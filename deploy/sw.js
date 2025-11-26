@@ -11,11 +11,13 @@ const urlsToCache = [
   BASE_PATH + 'js/terraform-generator.js',
   BASE_PATH + 'js/validators.js',
   BASE_PATH + 'js/utils.js',
-  // CDN resources
-  'https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css',
-  'https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js',
-  'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css',
-  'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'
+  // Local libraries
+  BASE_PATH + 'libs/bootstrap/css/bootstrap.min.css',
+  BASE_PATH + 'libs/bootstrap/js/bootstrap.bundle.min.js',
+  BASE_PATH + 'libs/bootstrap-icons/font/bootstrap-icons.css',
+  BASE_PATH + 'libs/bootstrap-icons/font/fonts/bootstrap-icons.woff',
+  BASE_PATH + 'libs/bootstrap-icons/font/fonts/bootstrap-icons.woff2',
+  BASE_PATH + 'libs/jszip/jszip.min.js'
 ];
 
 // Install event - cache resources

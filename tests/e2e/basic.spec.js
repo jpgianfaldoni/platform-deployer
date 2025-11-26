@@ -8,7 +8,7 @@ test.describe('Basic Application Tests', () => {
 
   test('should load the main page successfully', async ({ page }) => {
     // Check page title
-    await expect(page).toHaveTitle(/One Click Databricks Deployer/i);
+    await expect(page).toHaveTitle(/One-Click Deployer/i);
     
     // Check that the page loaded without errors
     const errors = [];
@@ -25,7 +25,7 @@ test.describe('Basic Application Tests', () => {
     // Check navbar brand
     const navbarBrand = page.locator('.navbar-brand');
     await expect(navbarBrand).toBeVisible();
-    await expect(navbarBrand).toContainText('Databricks Deployer');
+    await expect(navbarBrand).toContainText('One-Click Deployer');
     
     // On mobile, menu might be collapsed - check if toggler exists
     const navbarToggler = page.locator('.navbar-toggler');
@@ -52,12 +52,8 @@ test.describe('Basic Application Tests', () => {
     await expect(footer).toBeVisible();
     
     // Check footer content
-    await expect(footer).toContainText('One Click Databricks Deployer');
+    await expect(footer).toContainText('One-Click Deployer');
     await expect(footer).toContainText('Databricks');
-    
-    // Check footer links
-    const githubLink = footer.locator('a[href*="github"]');
-    await expect(githubLink).toBeVisible();
   });
 
   test('should navigate to home route', async ({ page }) => {

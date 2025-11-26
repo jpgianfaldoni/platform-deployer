@@ -210,6 +210,32 @@ class Utils {
   static formatNumber(num) {
     return num.toLocaleString('en-US');
   }
+
+  /**
+   * Wait for JSZip library to be available
+   * @param {number} timeout - Maximum time to wait in milliseconds (default: 5000)
+   * @returns {Promise<void>}
+   */
+  static async waitForJSZip(timeout = 5000) {
+    if (typeof JSZip !== 'undefined') {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve, reject) => {
+      const startTime = Date.now();
+      const checkInterval = 100; // Check every 100ms
+
+      const checkJSZip = setInterval(() => {
+        if (typeof JSZip !== 'undefined') {
+          clearInterval(checkJSZip);
+          resolve();
+        } else if (Date.now() - startTime >= timeout) {
+          clearInterval(checkJSZip);
+          reject(new Error('JSZip library failed to load. Please check your internet connection and try again.'));
+        }
+      }, checkInterval);
+    });
+  }
 }
 
 // Export for use in other modules

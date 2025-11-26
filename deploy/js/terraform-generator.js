@@ -39,6 +39,11 @@ class TerraformGenerator {
    * Generate complete Terraform project as ZIP
    */
   async generateProject(config) {
+    // Check if JSZip is available
+    if (typeof JSZip === 'undefined') {
+      throw new Error('JSZip library is not loaded. Please ensure the JSZip script is loaded before generating the project.');
+    }
+    
     const zip = new JSZip();
     const provider = config.provider.toLowerCase();
     

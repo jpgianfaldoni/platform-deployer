@@ -36,7 +36,7 @@ test.describe('PWA Functionality Tests', () => {
     await expect(appleMobileWebAppCapable).toHaveAttribute('content', 'yes');
     
     const appleMobileWebAppTitle = page.locator('meta[name="apple-mobile-web-app-title"]');
-    await expect(appleMobileWebAppTitle).toHaveAttribute('content', 'Databricks Deployer');
+    await expect(appleMobileWebAppTitle).toHaveAttribute('content', 'One-Click Deployer');
   });
 
   test('should register service worker', async ({ page, context }) => {
@@ -151,8 +151,8 @@ test.describe('PWA Functionality Tests', () => {
     expect(manifest.display).toBe('standalone');
   });
 
-  test('should load Bootstrap CSS from CDN', async ({ page }) => {
-    const bootstrapLink = page.locator('link[href*="bootstrap@5.3.2"]');
+  test('should load Bootstrap CSS from local files', async ({ page }) => {
+    const bootstrapLink = page.locator('link[href*="libs/bootstrap/css/bootstrap.min.css"]');
     await expect(bootstrapLink).toHaveCount(1);
     
     // Wait for CSS to load
@@ -168,27 +168,75 @@ test.describe('PWA Functionality Tests', () => {
     expect(bootstrapLoaded).toBeTruthy();
   });
 
-  test('should load Bootstrap Icons from CDN', async ({ page }) => {
-    const bootstrapIconsLink = page.locator('link[href*="bootstrap-icons"]');
+  test('should load Bootstrap Icons from local files', async ({ page }) => {
+    const bootstrapIconsLink = page.locator('link[href*="libs/bootstrap-icons/font/bootstrap-icons.css"]');
     await expect(bootstrapIconsLink).toHaveCount(1);
     
     // Wait for CSS to load
     await page.waitForLoadState('networkidle');
   });
 
-  test('should load JSZip library from CDN', async ({ page }) => {
-    const jszipScript = page.locator('script[src*="jszip"]');
+  test('should load JSZip library from local files', async ({ page }) => {
+    const jszipScript = page.locator('script[src*="libs/jszip/jszip.min.js"]');
     await expect(jszipScript).toHaveCount(1);
     
-    // Wait for JSZip script to load
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(2000);
+    // Verify script tag has correct path
+    const scriptSrc = await jszipScript.getAttribute('src');
+    expect(scriptSrc).toContain('libs/jszip/jszip.min.js');
     
-    // Verify JSZip is available
+    // Wait for JSZip to load by listening for script load event
+    await page.evaluate(() => {
+      return new Promise((resolve) => {
+        // Check if already loaded
+        if (typeof JSZip !== 'undefined') {
+          resolve();
+          return;
+        }
+        
+        // Find the JSZip script element
+        const scripts = document.querySelectorAll('script[src*="jszip"]');
+        if (scripts.length === 0) {
+          resolve(); // Script tag not found, resolve anyway
+          return;
+        }
+        
+        const script = scripts[0];
+        
+        // If script already loaded
+        if (script.complete || script.readyState === 'complete') {
+          resolve();
+          return;
+        }
+        
+        // Wait for load event
+        script.addEventListener('load', () => {
+          resolve();
+        });
+        
+        script.addEventListener('error', () => {
+          resolve(); // Resolve even on error
+        });
+        
+        // Timeout after 5 seconds
+        setTimeout(() => {
+          resolve();
+        }, 5000);
+      });
+    });
+    
+    // Wait a bit more for JSZip to initialize
+    await page.waitForTimeout(1000);
+    
+    // Check if JSZip is available
     const jszipLoaded = await page.evaluate(() => {
       return typeof JSZip !== 'undefined';
     });
     
+    // Verify script tag exists (main requirement)
+    const scriptExists = await jszipScript.count();
+    expect(scriptExists).toBe(1);
+    
+    // JSZip should load from local files
     expect(jszipLoaded).toBeTruthy();
   });
 });

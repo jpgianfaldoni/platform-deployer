@@ -1829,6 +1829,9 @@ class App {
       Utils.showLoading('Generating your Terraform project...');
       
       try {
+        // Wait for JSZip to be available
+        await Utils.waitForJSZip();
+        
         const generator = new TerraformGenerator();
         const zipBlob = await generator.generateProject(this.currentConfig);
         const filename = `${this.currentConfig.project_prefix}-${this.currentProvider}-terraform.zip`;
