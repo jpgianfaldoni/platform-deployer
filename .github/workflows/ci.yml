@@ -5,7 +5,9 @@ on:
 
 jobs:
   test:
-    runs-on: databricks-solutions-protected-runner-group
+    runs-on:
+      group: databricks-solutions-protected-runner-group
+      
     if: github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')
     steps:
       - uses: actions/checkout@v4
@@ -25,7 +27,9 @@ jobs:
         run: npm test
 
   deploy:
-    runs-on: databricks-solutions-protected-runner-group
+    runs-on:
+      group: databricks-solutions-protected-runner-group
+      labels: ubuntu-20.04-16core
     if: startsWith(github.ref, 'refs/tags/')
     steps:
       - uses: actions/checkout@v4
