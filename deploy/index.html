@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="description" content="One-Click Deployer - Simplify Databricks infrastructure deployment across AWS, Azure, and GCP. Generate production-ready Terraform configurations instantly.">
+    <meta name="keywords" content="Databricks, Terraform, AWS, Azure, GCP, Infrastructure as Code, Deployment">
+    <meta name="author" content="One-Click Deployer">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="One-Click Deployer - Databricks Infrastructure Generator">
+    <meta property="og:description" content="Simplify Databricks infrastructure deployment across multi-cloud environments">
+    
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:title" content="One-Click Deployer - Databricks Infrastructure Generator">
+    <meta property="twitter:description" content="Simplify Databricks infrastructure deployment across multi-cloud environments">
+    
+    <title>One-Click Deployer - Databricks Infrastructure Generator</title>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#0056b3">
+    <!-- iOS Safari meta tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="One-Click Deployer">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="32x32" href="./icons/icon-128x128.png">
+    <link rel="apple-touch-icon" href="./icons/icon-192x192.png">
+    
+    <!-- Bootstrap 5 CSS with fallback -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link href="./css/main.css" rel="stylesheet">
+    
+    <!-- Preconnect for performance -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+</head>
+<body>
+    <!-- Navigation -->
+    <header role="banner">
+        <nav class="navbar navbar-expand-lg navbar-dark bg-primary sticky-top" style="top: 0;" aria-label="Main navigation">
+            <div class="container">
+                <a class="navbar-brand fw-bold" href="#/" data-navigate aria-label="One-Click Deployer Home">
+                    <i class="bi bi-cloud-arrow-up-fill me-2" aria-hidden="true"></i>
+                    One-Click Deployer
+                    <span id="pwa-status-badge" class="badge bg-success ms-2" style="display: none;" aria-label="PWA Status">
+                        <i class="bi bi-wifi me-1" aria-hidden="true"></i>Offline Ready
+                    </span>
+                </a>
+                
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                
+                <div class="collapse navbar-collapse" id="navbarNav">
+                    <ul class="navbar-nav ms-auto align-items-center">
+                        <li class="nav-item">
+                            <a class="nav-link" href="#/" data-navigate>Home</a>
+                        </li>
+                        <li class="nav-item" id="change-provider-nav" style="display: none;">
+                            <a class="nav-link" href="#/select-provider" data-navigate>Change Provider</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#/reset" data-navigate>
+                                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Start Over
+                            </a>
+                        </li>
+                        <!-- PWA Install Button -->
+                        <li class="nav-item" id="pwa-install-nav-item" style="display: none;">
+                            <button class="btn btn-light btn-sm ms-2" id="pwa-install-btn-nav" type="button" title="Install application on your device" aria-label="Install One-Click Deployer">
+                                <i class="bi bi-download me-1" aria-hidden="true"></i>
+                                <span class="d-none d-md-inline">Install App</span>
+                                <span class="d-md-none">Install</span>
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Progress Indicator -->
+    <div id="progress-indicator" class="container mt-3" style="display: none;">
+        <div class="row">
+            <div class="col-12">
+                <div class="progress-container">
+                    <div class="progress mb-4" style="height: 6px;">
+                        <div class="progress-bar bg-success" role="progressbar" 
+                             id="progress-bar"
+                             style="width: 0%"
+                             aria-valuenow="0" 
+                             aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between text-muted small">
+                        <span id="step-1">
+                            <i class="bi bi-1-circle"></i>
+                            Select Provider
+                        </span>
+                        <span id="step-2">
+                            <i class="bi bi-2-circle"></i>
+                            Configure
+                        </span>
+                        <span id="step-3">
+                            <i class="bi bi-3-circle"></i>
+                            Download
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Flash Messages -->
+    <div id="flash-messages" class="container mt-3"></div>
+
+    <!-- Main Content -->
+    <main id="app-content" class="container-fluid px-0">
+        <!-- Content will be loaded here by JavaScript -->
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-light mt-5 py-4" role="contentinfo">
+        <div class="container">
+            <div class="row">
+                <div class="col-12 text-center">
+                    <h6 class="fw-bold text-primary">One-Click Deployer</h6>
+                    <p class="text-muted small mb-0">
+                        Simplifying Databricks infrastructure deployment across multi-cloud environments.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Loading overlay -->
+    <div id="loading-overlay" class="loading-overlay d-none">
+        <div class="loading-content">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <div class="mt-3">
+                <strong id="loading-message">Generating your Terraform project...</strong>
+                <div class="text-muted">This may take a few seconds</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Install PWA Banner (top of page) -->
+    <div id="install-banner" class="bg-primary text-white py-2" style="display: none; z-index: 1050;" role="banner" aria-label="Install app banner">
+        <div class="container">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-download me-2" aria-hidden="true"></i>
+                    <span>Install this app for a better experience and offline access</span>
+                </div>
+                <div>
+                    <button id="install-btn-banner" class="btn btn-light btn-sm me-2" aria-label="Install One-Click Deployer">Install Now</button>
+                    <button id="dismiss-install-banner" class="btn btn-outline-light btn-sm" aria-label="Dismiss install banner">Not Now</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Offline Indicator -->
+    <div id="offline-indicator" class="bg-warning text-dark py-2 text-center" style="display: none; z-index: 1051;">
+        <div class="container">
+            <i class="bi bi-wifi-off me-2"></i>
+            <strong>Offline Mode:</strong> You are using a cached version. Some features may be limited.
+        </div>
+    </div>
+
+    <!-- Bootstrap 5 JS with integrity -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-BBtl+eGJRgqQAUMxJ7pMwbEyER4l1g+O15P+16Ep7Q9Q+zqX6gSbd85u4mG4QzX+" crossorigin="anonymous"></script>
+    <!-- JSZip for ZIP generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" integrity="sha512-dOy4mQl8Y4KjO6w5k5nAHfcsgHJQHt/1u3P9tM0+xpA6gsL2L02OLIZNykHy7f3sF7vn+N3xgpQh1JDmD53sAQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    
+    <!-- App JavaScript -->
+    <script src="./js/network-calculator.js"></script>
+    <script src="./js/validators.js"></script>
+    <script src="./js/utils.js"></script>
+    <script src="./js/terraform-generator.js"></script>
+    <script src="./js/app.js"></script>
+
+    <!-- Service Worker Registration & PWA Install Logic -->
+    <script>
+        // Service Worker Registration
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then((registration) => {
+                        console.log('SW registered:', registration);
+                        
+                        // Check for updates
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    // New service worker available
+                                    console.log('New service worker available');
+                                }
+                            });
+                        });
+                    })
+                    .catch((error) => {
+                        console.log('SW registration failed:', error);
+                    });
+            });
+        }
+
+        // PWA Install Prompt Management
+        let deferredPrompt = null;
+        let installBannerDismissed = false;
+
+        // Check if already installed - Enhanced detection
+        function isPWAInstalled() {
+            // Check for standalone display mode (most reliable)
+            if (window.matchMedia('(display-mode: standalone)').matches) {
+                console.log('PWA detected: standalone display mode');
+                return true;
+            }
+            
+            // Check for iOS standalone mode
+            if (window.navigator.standalone === true) {
+                console.log('PWA detected: iOS standalone mode');
+                return true;
+            }
+            
+            // Check for Android app referrer
+            if (document.referrer.includes('android-app://')) {
+                console.log('PWA detected: Android app referrer');
+                return true;
+            }
+            
+            // Check if launched from home screen (iOS)
+            if (window.matchMedia('(display-mode: fullscreen)').matches) {
+                console.log('PWA detected: fullscreen display mode');
+                return true;
+            }
+            
+            // Check localStorage flag (set after successful installation)
+            if (localStorage.getItem('pwa-installed') === 'true') {
+                console.log('PWA detected: localStorage flag');
+                return true;
+            }
+            
+            console.log('PWA not detected - running in browser');
+            return false;
+        }
+
+        // Update install button visibility
+        function updateInstallButtonVisibility() {
+            const installNavItem = document.getElementById('pwa-install-nav-item');
+            const installBtnNav = document.getElementById('pwa-install-btn-nav');
+            const installBanner = document.getElementById('install-banner');
+            
+            console.log('Updating install button visibility - isPWAInstalled:', isPWAInstalled(), 'deferredPrompt:', !!deferredPrompt);
+            
+            if (isPWAInstalled()) {
+                // Hide install button if already installed
+                if (installNavItem) {
+                    installNavItem.style.display = 'none';
+                }
+                if (installBanner) {
+                    installBanner.style.display = 'none';
+                }
+                // Show installed badge
+                showInstalledBadge();
+            } else if (deferredPrompt) {
+                // Show install button if prompt is available
+                if (installNavItem) {
+                    installNavItem.style.display = 'block';
+                }
+            } else {
+                // Check if browser supports installation but prompt not yet available
+                // Show button for manual instructions
+                const isInstallable = 'BeforeInstallPromptEvent' in window || 
+                                     /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+                                     /Android/.test(navigator.userAgent);
+                
+                if (isInstallable && installNavItem) {
+                    installNavItem.style.display = 'block';
+                } else if (installNavItem) {
+                    installNavItem.style.display = 'none';
+                }
+            }
+        }
+
+        // Show installed badge in navbar
+        function showInstalledBadge() {
+            const badge = document.getElementById('pwa-status-badge');
+            if (badge) {
+                badge.className = 'badge bg-success ms-2';
+                badge.innerHTML = '<i class="bi bi-check-circle-fill me-1" aria-hidden="true"></i>App Installed';
+                badge.style.display = 'inline-block';
+                badge.title = 'This application is installed on your device';
+                badge.setAttribute('aria-label', 'Application installed');
+                console.log('✓ Showing installed badge');
+            }
+        }
+
+        // Show install banner
+        function showInstallBanner() {
+            if (isPWAInstalled()) {
+                return; // Already installed
+            }
+
+            // Check if user dismissed before
+            const dismissed = localStorage.getItem('pwa-install-dismissed');
+            if (dismissed) {
+                const dismissedTime = parseInt(dismissed, 10);
+                const daysSinceDismissed = (Date.now() - dismissedTime) / (1000 * 60 * 60 * 24);
+                
+                // Show again after 7 days
+                if (daysSinceDismissed < 7) {
+                    return;
+                }
+            }
+
+            const banner = document.getElementById('install-banner');
+            if (banner && deferredPrompt) {
+                banner.style.display = 'block';
+                
+                // Auto-hide after 10 seconds if not interacted
+                setTimeout(() => {
+                    if (banner.style.display === 'block') {
+                        banner.style.animation = 'slideUp 0.3s ease-out';
+                        setTimeout(() => {
+                            banner.style.display = 'none';
+                        }, 300);
+                    }
+                }, 10000);
+            }
+        }
+
+        // Handle beforeinstallprompt event
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            
+            // Update install button visibility
+            updateInstallButtonVisibility();
+            
+            // Show banner after a short delay (better UX)
+            setTimeout(() => {
+                if (!isPWAInstalled()) {
+                    showInstallBanner();
+                }
+            }, 2000);
+        });
+
+        // Install function - reusable and globally available
+        async function installPWA() {
+            if (deferredPrompt) {
+                try {
+                    // Show the install prompt
+                    deferredPrompt.prompt();
+                    
+                    // Wait for user response
+                    const { outcome } = await deferredPrompt.userChoice;
+                    console.log(`User response: ${outcome}`);
+                    
+                    if (outcome === 'accepted') {
+                        // Track successful installation
+                        console.log('PWA installed successfully');
+                        localStorage.setItem('pwa-installed', 'true');
+                        
+                        // Show success message
+                        if (typeof Utils !== 'undefined') {
+                            Utils.showFlashMessage('App installed successfully!', 'success');
+                        }
+                        
+                        // Update UI
+                        updateInstallButtonVisibility();
+                    }
+                    
+                    // Clear the deferred prompt
+                    deferredPrompt = null;
+                    
+                    // Hide banner
+                    const banner = document.getElementById('install-banner');
+                    if (banner) {
+                        banner.style.display = 'none';
+                    }
+                } catch (error) {
+                    console.error('Error during installation:', error);
+                    if (typeof Utils !== 'undefined') {
+                        Utils.showFlashMessage('Installation failed. Please try again.', 'error');
+                    }
+                }
+            } else {
+                // Fallback: manual installation instructions
+                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+                const isAndroid = /Android/.test(navigator.userAgent);
+                
+                let instructions = '';
+                if (isIOS) {
+                    instructions = 'To install this app on iOS:\n\n1. Tap the Share button\n2. Select "Add to Home Screen"\n3. Tap "Add"';
+                } else if (isAndroid) {
+                    instructions = 'To install this app on Android:\n\n1. Tap the menu (⋮)\n2. Select "Add to Home Screen" or "Install App"\n3. Tap "Install"';
+                } else {
+                    instructions = 'To install this app:\n\nChrome Desktop: Click the install icon in the address bar\nChrome Mobile: Menu → "Add to Home Screen"';
+                }
+                
+                alert(instructions);
+            }
+        }
+
+        // Install button handlers - Banner
+        document.getElementById('install-btn-banner')?.addEventListener('click', async () => {
+            await installPWA();
+        });
+
+        // Install button handler - Navbar
+        document.getElementById('pwa-install-btn-nav')?.addEventListener('click', async () => {
+            await installPWA();
+        });
+
+        // Dismiss banner
+        document.getElementById('dismiss-install-banner')?.addEventListener('click', () => {
+            document.getElementById('install-banner').style.display = 'none';
+            localStorage.setItem('pwa-install-dismissed', Date.now().toString());
+        });
+
+        // Offline/Online detection
+        function updateOnlineStatus() {
+            const indicator = document.getElementById('offline-indicator');
+            if (indicator) {
+                if (navigator.onLine) {
+                    indicator.style.display = 'none';
+                } else {
+                    indicator.style.display = 'block';
+                }
+            }
+        }
+
+        window.addEventListener('online', () => {
+            updateOnlineStatus();
+            const badge = document.getElementById('pwa-status-badge');
+            if (badge) badge.style.display = 'none';
+            Utils.showFlashMessage('Connection restored!', 'success');
+        });
+
+        window.addEventListener('offline', () => {
+            updateOnlineStatus();
+            const badge = document.getElementById('pwa-status-badge');
+            if (badge) {
+                badge.style.display = 'inline-block';
+                badge.innerHTML = '<i class="bi bi-wifi-off me-1"></i>Offline';
+            }
+            Utils.showFlashMessage('Offline mode activated. The app continues to work!', 'info');
+        });
+
+        // Check service worker status
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.ready.then((registration) => {
+                if (registration) {
+                    const badge = document.getElementById('pwa-status-badge');
+                    if (badge) {
+                        badge.style.display = 'inline-block';
+                        badge.innerHTML = '<i class="bi bi-wifi me-1"></i>Offline Ready';
+                    }
+                }
+            });
+        }
+
+        // Initial status check
+        updateOnlineStatus();
+
+        // Check if app was launched from installed PWA
+        console.log('=== PWA Status Check ===');
+        console.log('Display mode:', window.matchMedia('(display-mode: standalone)').matches ? 'standalone' : 'browser');
+        console.log('User agent:', navigator.userAgent);
+        console.log('Is installed:', isPWAInstalled());
+        
+        if (isPWAInstalled()) {
+            console.log('✓ Running as installed PWA');
+            // Hide install banner if already installed
+            const banner = document.getElementById('install-banner');
+            if (banner) {
+                banner.style.display = 'none';
+            }
+            
+            // Hide install button
+            updateInstallButtonVisibility();
+            
+            // Show installed badge
+            showInstalledBadge();
+        } else {
+            console.log('✗ Running in browser - showing install options');
+            // Initial check for install button visibility
+            updateInstallButtonVisibility();
+            
+            // Show install button immediately for mobile devices
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            if (isMobile) {
+                const installNavItem = document.getElementById('pwa-install-nav-item');
+                if (installNavItem) {
+                    installNavItem.style.display = 'block';
+                    console.log('Mobile device detected - showing install button');
+                }
+            }
+        }
+
+        // Make deferredPrompt and installPWA globally available
+        window.deferredPrompt = null;
+        window.installPWA = installPWA;
+        Object.defineProperty(window, 'deferredPrompt', {
+            get: () => deferredPrompt,
+            set: (value) => {
+                deferredPrompt = value;
+                updateInstallButtonVisibility();
+            }
+        });
+
+        // Periodic check for install prompt (every 30 seconds)
+        setInterval(() => {
+            if (window.deferredPrompt && !isPWAInstalled()) {
+                const dismissed = localStorage.getItem('pwa-install-dismissed');
+                if (!dismissed) {
+                    const banner = document.getElementById('install-banner');
+                    if (banner && banner.style.display === 'none') {
+                        // Only show if user has been on page for a while
+                        banner.style.display = 'block';
+                    }
+                }
+                // Update button visibility
+                updateInstallButtonVisibility();
+            }
+        }, 30000);
+
+        // Listen for app installed event (fired after successful installation)
+        window.addEventListener('appinstalled', () => {
+            console.log('PWA was installed');
+            localStorage.setItem('pwa-installed', 'true');
+            deferredPrompt = null;
+            updateInstallButtonVisibility();
+            showInstalledBadge();
+            
+            if (typeof Utils !== 'undefined') {
+                Utils.showFlashMessage('App installed successfully! Thank you for installing.', 'success');
+            }
+        });
+    </script>
+
+    <style>
+        @keyframes slideUp {
+            from {
+                transform: translateY(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateY(-100%);
+                opacity: 0;
+            }
+        }
+
+        #install-banner {
+            animation: slideDown 0.3s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                transform: translateY(-100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        /* Ensure banners don't push content down unexpectedly */
+        #install-banner[style*="block"] ~ nav {
+            position: sticky;
+            top: 0;
+        }
+
+        #offline-indicator[style*="block"] ~ nav {
+            position: sticky;
+            top: 0;
+        }
+
+        @media (max-width: 768px) {
+            #install-banner .d-flex {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+            
+            #install-banner .d-flex > div:first-child {
+                text-align: center;
+            }
+            
+            #install-banner .d-flex > div:last-child {
+                width: 100%;
+            }
+            
+            #install-banner .btn {
+                width: 100%;
+                margin-bottom: 0.25rem;
+            }
+        }
+    </style>
+</body>
+</html>
+
