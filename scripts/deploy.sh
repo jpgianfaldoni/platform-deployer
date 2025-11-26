@@ -39,11 +39,21 @@ fi
 REPO_ROOT=$(git rev-parse --show-toplevel)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PWA_DIR="$(dirname "$SCRIPT_DIR")"
-DEPLOY_DIR="$PWA_DIR/deploy"
+# Garante que o caminho seja absoluto
+DEPLOY_DIR="$(cd "$PWA_DIR/deploy" && pwd)"
 
 # Verifica se a pasta deploy existe
 if [ ! -d "$DEPLOY_DIR" ]; then
     print_error "Pasta deploy/ não encontrada em $DEPLOY_DIR"
+    print_info "Diretório do script: $SCRIPT_DIR"
+    print_info "Diretório PWA: $PWA_DIR"
+    print_info "Diretório raiz do repo: $REPO_ROOT"
+    exit 1
+fi
+
+# Verifica se há arquivos na pasta deploy antes de continuar
+if [ -z "$(ls -A "$DEPLOY_DIR" 2>/dev/null)" ]; then
+    print_error "A pasta deploy/ está vazia!"
     exit 1
 fi
 
@@ -88,11 +98,40 @@ fi
 
 # Limpa o diretório atual (exceto .git)
 print_info "Limpando diretório de deploy..."
-find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} + 2>/dev/null || true
+
+# Verifica novamente se há arquivos na pasta deploy (pode ter mudado)
+if [ -z "$(ls -A "$DEPLOY_DIR" 2>/dev/null)" ]; then
+    print_error "A pasta deploy/ está vazia!"
+    git checkout $ORIGINAL_BRANCH
+    exit 1
+fi
 
 # Copia os arquivos da pasta deploy/
-print_info "Copiando arquivos de $DEPLOY_DIR..."
-cp -r "$DEPLOY_DIR"/* .
+print_info "Copiando arquivos de $DEPLOY_DIR para $(pwd)..."
+
+# Usa rsync se disponível (mais robusto), senão usa cp com método seguro
+if command -v rsync >/dev/null 2>&1; then
+    print_info "Usando rsync para copiar arquivos..."
+    if ! rsync -av --exclude='.git' "$DEPLOY_DIR/" .; then
+        print_error "Erro ao copiar arquivos com rsync"
+        git checkout $ORIGINAL_BRANCH
+        exit 1
+    fi
+else
+    # Usa cp com método que funciona mesmo com padrões vazios
+    print_info "Usando cp para copiar arquivos..."
+    # Muda temporariamente para o diretório deploy e copia tudo
+    (cd "$DEPLOY_DIR" && tar cf - .) | tar xf -
+    if [ $? -ne 0 ]; then
+        print_error "Erro ao copiar arquivos de $DEPLOY_DIR"
+        print_info "Verifique se a pasta deploy/ contém arquivos válidos"
+        print_info "Listando conteúdo de $DEPLOY_DIR:"
+        ls -la "$DEPLOY_DIR" || true
+        git checkout $ORIGINAL_BRANCH
+        exit 1
+    fi
+fi
 
 # Adiciona todos os arquivos ao staging
 print_info "Adicionando arquivos ao staging..."
