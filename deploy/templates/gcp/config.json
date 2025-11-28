@@ -1,0 +1,17 @@
+{
+  "provider": "gcp",
+  "variables": {
+    "required": [],
+    "optional": ["project_id"]
+  },
+  "template_files": [
+    "provider.tf.template",
+    "variables.tf.template",
+    "tfvars.tf.template",
+    "main.tf.template",
+    "outputs.tf.template",
+    "versions.tf.template",
+    "readme.md.template"
+  ]
+}
+

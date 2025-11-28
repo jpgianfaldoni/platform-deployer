@@ -1,0 +1,43 @@
+terraform {
+  required_version = ">= 1.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    databricks = {
+      source  = "databricks/databricks"
+      version = "~> 1.26"
+    }
+  }
+}
+
+# Configure the AWS Provider
+provider "aws" {
+  region = var.aws_region
+  
+  default_tags {
+    tags = merge(
+      var.common_tags,
+      {
+        Project     = "{{project_prefix}}"
+        Environment = "dev"
+        ManagedBy   = "terraform"
+        CreatedBy   = "databricks-deployer"
+      }
+    )
+  }
+}
+
+# Configure the Databricks Provider for AWS
+provider "databricks" {
+  alias      = "mws"
+  host       = "https://accounts.cloud.databricks.com"
+  account_id = var.databricks_account_id
+}
+
+provider "databricks" {
+  alias = "workspace"
+  host  = databricks_mws_workspaces.this.workspace_url
+}
+

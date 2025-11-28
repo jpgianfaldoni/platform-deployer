@@ -21,7 +21,7 @@
     <title>One-Click Deployer - Databricks Infrastructure Generator</title>
     
     <!-- PWA Manifest -->
-    <link rel="manifest" href="./manifest.json">
+    <link rel="manifest" href="./manifest.json?v=1.0.0">
     <meta name="theme-color" content="#0056b3">
     <!-- iOS Safari meta tags -->
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -34,11 +34,11 @@
     <link rel="apple-touch-icon" href="./icons/icon-192x192.png">
     
     <!-- Bootstrap 5 CSS -->
-    <link href="./libs/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+    <link href="./libs/bootstrap/css/bootstrap.min.css?v=1.0.0" rel="stylesheet">
     <!-- Bootstrap Icons -->
-    <link href="./libs/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="./libs/bootstrap-icons/font/bootstrap-icons.css?v=1.0.0" rel="stylesheet">
     <!-- Custom CSS -->
-    <link href="./css/main.css" rel="stylesheet">
+    <link href="./css/main.css?v=1.0.0" rel="stylesheet">
 </head>
 <body>
     <!-- Navigation -->
@@ -176,23 +176,28 @@
     </div>
 
     <!-- Bootstrap 5 JS -->
-    <script src="./libs/bootstrap/js/bootstrap.bundle.min.js"></script>
+    <script src="./libs/bootstrap/js/bootstrap.bundle.min.js?v=1.0.0"></script>
+    <!-- Choices.js for modern select component -->
+    <link rel="stylesheet" href="./libs/choices.js/css/choices.min.css?v=1.0.0" />
+    <script src="./libs/choices.js/js/choices.min.js?v=1.0.0"></script>
     <!-- JSZip for ZIP generation -->
-    <script src="./libs/jszip/jszip.min.js"></script>
+    <script src="./libs/jszip/jszip.min.js?v=1.0.0"></script>
     
     <!-- App JavaScript -->
-    <script src="./js/network-calculator.js"></script>
-    <script src="./js/validators.js"></script>
-    <script src="./js/utils.js"></script>
-    <script src="./js/terraform-generator.js"></script>
-    <script src="./js/app.js"></script>
+    <script src="./js/network-calculator.js?v=1.0.0"></script>
+    <script src="./js/validators.js?v=1.0.0"></script>
+    <script src="./js/utils.js?v=1.0.0"></script>
+    <script src="./js/template-loader.js?v=1.0.0"></script>
+    <script src="./js/template-engine.js?v=1.0.0"></script>
+    <script src="./js/terraform-generator.js?v=1.0.0"></script>
+    <script src="./js/app.js?v=1.0.0"></script>
 
     <!-- Service Worker Registration & PWA Install Logic -->
     <script>
         // Service Worker Registration
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js')
+                navigator.serviceWorker.register('./sw.js?v=1.0.0')
                     .then((registration) => {
                         console.log('SW registered:', registration);
                         

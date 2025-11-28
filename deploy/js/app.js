@@ -20,6 +20,289 @@ class App {
     this.init();
   }
 
+  /**
+   * Get official regions list for a cloud provider organized by geographic groups
+   * Returns array of group objects with name and regions array
+   * Only includes regions officially supported by Databricks
+   */
+  getRegions(provider) {
+    const regions = {
+      aws: [
+        {
+          group: 'United States',
+          regions: [
+            { code: 'us-east-1', name: 'US East (N. Virginia)' },
+            { code: 'us-east-2', name: 'US East (Ohio)' },
+            { code: 'us-west-1', name: 'US West (N. California)' },
+            { code: 'us-west-2', name: 'US West (Oregon)' }
+          ]
+        },
+        {
+          group: 'Canada',
+          regions: [
+            { code: 'ca-central-1', name: 'Canada (Central)' }
+          ]
+        },
+        {
+          group: 'Europe',
+          regions: [
+            { code: 'eu-central-1', name: 'Europe (Frankfurt)' },
+            { code: 'eu-west-1', name: 'Europe (Ireland)' },
+            { code: 'eu-west-2', name: 'Europe (London)' },
+            { code: 'eu-west-3', name: 'Europe (Paris)' }
+          ]
+        },
+        {
+          group: 'Asia Pacific',
+          regions: [
+            { code: 'ap-northeast-1', name: 'Asia Pacific (Tokyo)' },
+            { code: 'ap-northeast-2', name: 'Asia Pacific (Seoul)' },
+            { code: 'ap-south-1', name: 'Asia Pacific (Mumbai)' },
+            { code: 'ap-southeast-1', name: 'Asia Pacific (Singapore)' },
+            { code: 'ap-southeast-2', name: 'Asia Pacific (Sydney)' },
+            { code: 'ap-southeast-3', name: 'Asia Pacific (Jakarta)' }
+          ]
+        },
+        {
+          group: 'South America',
+          regions: [
+            { code: 'sa-east-1', name: 'South America (São Paulo)' }
+          ]
+        }
+      ],
+      azure: [
+        {
+          group: 'United States',
+          regions: [
+            { code: 'centralus', name: 'Central US' },
+            { code: 'eastus', name: 'East US' },
+            { code: 'eastus2', name: 'East US 2' },
+            { code: 'northcentralus', name: 'North Central US' },
+            { code: 'southcentralus', name: 'South Central US' },
+            { code: 'westus', name: 'West US' },
+            { code: 'westus2', name: 'West US 2' },
+            { code: 'westus3', name: 'West US 3' }
+          ]
+        },
+        {
+          group: 'Canada',
+          regions: [
+            { code: 'canadacentral', name: 'Canada Central' },
+            { code: 'canadaeast', name: 'Canada East' }
+          ]
+        },
+        {
+          group: 'Europe',
+          regions: [
+            { code: 'francecentral', name: 'France Central' },
+            { code: 'germanywestcentral', name: 'Germany West Central' },
+            { code: 'northeurope', name: 'North Europe' },
+            { code: 'norwayeast', name: 'Norway East' },
+            { code: 'norwaywest', name: 'Norway West' },
+            { code: 'switzerlandnorth', name: 'Switzerland North' },
+            { code: 'switzerlandwest', name: 'Switzerland West' },
+            { code: 'uksouth', name: 'UK South' },
+            { code: 'ukwest', name: 'UK West' },
+            { code: 'westeurope', name: 'West Europe' }
+          ]
+        },
+        {
+          group: 'Asia Pacific',
+          regions: [
+            { code: 'australiaeast', name: 'Australia East' },
+            { code: 'australiasoutheast', name: 'Australia Southeast' },
+            { code: 'centralindia', name: 'India Central' },
+            { code: 'eastasia', name: 'East Asia' },
+            { code: 'japaneast', name: 'Japan East' },
+            { code: 'japanwest', name: 'Japan West' },
+            { code: 'koreacentral', name: 'Korea Central' },
+            { code: 'koreasouth', name: 'Korea South' },
+            { code: 'southindia', name: 'India South' },
+            { code: 'southeastasia', name: 'Southeast Asia' }
+          ]
+        },
+        {
+          group: 'Middle East & Africa',
+          regions: [
+            { code: 'southafricanorth', name: 'South Africa North' },
+            { code: 'southafricawest', name: 'South Africa West' },
+            { code: 'uaenorth', name: 'UAE North' }
+          ]
+        },
+        {
+          group: 'South America',
+          regions: [
+            { code: 'brazilsouth', name: 'Brazil South' }
+          ]
+        }
+      ],
+      gcp: [
+        {
+          group: 'United States',
+          regions: [
+            { code: 'us-central1', name: 'US Central (Iowa)' },
+            { code: 'us-east1', name: 'US East (South Carolina)' },
+            { code: 'us-east4', name: 'US East (Northern Virginia)' },
+            { code: 'us-west1', name: 'US West (Oregon)' },
+            { code: 'us-west4', name: 'US West (Las Vegas)' }
+          ]
+        },
+        {
+          group: 'Canada',
+          regions: [
+            { code: 'northamerica-northeast1', name: 'North America Northeast (Montréal)' }
+          ]
+        },
+        {
+          group: 'Europe',
+          regions: [
+            { code: 'europe-west1', name: 'Europe West (Belgium)' },
+            { code: 'europe-west2', name: 'Europe West (London)' },
+            { code: 'europe-west3', name: 'Europe West (Frankfurt)' }
+          ]
+        },
+        {
+          group: 'Asia Pacific',
+          regions: [
+            { code: 'asia-northeast1', name: 'Asia Northeast (Tokyo)' },
+            { code: 'asia-south1', name: 'Asia South (Mumbai)' },
+            { code: 'asia-southeast1', name: 'Asia Southeast (Singapore)' }
+          ]
+        },
+        {
+          group: 'Australia',
+          regions: [
+            { code: 'australia-southeast1', name: 'Australia Southeast (Sydney)' }
+          ]
+        },
+        {
+          group: 'South America',
+          regions: [
+            { code: 'southamerica-east1', name: 'South America East (São Paulo)' }
+          ]
+        }
+      ]
+    };
+
+    return regions[provider?.toLowerCase()] || [];
+  }
+
+  /**
+   * Render region select options with optgroups
+   */
+  renderRegionOptions(provider, selectedRegion) {
+    const groups = this.getRegions(provider);
+    let html = '<option value="">Select region</option>';
+    
+    groups.forEach(group => {
+      html += `<optgroup label="${group.group}">`;
+      group.regions.forEach(region => {
+        const selected = selectedRegion === region.code ? 'selected' : '';
+        html += `<option value="${region.code}" ${selected}>${region.name} (${region.code})</option>`;
+      });
+      html += '</optgroup>';
+    });
+    
+    return html;
+  }
+
+  /**
+   * Get availability zone limits for a provider
+   */
+  getAvailabilityZoneLimits(provider) {
+    const limits = {
+      aws: { min: 2, max: 6 },
+      azure: { min: 1, max: 3 },
+      gcp: { min: 2, max: 6 }
+    };
+    return limits[provider?.toLowerCase()] || { min: 1, max: 3 };
+  }
+
+  /**
+   * Generate availability zone options based on provider and region
+   */
+  getAvailabilityZoneOptions(provider, region) {
+    if (!provider || !region) {
+      return [];
+    }
+
+    const zones = [];
+    
+    if (provider === 'aws') {
+      // AWS zones: typically a, b, c, d, e, f
+      const zoneLetters = ['a', 'b', 'c', 'd', 'e', 'f'];
+      zoneLetters.forEach(letter => {
+        zones.push({
+          value: `${region}${letter}`,
+          label: `${region}${letter}`
+        });
+      });
+    } else if (provider === 'azure') {
+      // Azure zones: numeric 1, 2, 3
+      [1, 2, 3].forEach(num => {
+        zones.push({
+          value: String(num),
+          label: `Zone ${num}`
+        });
+      });
+    } else if (provider === 'gcp') {
+      // GCP zones: typically a, b, c, d, e, f
+      const zoneLetters = ['a', 'b', 'c', 'd', 'e', 'f'];
+      zoneLetters.forEach(letter => {
+        zones.push({
+          value: `${region}-${letter}`,
+          label: `${region}-${letter}`
+        });
+      });
+    }
+    
+    return zones;
+  }
+
+  /**
+   * Get currently selected availability zones
+   */
+  getSelectedAvailabilityZones() {
+    const azSelect = document.getElementById('availability-zones-select');
+    if (!azSelect) return [];
+    
+    // Check if Choices.js is initialized
+    if (azSelect.choices) {
+      return azSelect.choices.getValue(true) || [];
+    }
+    
+    // Fallback: get from select options
+    return Array.from(azSelect.selectedOptions)
+      .map(option => option.value)
+      .filter(value => value);
+  }
+
+  /**
+   * Render availability zone select options, excluding already selected zones
+   */
+  renderAvailabilityZoneOptions(provider, region, selectedZone, excludeSelected = true) {
+    const zones = this.getAvailabilityZoneOptions(provider, region);
+    let html = '<option value="">Select availability zone</option>';
+    
+    // Get currently selected zones to exclude (if excludeSelected is true)
+    let selectedZones = [];
+    if (excludeSelected) {
+      selectedZones = this.getSelectedAvailabilityZones();
+    }
+    
+    zones.forEach(zone => {
+      // Skip if zone is already selected (unless it's the current select's value)
+      if (excludeSelected && selectedZones.includes(zone.value) && zone.value !== selectedZone) {
+        return;
+      }
+      
+      const selected = selectedZone === zone.value ? 'selected' : '';
+      html += `<option value="${zone.value}" ${selected}>${zone.label}</option>`;
+    });
+    
+    return html;
+  }
+
   init() {
     // Setup navigation
     this.setupNavigation();
@@ -901,12 +1184,17 @@ class App {
     // Try to find input, select, or checkbox
     let field = document.querySelector(`input[name="${fieldName}"], select[name="${fieldName}"]`);
     
-    // If not found and it's availability_zones, mark the container
+    // If not found and it's availability_zones, mark the select
     if (!field && fieldName === 'availability_zones') {
-      const azContainer = document.getElementById('az-container');
-      if (azContainer) {
-        azContainer.setAttribute('data-invalid', 'true');
-        azContainer.setAttribute('data-error', errorMessage);
+      const azSelect = document.getElementById('availability-zones-select');
+      if (azSelect) {
+        azSelect.setAttribute('data-invalid', 'true');
+        azSelect.setAttribute('data-error', errorMessage);
+        // Also mark the Choices.js container
+        const choicesContainer = azSelect.closest('.choices');
+        if (choicesContainer) {
+          choicesContainer.classList.add('is-invalid');
+        }
       }
       return;
     }
@@ -996,7 +1284,8 @@ class App {
                         <span class="text-danger">*</span>
                       </label>
                       <input type="text" class="form-control" name="project_prefix" 
-                             value="${this.currentConfig.project_prefix || ''}" required>
+                             value="${this.currentConfig.project_prefix || ''}" 
+                             placeholder="e.g., my-databricks-project" required>
                       <div class="form-text">Prefix for all resource names (2-20 characters, alphanumeric and hyphens only)</div>
                     </div>
                     <div class="col-md-6">
@@ -1004,8 +1293,9 @@ class App {
                         Region
                         <span class="text-danger">*</span>
                       </label>
-                      <input type="text" class="form-control" name="region" 
-                             value="${this.currentConfig.region || ''}" required>
+                      <select class="form-select" name="region" required>
+                        ${this.renderRegionOptions(this.currentProvider, this.currentConfig.region)}
+                      </select>
                       <div class="form-text">Cloud provider region for resource deployment</div>
                     </div>
                     <div class="col-md-6">
@@ -1029,7 +1319,8 @@ class App {
                           <span class="text-danger">*</span>
                         </label>
                         <input type="text" class="form-control" name="resource_group_name" 
-                               value="${this.currentConfig.resource_group_name || ''}" required>
+                               value="${this.currentConfig.resource_group_name || ''}" 
+                               placeholder="e.g., rg-databricks-prod" required>
                         <div class="form-text">Azure Resource Group name for all resources</div>
                       </div>
                     ` : ''}
@@ -1040,7 +1331,8 @@ class App {
                           <span class="text-danger">*</span>
                         </label>
                         <input type="text" class="form-control" name="project_id" 
-                               value="${this.currentConfig.project_id || ''}" required>
+                               value="${this.currentConfig.project_id || ''}" 
+                               placeholder="e.g., my-gcp-project-123" required>
                         <div class="form-text">Google Cloud Project ID for resource deployment</div>
                       </div>
                     ` : ''}
@@ -1075,7 +1367,8 @@ class App {
                           <span class="text-danger">*</span>
                         </label>
                         <input type="text" class="form-control" name="existing_vpc_name" 
-                               value="${this.currentConfig.existing_vpc_name || ''}">
+                               value="${this.currentConfig.existing_vpc_name || ''}"
+                               placeholder="${this.currentProvider === 'azure' ? 'e.g., my-existing-vnet' : 'e.g., vpc-0123456789abcdef0'}">
                         <div class="form-text">${this.currentProvider === 'azure' ? 
                           'Name of existing VNet to use' : 
                           'Name of existing VPC to use'}</div>
@@ -1088,19 +1381,19 @@ class App {
                       <span class="text-danger">*</span>
                     </label>
                     <input type="text" class="form-control" name="vpc_cidr" 
-                           value="${this.currentConfig.vpc_cidr || '10.0.0.0/22'}" required>
+                           value="${this.currentConfig.vpc_cidr || '10.0.0.0/22'}" 
+                           placeholder="e.g., 10.0.0.0/22" required>
                     <div class="form-text">${vpcDesc}</div>
                   </div>
                   <div class="mb-3">
-                    <label class="form-label fw-semibold">
+                    <label class="form-label fw-semibold" for="availability-zones-select">
                       Availability Zones
                       <span class="text-danger">*</span>
                     </label>
-                    <div id="az-container"></div>
-                    <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="add-az">
-                      <i class="bi bi-plus"></i> Add Availability Zone
-                    </button>
-                    <div class="form-text">Select availability zones for subnet distribution</div>
+                    <select id="availability-zones-select" class="form-select" name="availability_zones" multiple required>
+                      <option value="" disabled>Select availability zones</option>
+                    </select>
+                    <div class="form-text">Type to search and select availability zones. Selected zones will appear as tags.</div>
                   </div>
                   <div id="subnets-preview" class="mt-4" style="display: none;">
                     <h6 class="fw-bold text-primary mb-3">
@@ -1162,140 +1455,17 @@ class App {
     this.render(content);
     Utils.updateProgress(2);
     
-    // Initialize availability zones
-    const azContainer = document.getElementById('az-container');
-    if (azContainer) {
-      const defaultZones = this.currentConfig.availability_zones || [];
-      if (defaultZones.length === 0) {
-        // Add default zones based on provider and region
-        const region = this.currentConfig.region || '';
-        let zones = [];
-        if (this.currentProvider === 'aws' && region) {
-          zones = [`${region}a`, `${region}b`];
-        } else if (this.currentProvider === 'azure') {
-          zones = ['1', '2'];
-        } else if (this.currentProvider === 'gcp' && region) {
-          zones = [`${region}-a`, `${region}-b`];
-        } else {
-          zones = ['zone-1'];
-        }
-        
-        zones.forEach((zone, idx) => {
-          const zoneDiv = document.createElement('div');
-          zoneDiv.className = 'row mb-2 az-row';
-          zoneDiv.innerHTML = `
-            <div class="col-md-6">
-              <input type="text" class="form-control" name="availability_zones" 
-                     value="${zone}" placeholder="Availability Zone" required>
-            </div>
-            <div class="col-md-6 d-flex align-items-center">
-              <button type="button" class="btn btn-sm btn-outline-danger remove-az-btn">
-                <i class="bi bi-trash"></i> Remove
-              </button>
-            </div>
-          `;
-          azContainer.appendChild(zoneDiv);
-        });
-      } else {
-        defaultZones.forEach(zone => {
-          const zoneDiv = document.createElement('div');
-          zoneDiv.className = 'row mb-2 az-row';
-          zoneDiv.innerHTML = `
-            <div class="col-md-6">
-              <input type="text" class="form-control" name="availability_zones" 
-                     value="${zone}" placeholder="Availability Zone" required>
-            </div>
-            <div class="col-md-6 d-flex align-items-center">
-              <button type="button" class="btn btn-sm btn-outline-danger remove-az-btn">
-                <i class="bi bi-trash"></i> Remove
-              </button>
-            </div>
-          `;
-          azContainer.appendChild(zoneDiv);
-        });
-      }
-    }
-    
-    // Add zone button - will be updated after calculateSubnets is defined
-    let azCounter = document.querySelectorAll('.az-row').length;
-    const addZoneBtn = document.getElementById('add-az');
-    if (addZoneBtn) {
-      // Store reference to add zone handler
-      this.addZoneHandler = () => {
-        const zoneDiv = document.createElement('div');
-        zoneDiv.className = 'row mb-2 az-row';
-        zoneDiv.innerHTML = `
-          <div class="col-md-6">
-            <input type="text" class="form-control" name="availability_zones" 
-                   placeholder="Availability Zone" required>
-          </div>
-          <div class="col-md-6 d-flex align-items-center">
-            <button type="button" class="btn btn-sm btn-outline-danger remove-az-btn">
-              <i class="bi bi-trash"></i> Remove
-            </button>
-          </div>
-        `;
-        azContainer.appendChild(zoneDiv);
-        azCounter++;
-      };
-      addZoneBtn.addEventListener('click', this.addZoneHandler);
-    }
-    
-    // Remove zone buttons - will be updated after calculateSubnets is defined
-    document.querySelectorAll('.remove-az-btn').forEach(btn => {
-      btn.addEventListener('click', function() {
-        const row = this.closest('.az-row');
-        if (document.querySelectorAll('.az-row').length > 1) {
-          row.remove();
-        } else {
-          alert('At least one availability zone is required.');
-        }
-      });
-    });
-    
-    // Setup create_new_vpc toggle
-    const createNewVpcCheckbox = document.getElementById('create_new_vpc');
-    const existingVpcSection = document.getElementById('existing-vpc-section');
-    if (createNewVpcCheckbox && existingVpcSection) {
-      createNewVpcCheckbox.addEventListener('change', function() {
-        if (this.checked) {
-          existingVpcSection.style.display = 'none';
-        } else {
-          existingVpcSection.style.display = 'block';
-        }
-      });
-    }
-    
-    // Setup private link validation
-    const privateLinkCheckbox = document.getElementById('enable_private_link');
-    const pricingTierSelect = document.querySelector('select[name="pricing_tier"]');
-    const privateLinkWarning = document.getElementById('private-link-warning');
-    
-    const checkPrivateLinkRequirements = () => {
-      const tier = pricingTierSelect?.value;
-      const privateLinkEnabled = privateLinkCheckbox?.checked || false;
-      const requiredTier = this.currentProvider === 'aws' ? 'ENTERPRISE' : 'PREMIUM';
-      
-      if (privateLinkEnabled && tier !== requiredTier && privateLinkWarning) {
-        privateLinkWarning.style.display = 'block';
-      } else if (privateLinkWarning) {
-        privateLinkWarning.style.display = 'none';
-      }
-    };
-    
-    privateLinkCheckbox?.addEventListener('change', checkPrivateLinkRequirements);
-    pricingTierSelect?.addEventListener('change', checkPrivateLinkRequirements);
-    
-    // Real-time subnet calculation
+    // Real-time subnet calculation function (defined early so it can be used in availability zone handlers)
     const vpcCidrInput = document.querySelector('input[name="vpc_cidr"]');
+    const pricingTierSelect = document.querySelector('select[name="pricing_tier"]');
+    const privateLinkCheckbox = document.getElementById('enable_private_link');
+    const privateLinkWarning = document.getElementById('private-link-warning');
     
     const calculateSubnets = Utils.debounce(() => {
       const vpcCidr = vpcCidrInput?.value;
       const pricingTier = pricingTierSelect?.value;
       const enablePrivateLink = privateLinkCheckbox?.checked || false;
-      const zones = Array.from(document.querySelectorAll('#az-container input'))
-        .map(input => input.value.trim())
-        .filter(v => v);
+      const zones = this.getSelectedAvailabilityZones();
       
       if (!vpcCidr || zones.length === 0 || !pricingTier) {
         const preview = document.getElementById('subnets-preview');
@@ -1338,8 +1508,8 @@ class App {
           if (summaryContainer && summary && !summary.error) {
             summaryContainer.innerHTML = `
               <div class="card">
-                <div class="card-body p-3">
-                  <h6 class="card-title">Network Utilization Summary</h6>
+                <div class="card-body">
+                  <h6 class="card-title mb-3">Network Utilization Summary</h6>
                   <div class="row text-center">
                     <div class="col-3">
                       <div class="h6 text-primary mb-1">${Utils.formatNumber(summary.total_ips)}</div>
@@ -1368,6 +1538,711 @@ class App {
       }
     }, 500);
     
+    // Store calculateSubnets for use in handlers
+    this.calculateSubnets = calculateSubnets;
+    
+    // Initialize availability zones - using Choices.js
+    const azSelect = document.getElementById('availability-zones-select');
+    const regionSelect = document.querySelector('select[name="region"]');
+    let currentRegion = this.currentConfig.region || '';
+    let choicesInstance = null;
+    
+    // Function to update availability zone options
+    const updateAvailabilityZoneOptions = () => {
+      if (!azSelect) return;
+      
+      const zones = this.getAvailabilityZoneOptions(this.currentProvider, currentRegion);
+      
+      // Safety check: ensure zones is an array
+      if (!zones || !Array.isArray(zones) || zones.length === 0) {
+        console.warn(`No availability zones found for provider ${this.currentProvider} and region ${currentRegion}`);
+        // Clear the select
+        azSelect.innerHTML = '<option value="" disabled>No availability zones available</option>';
+        // Destroy Choices.js if it exists
+        if (choicesInstance) {
+          try {
+            choicesInstance.destroy();
+          } catch (e) {
+            console.warn('Error destroying Choices.js:', e);
+          }
+          choicesInstance = null;
+        }
+        return;
+      }
+      
+      // Convert zones to Choices.js format
+      const choicesData = zones.map(zone => ({
+        value: zone.value,
+        label: zone.label,
+        selected: false,
+        disabled: false
+      }));
+      
+      // If Choices.js is already initialized, use setChoices to update options
+      if (choicesInstance && typeof choicesInstance.setChoices === 'function') {
+        try {
+          // Clear current selections first - IMPORTANT: do this before setChoices
+          choicesInstance.setValue([]);
+          choicesInstance.clearStore();
+          
+          // Update choices using setChoices (4th param true = clear existing choices)
+          // This will replace all choices with the new ones
+          choicesInstance.setChoices(choicesData, 'value', 'label', true);
+          
+          // Force clear selections again after updating choices
+          choicesInstance.setValue([]);
+          
+          
+          // Verify the update worked - check that only valid zones are in choices
+          const updatedChoices = choicesInstance.choices || [];
+          const validZoneValues = zones.map(z => z.value);
+          const invalidChoices = updatedChoices.filter(c => c && c.value && !validZoneValues.includes(c.value));
+          
+          if (invalidChoices.length > 0) {
+            console.error(`Choices.js still has invalid choices: ${invalidChoices.map(c => c.value).join(', ')}. Re-initializing...`);
+            // Fall back to destroy and recreate
+            choicesInstance.destroy();
+            choicesInstance = null;
+            // Continue to initialization code below
+          } else if (updatedChoices.length !== zones.length) {
+            console.error(`Choices.js update failed: expected ${zones.length}, got ${updatedChoices.length}. Re-initializing...`);
+            // Fall back to destroy and recreate
+            choicesInstance.destroy();
+            choicesInstance = null;
+            // Continue to initialization code below
+          } else {
+            // Update successful, verify no values are selected
+            try {
+              const currentValues = choicesInstance.getValue(true) || [];
+              if (currentValues.length > 0) {
+                console.warn(`Found ${currentValues.length} selected values after update, clearing...`);
+                choicesInstance.setValue([]);
+              }
+            } catch (e) {
+              console.warn('Error checking selected values:', e);
+            }
+            // We're done
+            return;
+          }
+        } catch (e) {
+          console.error('Error updating Choices.js with setChoices:', e);
+          // Fall back to destroy and recreate
+          try {
+            choicesInstance.destroy();
+          } catch (destroyError) {
+            console.warn('Error destroying Choices.js:', destroyError);
+          }
+          choicesInstance = null;
+        }
+      }
+      
+      // If we get here, we need to initialize Choices.js from scratch
+      // FIRST: Destroy Choices.js BEFORE updating options to ensure clean state
+      if (choicesInstance) {
+        try {
+          choicesInstance.clearStore();
+          choicesInstance.setValue([]);
+          choicesInstance.destroy();
+        } catch (e) {
+          console.warn('Error destroying Choices.js:', e);
+        }
+        choicesInstance = null;
+      }
+      
+      // Also clear the reference stored on the select element
+      if (azSelect && azSelect.choicesInstance) {
+        try {
+          azSelect.choicesInstance.destroy();
+        } catch (e) {
+          // Ignore errors if already destroyed
+        }
+        azSelect.choicesInstance = null;
+      }
+      
+      // Remove Choices.js wrapper from DOM if it exists
+      const choicesWrapper = azSelect.closest('.choices');
+      if (choicesWrapper && choicesWrapper !== azSelect) {
+        const parent = choicesWrapper.parentElement;
+        if (parent) {
+          parent.insertBefore(azSelect, choicesWrapper);
+          choicesWrapper.remove();
+        }
+      }
+      
+      // NOW: Clear existing options and add new ones
+      azSelect.innerHTML = '<option value="" disabled>Select availability zones</option>';
+      
+      // Add zone options
+      zones.forEach(zone => {
+        const option = document.createElement('option');
+        option.value = zone.value;
+        option.textContent = zone.label;
+        azSelect.appendChild(option);
+      });
+      
+      // Verify all options were added
+      const optionCount = azSelect.options.length - 1; // -1 for placeholder
+      if (optionCount !== zones.length) {
+        console.error(`Failed to add all options: expected ${zones.length}, found ${optionCount}. Re-adding...`);
+        zones.forEach(zone => {
+          if (!Array.from(azSelect.options).some(opt => opt.value === zone.value)) {
+            const option = document.createElement('option');
+            option.value = zone.value;
+            option.textContent = zone.label;
+            azSelect.appendChild(option);
+          }
+        });
+      }
+      
+      // Wait for DOM to be updated before initializing Choices.js
+      // Use a small timeout to ensure DOM is fully updated
+      setTimeout(() => {
+        // Initialize Choices.js (wait for it to be available)
+        const initChoices = () => {
+          if (typeof Choices === 'undefined') {
+            // Wait a bit and try again
+            setTimeout(initChoices, 100);
+            return;
+          }
+          
+          // CRITICAL: Verify select element still exists and is in the DOM
+          if (!azSelect || !azSelect.parentElement) {
+            console.error('Select element not found or removed from DOM');
+            return;
+          }
+          
+          // Double-check that all options are still in the select before initializing Choices.js
+          const currentOptions = Array.from(azSelect.options).filter(opt => opt.value && opt.value !== '');
+          const currentOptionValues = currentOptions.map(opt => opt.value);
+          const expectedZoneValues = zones.map(z => z.value);
+          
+          // Check if all expected options are present
+          const missingOptions = expectedZoneValues.filter(val => !currentOptionValues.includes(val));
+          
+          if (currentOptions.length !== zones.length || missingOptions.length > 0) {
+            
+            // Clear and re-add all options
+            azSelect.innerHTML = '<option value="" disabled>Select availability zones</option>';
+            zones.forEach(zone => {
+              const option = document.createElement('option');
+              option.value = zone.value;
+              option.textContent = zone.label;
+              azSelect.appendChild(option);
+            });
+            
+            // Verify again after re-adding
+            const verifyOptions = Array.from(azSelect.options).filter(opt => opt.value && opt.value !== '');
+            if (verifyOptions.length !== zones.length) {
+              console.error(`Failed to add all options after retry. Expected ${zones.length}, got ${verifyOptions.length}`);
+              return;
+            }
+            
+            // Try again after re-adding with a small delay
+            setTimeout(() => {
+              initChoices();
+            }, 50);
+            return;
+          }
+        
+        // Now Choices.js is available
+        const limits = this.getAvailabilityZoneLimits(this.currentProvider);
+        const defaultZones = this.currentConfig.availability_zones || [];
+        
+        // Set default zones if available
+        // IMPORTANT: Only use defaultZones if they actually belong to the current region
+        let initialValues = [];
+        
+        // First, filter defaultZones to only include zones that exist in current region's options
+        const validDefaultZones = defaultZones.filter(z => zones.some(az => az.value === z));
+        
+        // Only use stored zones if they're valid for current region AND region hasn't changed
+        // If region changed, defaultZones will be empty (cleared in region change handler)
+        if (validDefaultZones.length > 0 && currentRegion === (this.currentConfig.region || '')) {
+          initialValues = validDefaultZones;
+        } else if (currentRegion) {
+          // Set default zones based on provider and region (respecting minimum)
+          let defaultZoneValues = [];
+          if (this.currentProvider === 'aws') {
+            defaultZoneValues = [`${currentRegion}a`, `${currentRegion}b`];
+          } else if (this.currentProvider === 'azure') {
+            defaultZoneValues = ['1', '2'];
+          } else if (this.currentProvider === 'gcp') {
+            defaultZoneValues = [`${currentRegion}-a`, `${currentRegion}-b`];
+          }
+          
+          // Ensure we have at least the minimum
+          while (defaultZoneValues.length < limits.min) {
+            if (this.currentProvider === 'aws' && currentRegion) {
+              defaultZoneValues.push(`${currentRegion}${String.fromCharCode(97 + defaultZoneValues.length)}`);
+            } else if (this.currentProvider === 'azure') {
+              defaultZoneValues.push(String(defaultZoneValues.length + 1));
+            } else if (this.currentProvider === 'gcp' && currentRegion) {
+              defaultZoneValues.push(`${currentRegion}-${String.fromCharCode(97 + defaultZoneValues.length)}`);
+            } else {
+              break;
+            }
+          }
+          
+          // Filter to only include zones that exist in available options
+          initialValues = defaultZoneValues.filter(z => zones.some(az => az.value === z));
+        }
+        
+        // CRITICAL: Final verification before initializing Choices.js
+        // Ensure select element exists and is in DOM
+        if (!azSelect || !azSelect.parentElement) {
+          console.error('Cannot initialize Choices.js: select element not in DOM');
+          return;
+        }
+        
+        // Verify all options are present before initializing
+        const finalOptions = Array.from(azSelect.options).filter(opt => opt.value && opt.value !== '');
+        const finalOptionValues = finalOptions.map(opt => opt.value);
+        const expectedValues = zones.map(z => z.value);
+        
+        // Check if we have the correct number of options
+        if (finalOptions.length !== zones.length) {
+          console.error(`Cannot initialize Choices.js: Expected ${zones.length} options, but found ${finalOptions.length} in select`);
+          console.error(`Expected: ${expectedValues.join(', ')}`);
+          console.error(`Found: ${finalOptionValues.join(', ')}`);
+          
+          // Try one more time to fix it
+          azSelect.innerHTML = '<option value="" disabled>Select availability zones</option>';
+          zones.forEach(zone => {
+            const option = document.createElement('option');
+            option.value = zone.value;
+            option.textContent = zone.label;
+            azSelect.appendChild(option);
+          });
+          
+          // Wait a bit and verify again
+          setTimeout(() => {
+            const retryOptions = Array.from(azSelect.options).filter(opt => opt.value && opt.value !== '');
+            if (retryOptions.length === zones.length) {
+              initChoices();
+            } else {
+              console.error(`Failed to fix options. Still have ${retryOptions.length} instead of ${zones.length}`);
+            }
+          }, 100);
+          return;
+        }
+        
+        // Double-check: ensure no old zone values are present
+        const validZoneValues = zones.map(z => z.value);
+        const invalidOptions = finalOptionValues.filter(val => !validZoneValues.includes(val));
+        if (invalidOptions.length > 0) {
+          console.warn(`Found invalid options in select: ${invalidOptions.join(', ')}. Removing...`);
+          invalidOptions.forEach(invalidVal => {
+            const invalidOption = azSelect.querySelector(`option[value="${invalidVal}"]`);
+            if (invalidOption) {
+              invalidOption.remove();
+            }
+          });
+          // Re-check after removal - if we removed invalid options, we need to re-add missing ones
+          const updatedOptions = Array.from(azSelect.options).filter(opt => opt.value && opt.value !== '');
+          const missingValues = expectedValues.filter(val => !updatedOptions.some(opt => opt.value === val));
+          if (missingValues.length > 0) {
+            console.warn(`After removing invalid options, missing: ${missingValues.join(', ')}. Re-adding...`);
+            missingValues.forEach(val => {
+              const zone = zones.find(z => z.value === val);
+              if (zone) {
+                const option = document.createElement('option');
+                option.value = zone.value;
+                option.textContent = zone.label;
+                azSelect.appendChild(option);
+              }
+            });
+          }
+        }
+        
+        // Final check before initializing
+        const preInitOptions = Array.from(azSelect.options).filter(opt => opt.value && opt.value !== '');
+        if (preInitOptions.length !== zones.length) {
+          console.error(`Final check failed: Expected ${zones.length} options, but have ${preInitOptions.length}. Aborting Choices.js initialization.`);
+          return;
+        }
+        
+        
+        // CRITICAL: Verify select still has options right before initialization
+        const lastCheckOptions = Array.from(azSelect.options).filter(opt => opt.value && opt.value !== '');
+        if (lastCheckOptions.length !== zones.length) {
+          console.error(`Options disappeared before Choices init! Had ${preInitOptions.length}, now have ${lastCheckOptions.length}`);
+          // Re-add options immediately
+          azSelect.innerHTML = '<option value="" disabled>Select availability zones</option>';
+          zones.forEach(zone => {
+            const option = document.createElement('option');
+            option.value = zone.value;
+            option.textContent = zone.label;
+            azSelect.appendChild(option);
+          });
+          // Wait a bit and retry
+          setTimeout(() => {
+            initChoices();
+          }, 100);
+          return;
+        }
+        
+        try {
+          // CRITICAL: Ensure options are in the select before initializing Choices.js
+          // Choices.js reads from the select HTML, so we need the options there
+          // Double-check one more time right before initialization
+          const finalCheck = Array.from(azSelect.options).filter(opt => opt.value && opt.value !== '');
+          if (finalCheck.length !== zones.length) {
+            azSelect.innerHTML = '<option value="" disabled>Select availability zones</option>';
+            zones.forEach(zone => {
+              const option = document.createElement('option');
+              option.value = zone.value;
+              option.textContent = zone.label;
+              azSelect.appendChild(option);
+            });
+          }
+          
+          // CRITICAL: Ensure select has all options BEFORE initializing Choices.js
+          // Choices.js reads from the select HTML, so we need options there
+          // Double-check one final time right before initialization
+          const finalOptionsCheck = Array.from(azSelect.options).filter(opt => opt.value && opt.value !== '');
+          if (finalOptionsCheck.length !== zones.length) {
+            azSelect.innerHTML = '<option value="" disabled>Select availability zones</option>';
+            zones.forEach(zone => {
+              const option = document.createElement('option');
+              option.value = zone.value;
+              option.textContent = zone.label;
+              azSelect.appendChild(option);
+            });
+          }
+          
+          // Store options data before Choices.js potentially modifies the select
+          const optionsData = Array.from(azSelect.options)
+            .filter(opt => opt.value && opt.value !== '')
+            .map(opt => ({
+              value: opt.value,
+              label: opt.textContent,
+              selected: false,
+              disabled: false
+            }));
+          
+          // Create Choices.js - let it read from the select HTML
+          // Don't pass choices in constructor - let Choices.js read from select
+          try {
+            choicesInstance = new Choices(azSelect, {
+              removeItemButton: true,
+              searchEnabled: true,
+              searchChoices: true,
+              searchFields: ['label', 'value'],
+              placeholder: true,
+              placeholderValue: 'Type to search availability zones...',
+              searchPlaceholderValue: 'Type to search...',
+              maxItemText: (maxItemCount) => {
+                return `Maximum ${limits.max} availability zone(s) allowed`;
+              },
+              addItemText: (value) => {
+                return `Press Enter to add <b>"${value}"</b>`;
+              },
+              maxItemCount: limits.max,
+              duplicateItemsAllowed: false,
+              shouldSort: false,
+              allowHTML: true,
+              classNames: {
+                containerOuter: 'choices form-select',
+                containerInner: 'choices__inner',
+                input: 'choices__input',
+                inputCloned: 'choices__input--cloned',
+                list: 'choices__list',
+                listItems: 'choices__list--multiple',
+                listSingle: 'choices__list--single',
+                listDropdown: 'choices__list--dropdown',
+                item: 'choices__item',
+                itemSelectable: 'choices__item--selectable',
+                itemDisabled: 'choices__item--disabled',
+                itemChoice: 'choices__item--choice',
+                placeholder: 'choices__placeholder',
+                group: 'choices__group',
+                groupHeading: 'choices__heading',
+                button: 'choices__button',
+                activeState: 'is-active',
+                focusState: 'is-focused',
+                openState: 'is-open',
+                disabledState: 'is-disabled',
+                highlightedState: 'is-highlighted',
+                selectedState: 'is-selected',
+                flippedState: 'is-flipped',
+                loadingState: 'is-loading',
+                noResults: 'has-no-results',
+                noChoices: 'has-no-choices'
+              }
+            });
+            
+            // Always use setChoices to ensure options are set correctly
+            if (optionsData.length > 0) {
+              // CRITICAL: Clear any selected values BEFORE setting new choices
+              // This prevents selected items from being counted as choices
+              try {
+                choicesInstance.setValue([]);
+                choicesInstance.clearStore();
+              } catch (e) {
+                // Ignore errors
+              }
+              
+              try {
+                // Use setChoices to set options
+                choicesInstance.setChoices(optionsData, 'value', 'label', true);
+                
+                // Clear values again after setChoices to ensure clean state
+                setTimeout(() => {
+                  try {
+                    choicesInstance.setValue([]);
+                  } catch (e) {
+                    // Ignore errors
+                  }
+                }, 10);
+                
+                // Wait a bit and verify choices were loaded
+                setTimeout(() => {
+                  const checkChoices2 = choicesInstance._store ? choicesInstance._store.choices : [];
+                  
+                  // Count unique choices (selected items might be duplicated)
+                  const uniqueChoices = new Set(checkChoices2.map(c => c.value || c.id));
+                  const finalChoicesCount = uniqueChoices.size;
+                  
+                  if (finalChoicesCount === zones.length) {
+                    setupChoicesComplete();
+                  } else {
+                    // Last resort: Try to manually add choices to the store
+                    if (choicesInstance._store) {
+                      try {
+                        choicesInstance._store.choices = optionsData.map(opt => ({
+                          id: opt.value,
+                          value: opt.value,
+                          label: opt.label,
+                          customProperties: {},
+                          active: false,
+                          disabled: opt.disabled || false,
+                          highlighted: false,
+                          placeholder: false,
+                          selected: false
+                        }));
+                        
+                        // Trigger a render
+                        if (typeof choicesInstance._render === 'function') {
+                          choicesInstance._render();
+                        }
+                        
+                        setTimeout(() => {
+                          setupChoicesComplete();
+                        }, 100);
+                      } catch (manualError) {
+                        setupChoicesComplete(); // Continue anyway
+                      }
+                    } else {
+                      setupChoicesComplete(); // Continue anyway
+                    }
+                  }
+                }, 200);
+              } catch (setChoicesError) {
+                setupChoicesComplete(); // Try to continue anyway
+              }
+            } else {
+              setupChoicesComplete(); // Try to continue anyway
+            }
+          } catch (initError) {
+            choicesInstance = null;
+          }
+          
+          // Function to complete setup after Choices.js is initialized
+          const setupChoicesComplete = () => {
+            if (!choicesInstance) return;
+            
+            // Set initial values - but only if they're valid for current region
+            const finalOptionValues = zones.map(z => z.value);
+              const validInitialValues = initialValues.filter(val => {
+                return finalOptionValues.includes(val);
+              });
+            
+            if (validInitialValues.length > 0) {
+              choicesInstance.setValue(validInitialValues);
+            } else {
+              // Ensure no values are selected
+              choicesInstance.setValue([]);
+            }
+            
+            // Store choices instance for later use
+            azSelect.choicesInstance = choicesInstance;
+            
+            // Add event listeners for validation and subnet recalculation
+            const appInstance = this;
+            
+            // Listen to Choices.js events (only add once)
+            if (!azSelect.hasChoicesListeners) {
+              azSelect.addEventListener('change', function() {
+                if (!choicesInstance) return;
+                const selectedValues = choicesInstance.getValue(true) || [];
+                const limits = appInstance.getAvailabilityZoneLimits(appInstance.currentProvider);
+                
+                // Validate minimum
+                if (selectedValues.length < limits.min) {
+                  Utils.showFlashMessage(
+                    `At least ${limits.min} availability zone(s) required for ${appInstance.currentProvider.toUpperCase()}.`, 
+                    'warning'
+                  );
+                }
+                
+                // Trigger subnet recalculation
+                if (typeof calculateSubnets === 'function') {
+                  calculateSubnets();
+                }
+              });
+              
+              // Use Choices.js event system
+              const container = azSelect.closest('.choices') || document.querySelector('.choices');
+              if (container) {
+                container.addEventListener('addItem', function() {
+                  if (typeof calculateSubnets === 'function') {
+                    calculateSubnets();
+                  }
+                });
+                
+                container.addEventListener('removeItem', function() {
+                  if (typeof calculateSubnets === 'function') {
+                    calculateSubnets();
+                  }
+                });
+                
+                // Ensure dropdown appears above all sections when opened
+                // Use MutationObserver to detect when dropdown opens
+                const observer = new MutationObserver(function(mutations) {
+                  mutations.forEach(function(mutation) {
+                    if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                      const target = mutation.target;
+                      if (target.classList.contains('is-open')) {
+                        // Dropdown is now open - ensure it can overflow all sections
+                        const dropdown = container.querySelector('.choices__list--dropdown');
+                        if (dropdown) {
+                          // Force high z-index and ensure visibility
+                          dropdown.style.zIndex = '99999';
+                          dropdown.style.position = 'absolute';
+                          
+                          // Ensure all parent containers allow overflow
+                          let parent = dropdown.parentElement;
+                          while (parent && parent !== document.body) {
+                            const computedStyle = window.getComputedStyle(parent);
+                            if (computedStyle.overflow === 'hidden' || computedStyle.overflow === 'auto' || computedStyle.overflow === 'scroll') {
+                              parent.style.setProperty('overflow', 'visible', 'important');
+                            }
+                            parent = parent.parentElement;
+                          }
+                          
+                          // Also check all ancestors up to body
+                          let ancestor = container.parentElement;
+                          while (ancestor && ancestor !== document.body) {
+                            const ancestorStyle = window.getComputedStyle(ancestor);
+                            if (ancestorStyle.overflow === 'hidden' || ancestorStyle.overflow === 'auto' || ancestorStyle.overflow === 'scroll') {
+                              ancestor.style.setProperty('overflow', 'visible', 'important');
+                            }
+                            ancestor = ancestor.parentElement;
+                          }
+                        }
+                      }
+                    }
+                  });
+                });
+                
+                // Observe the container for class changes
+                observer.observe(container, {
+                  attributes: true,
+                  attributeFilter: ['class']
+                });
+              }
+              
+              azSelect.hasChoicesListeners = true;
+            }
+            
+          };
+        } catch (initError) {
+          choicesInstance = null;
+          return;
+        }
+        };
+        
+        initChoices();
+      });
+    };
+    
+    // Initialize availability zone select
+    if (azSelect) {
+      updateAvailabilityZoneOptions();
+      
+      // Update when region changes
+      if (regionSelect) {
+        const appInstance = this;
+        regionSelect.addEventListener('change', function() {
+          const newRegion = this.value;
+          if (newRegion) {
+            currentRegion = newRegion;
+            
+            // Clear selections when region changes (zones are region-specific)
+            // First, clear the stored config to prevent old zones from being reapplied
+            if (appInstance.currentConfig) {
+              appInstance.currentConfig.availability_zones = [];
+              appInstance.currentConfig.region = newRegion; // Update region in config
+              Utils.setStorage('config', appInstance.currentConfig); // Persist the change
+            }
+            
+            // Clear Choices.js selections properly
+            // Note: We don't destroy here - updateAvailabilityZoneOptions() will use setChoices() if instance exists
+            if (choicesInstance) {
+              try {
+                // Clear all selected values
+                choicesInstance.setValue([]);
+                choicesInstance.clearStore();
+              } catch (e) {
+                console.warn('Error clearing Choices.js:', e);
+              }
+            }
+            
+            // Update availability zone options (will use setChoices() if instance exists, or recreate if not)
+            updateAvailabilityZoneOptions();
+            
+            // Trigger subnet recalculation if available
+            setTimeout(() => {
+              if (typeof appInstance.calculateSubnets === 'function') {
+                appInstance.calculateSubnets();
+              }
+            }, 150);
+          }
+        });
+      }
+    }
+    
+    // Setup create_new_vpc toggle
+    const createNewVpcCheckbox = document.getElementById('create_new_vpc');
+    const existingVpcSection = document.getElementById('existing-vpc-section');
+    if (createNewVpcCheckbox && existingVpcSection) {
+      createNewVpcCheckbox.addEventListener('change', function() {
+        if (this.checked) {
+          existingVpcSection.style.display = 'none';
+        } else {
+          existingVpcSection.style.display = 'block';
+        }
+      });
+    }
+    
+    // Setup private link validation
+    const checkPrivateLinkRequirements = () => {
+      const tier = pricingTierSelect?.value;
+      const privateLinkEnabled = privateLinkCheckbox?.checked || false;
+      const requiredTier = this.currentProvider === 'aws' ? 'ENTERPRISE' : 'PREMIUM';
+      
+      if (privateLinkEnabled && tier !== requiredTier && privateLinkWarning) {
+        privateLinkWarning.style.display = 'block';
+      } else if (privateLinkWarning) {
+        privateLinkWarning.style.display = 'none';
+      }
+    };
+    
+    privateLinkCheckbox?.addEventListener('change', checkPrivateLinkRequirements);
+    pricingTierSelect?.addEventListener('change', checkPrivateLinkRequirements);
+    
+    // Real-time subnet calculation event listeners
+    // Note: calculateSubnets is already defined earlier in the function
     vpcCidrInput?.addEventListener('input', calculateSubnets);
     pricingTierSelect?.addEventListener('change', () => {
       checkPrivateLinkRequirements();
@@ -1378,47 +2253,8 @@ class App {
       calculateSubnets();
     });
     
-    // Add input listeners to availability zone inputs for recalculation
-    document.querySelectorAll('#az-container input[name="availability_zones"]').forEach(input => {
-      input.addEventListener('input', calculateSubnets);
-    });
-    
-    // Update add zone button to add listener to new inputs and trigger recalculation
-    if (addZoneBtn && this.addZoneHandler) {
-      // Remove old handler and add new one
-      addZoneBtn.removeEventListener('click', this.addZoneHandler);
-      addZoneBtn.addEventListener('click', () => {
-        this.addZoneHandler();
-        // Wait for DOM to update, then add listener to new input and recalculate
-        setTimeout(() => {
-          const newInputs = document.querySelectorAll('#az-container input[name="availability_zones"]');
-          newInputs.forEach(input => {
-            // Check if listener already added
-            if (!input.hasAttribute('data-has-listener')) {
-              input.addEventListener('input', calculateSubnets);
-              input.setAttribute('data-has-listener', 'true');
-            }
-          });
-          calculateSubnets();
-        }, 100);
-      });
-    }
-    
-    // Update remove zone buttons to trigger recalculation
-    document.querySelectorAll('.remove-az-btn').forEach(btn => {
-      const originalHandler = btn.onclick;
-      btn.addEventListener('click', function() {
-        const row = this.closest('.az-row');
-        if (document.querySelectorAll('.az-row').length > 1) {
-          row.remove();
-          setTimeout(() => {
-            calculateSubnets();
-          }, 100);
-        } else {
-          alert('At least one availability zone is required.');
-        }
-      });
-    });
+    // Note: Change listeners for availability zone selects are added above in the initialization section
+    // Note: Remove button handlers are added above in the addAvailabilityZoneRow function
     
     // Trigger initial calculations
     if (this.currentConfig.vpc_cidr && this.currentConfig.availability_zones) {
@@ -1437,19 +2273,82 @@ class App {
       // Clear all previous field validations
       this.clearAllFieldValidations();
       
-      // Get availability zones
-      const zones = Array.from(document.querySelectorAll('#az-container input'))
-        .map(input => input.value.trim())
-        .filter(v => v);
+      // Get availability zones from multiple select
+      const zones = this.getSelectedAvailabilityZones();
+      
+      // Validate availability zones
+      const limits = this.getAvailabilityZoneLimits(this.currentProvider);
       
       if (zones.length === 0) {
-        // Mark availability zones container as invalid
-        const azContainer = document.getElementById('az-container');
-        if (azContainer) {
-          azContainer.setAttribute('data-invalid', 'true');
-          azContainer.setAttribute('data-error', 'At least one availability zone is required.');
+        const azSelect = document.getElementById('availability-zones-select');
+        if (azSelect) {
+          azSelect.setAttribute('data-invalid', 'true');
+          azSelect.setAttribute('data-error', `At least ${limits.min} availability zone(s) required for ${this.currentProvider.toUpperCase()}.`);
+          const choicesContainer = azSelect.closest('.choices');
+          if (choicesContainer) {
+            choicesContainer.classList.add('is-invalid');
+          }
         }
-        Utils.showFlashMessage('At least one availability zone is required.', 'error');
+        Utils.showFlashMessage(`At least ${limits.min} availability zone(s) required for ${this.currentProvider.toUpperCase()}.`, 'error');
+        return;
+      }
+      
+      // Check minimum
+      if (zones.length < limits.min) {
+        const azSelect = document.getElementById('availability-zones-select');
+        if (azSelect) {
+          azSelect.setAttribute('data-invalid', 'true');
+          azSelect.setAttribute('data-error', `At least ${limits.min} availability zone(s) required for ${this.currentProvider.toUpperCase()}.`);
+          const choicesContainer = azSelect.closest('.choices');
+          if (choicesContainer) {
+            choicesContainer.classList.add('is-invalid');
+          }
+        }
+        Utils.showFlashMessage(`At least ${limits.min} availability zone(s) required for ${this.currentProvider.toUpperCase()}.`, 'error');
+        return;
+      }
+      
+      // Check maximum
+      if (zones.length > limits.max) {
+        const azSelect = document.getElementById('availability-zones-select');
+        if (azSelect) {
+          azSelect.setAttribute('data-invalid', 'true');
+          azSelect.setAttribute('data-error', `Maximum ${limits.max} availability zone(s) allowed for ${this.currentProvider.toUpperCase()}.`);
+          const choicesContainer = azSelect.closest('.choices');
+          if (choicesContainer) {
+            choicesContainer.classList.add('is-invalid');
+          }
+        }
+        Utils.showFlashMessage(`Maximum ${limits.max} availability zone(s) allowed for ${this.currentProvider.toUpperCase()}.`, 'error');
+        return;
+      }
+      
+      // Check for duplicates (shouldn't happen with multiple select, but check anyway)
+      const uniqueZones = [...new Set(zones)];
+      if (uniqueZones.length !== zones.length) {
+        const azSelect = document.getElementById('availability-zones-select');
+        if (azSelect) {
+          azSelect.setAttribute('data-invalid', 'true');
+          azSelect.setAttribute('data-error', 'Duplicate availability zones are not allowed.');
+        }
+        Utils.showFlashMessage('Duplicate availability zones are not allowed.', 'error');
+        return;
+      }
+      
+      // Validate zone values are valid for provider and region
+      const validZones = this.getAvailabilityZoneOptions(this.currentProvider, config.region).map(z => z.value);
+      const invalidZones = zones.filter(z => !validZones.includes(z));
+      if (invalidZones.length > 0) {
+        const azSelect = document.getElementById('availability-zones-select');
+        if (azSelect) {
+          azSelect.setAttribute('data-invalid', 'true');
+          azSelect.setAttribute('data-error', `Invalid availability zones: ${invalidZones.join(', ')}`);
+          const choicesContainer = azSelect.closest('.choices');
+          if (choicesContainer) {
+            choicesContainer.classList.add('is-invalid');
+          }
+        }
+        Utils.showFlashMessage(`Invalid availability zones: ${invalidZones.join(', ')}`, 'error');
         return;
       }
       
@@ -1507,11 +2406,15 @@ class App {
         // Mark each invalid field
         Object.keys(validation.errors).forEach(fieldName => {
           if (fieldName === 'availability_zones') {
-            // Mark availability zones container
-            const azContainer = document.getElementById('az-container');
-            if (azContainer) {
-              azContainer.setAttribute('data-invalid', 'true');
-              azContainer.setAttribute('data-error', validation.errors[fieldName]);
+            // Mark availability zones select
+            const azSelect = document.getElementById('availability-zones-select');
+            if (azSelect) {
+              azSelect.setAttribute('data-invalid', 'true');
+              azSelect.setAttribute('data-error', validation.errors[fieldName]);
+              const choicesContainer = azSelect.closest('.choices');
+              if (choicesContainer) {
+                choicesContainer.classList.add('is-invalid');
+              }
             }
           } else {
             this.markFieldAsInvalid(fieldName, validation.errors[fieldName]);
@@ -1547,11 +2450,8 @@ class App {
           config.create_new_vpc = document.getElementById('create_new_vpc')?.checked !== false;
           config.enable_private_link = document.getElementById('enable_private_link')?.checked || false;
           
-          // Get availability zones
-          const zones = Array.from(document.querySelectorAll('#az-container input'))
-            .map(input => input.value.trim())
-            .filter(v => v);
-          config.availability_zones = zones;
+          // Get availability zones from multiple select
+          config.availability_zones = this.getSelectedAvailabilityZones();
           
           // Validate only this field
           const validation = Validators.validateConfiguration(config);

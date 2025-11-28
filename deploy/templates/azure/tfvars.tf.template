@@ -1,0 +1,5 @@
+# Azure Configuration
+resource_group_name = "{{resource_group_name}}"
+region             = "{{region}}"
+project_prefix     = "{{project_prefix}}"
+

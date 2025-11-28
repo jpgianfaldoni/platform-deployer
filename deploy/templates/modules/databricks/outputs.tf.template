@@ -1,0 +1,6 @@
+# Databricks Module Outputs
+output "workspace_url" {
+  description = "Workspace URL"
+  value       = "Configured in main.tf"
+}
+

@@ -99,7 +99,7 @@
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
     line-height: 1.6;
-    color: var(--text-primary);
+    color: var(--text-primary) !important; /* Ensure proper default text color */
     background-color: var(--bg-primary);
     font-size: var(--font-size-base);
     -webkit-font-smoothing: antialiased;
@@ -107,12 +107,42 @@ body {
     text-rendering: optimizeLegibility;
 }
 
+/* Ensure lists have proper contrast */
+ul, ol, li {
+    color: var(--text-primary);
+}
+
+.bg-light ul,
+.bg-light ol,
+.bg-light li,
+section.bg-light ul,
+section.bg-light ol,
+section.bg-light li {
+    color: var(--text-primary) !important;
+}
+
+/* Lists in colored sections should have white text */
+.bg-primary ul, .bg-primary ol, .bg-primary li,
+.bg-success ul, .bg-success ol, .bg-success li,
+.bg-info ul, .bg-info ol, .bg-info li,
+.bg-danger ul, .bg-danger ol, .bg-danger li {
+    color: #ffffff !important;
+}
+
 /* Improved Typography */
 h1, h2, h3, h4, h5, h6 {
     font-weight: 700;
     line-height: 1.2;
-    color: var(--text-primary);
+    color: var(--text-primary) !important; /* Ensure proper contrast */
     margin-bottom: var(--spacing-md);
+}
+
+/* Override for headings in colored sections */
+.bg-primary h1, .bg-primary h2, .bg-primary h3, .bg-primary h4, .bg-primary h5, .bg-primary h6,
+.bg-success h1, .bg-success h2, .bg-success h3, .bg-success h4, .bg-success h5, .bg-success h6,
+.bg-info h1, .bg-info h2, .bg-info h3, .bg-info h4, .bg-info h5, .bg-info h6,
+.bg-danger h1, .bg-danger h2, .bg-danger h3, .bg-danger h4, .bg-danger h5, .bg-danger h6 {
+    color: #ffffff !important;
 }
 
 h1 { font-size: var(--font-size-4xl); }
@@ -125,12 +155,35 @@ h6 { font-size: var(--font-size-base); }
 p {
     margin-bottom: var(--spacing-md);
     line-height: 1.7;
+    color: var(--text-primary); /* Ensure proper text color */
+}
+
+/* Override for paragraphs in colored sections */
+.bg-primary p,
+.bg-success p,
+.bg-info p,
+.bg-danger p {
+    color: #ffffff !important;
 }
 
 .lead {
     font-size: var(--font-size-xl);
     font-weight: 400;
     line-height: 1.6;
+    color: var(--text-primary); /* Ensure proper text color */
+}
+
+/* Lead text in colored sections */
+.bg-primary .lead,
+.bg-success .lead,
+.bg-info .lead,
+.bg-danger .lead {
+    color: #ffffff !important;
+}
+
+.bg-light .lead,
+section.bg-light .lead {
+    color: var(--text-primary) !important;
 }
 
 /* Navigation - Enhanced contrast */
@@ -202,12 +255,48 @@ p {
     border-bottom: 2px solid var(--border-light);
     font-weight: 600;
     padding: 1rem 1.5rem;
-    color: var(--text-primary);
+    color: var(--text-primary) !important; /* Ensure dark text on light background */
+}
+
+/* Ensure card headers with bg-light have proper contrast */
+.card-header.bg-light {
+    background-color: var(--bg-secondary) !important;
+    color: var(--text-primary) !important;
+    border-bottom: 2px solid var(--border-medium);
+}
+
+/* Card headers with colored backgrounds should have white text */
+.card-header.bg-primary,
+.card-header.bg-success,
+.card-header.bg-info,
+.card-header.bg-warning,
+.card-header.bg-danger {
+    color: #ffffff !important;
 }
 
 .card-body {
     padding: 1.5rem;
-    color: var(--text-primary);
+    color: var(--text-primary) !important; /* Ensure proper text color */
+    background-color: var(--bg-primary);
+}
+
+/* Ensure all text elements in card-body have proper contrast */
+.card-body h1,
+.card-body h2,
+.card-body h3,
+.card-body h4,
+.card-body h5,
+.card-body h6,
+.card-body p,
+.card-body .lead,
+.card-body .text-muted,
+.card-body label,
+.card-body .form-label {
+    color: var(--text-primary) !important;
+}
+
+.card-body .text-muted {
+    color: var(--text-secondary) !important;
 }
 
 /* Provider Cards - Better visual feedback */
@@ -262,9 +351,15 @@ p {
 /* Forms - Enhanced readability */
 .form-label {
     font-weight: 600;
-    color: var(--text-primary); /* Darker for better contrast */
+    color: var(--text-primary) !important; /* Darker for better contrast */
     margin-bottom: 0.5rem;
     font-size: 0.95rem;
+}
+
+/* Ensure form labels are visible in all contexts */
+.bg-light .form-label,
+section.bg-light .form-label {
+    color: var(--text-primary) !important;
 }
 
 .form-control, 
@@ -298,8 +393,14 @@ p {
 }
 
 .form-check-label {
-    color: var(--text-primary);
+    color: var(--text-primary) !important; /* Ensure proper contrast */
     font-weight: 500;
+}
+
+/* Ensure form check labels are visible */
+.bg-light .form-check-label,
+section.bg-light .form-check-label {
+    color: var(--text-primary) !important;
 }
 
 .form-check-input {
@@ -500,27 +601,50 @@ p {
 
 .badge.bg-light {
     background-color: var(--bs-gray-200) !important;
-    color: var(--text-primary);
+    color: var(--text-primary) !important; /* Dark text on light background */
+    border: 1px solid var(--border-medium);
+}
+
+.badge.bg-light.text-dark {
+    color: var(--text-primary) !important;
+    background-color: var(--bs-gray-200) !important;
 }
 
 /* Tables - Enhanced readability */
 .table {
     margin-bottom: 0;
-    color: var(--text-primary);
+    color: var(--text-primary) !important; /* Ensure proper text color */
 }
 
 .table td {
     padding: 0.75rem 0.5rem;
     border-top: 1px solid var(--border-light);
     vertical-align: middle;
-    color: var(--text-primary);
+    color: var(--text-primary) !important; /* Ensure proper text color */
 }
 
 .table th {
     padding: 1rem 0.5rem;
     border-bottom: 2px solid var(--border-medium);
     font-weight: 700;
-    color: var(--text-primary);
+    color: var(--text-primary) !important; /* Ensure proper text color */
+    background-color: var(--bg-secondary);
+}
+
+/* Ensure tables in cards have proper contrast */
+.card .table,
+.card-body .table {
+    color: var(--text-primary) !important;
+}
+
+.card .table td,
+.card-body .table td {
+    color: var(--text-primary) !important;
+}
+
+.card .table th,
+.card-body .table th {
+    color: var(--text-primary) !important;
     background-color: var(--bg-secondary);
 }
 
@@ -530,14 +654,21 @@ p {
 
 /* Code Elements - Better contrast */
 code {
-    background-color: var(--bg-tertiary);
-    color: var(--bs-primary-dark);
+    background-color: var(--bg-tertiary) !important;
+    color: var(--bs-primary-dark) !important; /* Dark text on light background */
     padding: 0.25rem 0.5rem;
     border-radius: 0.375rem;
     font-size: 0.875em;
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
     font-weight: 500;
     border: 1px solid var(--border-light);
+}
+
+/* Code blocks with bg-light should have dark text */
+.bg-light code,
+code.bg-light {
+    background-color: var(--bg-tertiary) !important;
+    color: var(--bs-primary-dark) !important;
 }
 
 pre code {
@@ -557,6 +688,22 @@ pre code {
     transition: all 0.2s ease-in-out;
     border: 1px solid var(--border-light);
     border-left-width: 4px !important;
+    color: var(--text-primary) !important; /* Ensure proper text color */
+}
+
+.subnet-card h1,
+.subnet-card h2,
+.subnet-card h3,
+.subnet-card h4,
+.subnet-card h5,
+.subnet-card h6,
+.subnet-card p,
+.subnet-card .text-muted {
+    color: var(--text-primary) !important;
+}
+
+.subnet-card .text-muted {
+    color: var(--text-secondary) !important;
 }
 
 .subnet-card:hover {
@@ -613,6 +760,20 @@ pre code {
     color: var(--text-secondary) !important; /* Better contrast */
 }
 
+/* Ensure text-muted is visible on light backgrounds */
+.bg-light .text-muted,
+section.bg-light .text-muted {
+    color: var(--text-secondary) !important;
+}
+
+/* Text-muted on colored backgrounds should be lighter */
+.bg-primary .text-muted,
+.bg-success .text-muted,
+.bg-info .text-muted,
+.bg-danger .text-muted {
+    color: rgba(255, 255, 255, 0.8) !important;
+}
+
 .text-primary {
     color: var(--bs-primary) !important;
 }
@@ -640,6 +801,24 @@ pre code {
 /* Background Colors */
 .bg-light {
     background-color: var(--bg-secondary) !important;
+    color: var(--text-primary) !important; /* Ensure dark text on light background */
+}
+
+/* Ensure sections with bg-light have proper text contrast */
+section.bg-light,
+.bg-light section {
+    color: var(--text-primary) !important;
+}
+
+section.bg-light h1,
+section.bg-light h2,
+section.bg-light h3,
+section.bg-light h4,
+section.bg-light h5,
+section.bg-light h6,
+section.bg-light p,
+section.bg-light .lead {
+    color: var(--text-primary) !important;
 }
 
 .bg-primary {
@@ -926,6 +1105,18 @@ body:has(#offline-indicator[style*="block"]) .navbar {
     margin: var(--spacing-2xl) 0;
     position: relative;
     overflow: hidden;
+    color: var(--text-primary) !important; /* Ensure proper text color */
+}
+
+.install-section h1,
+.install-section h2,
+.install-section h3,
+.install-section h4,
+.install-section h5,
+.install-section h6,
+.install-section p,
+.install-section .lead {
+    color: var(--text-primary) !important;
 }
 
 .install-section::before {
@@ -1029,6 +1220,18 @@ body:has(#offline-indicator[style*="block"]) .navbar {
 .what-we-do-section {
     padding: var(--spacing-3xl) 0;
     background: var(--bg-secondary);
+    color: var(--text-primary) !important; /* Ensure proper text color */
+}
+
+.what-we-do-section h1,
+.what-we-do-section h2,
+.what-we-do-section h3,
+.what-we-do-section h4,
+.what-we-do-section h5,
+.what-we-do-section h6,
+.what-we-do-section p,
+.what-we-do-section .lead {
+    color: var(--text-primary) !important;
 }
 
 .what-we-do-card {
@@ -1325,7 +1528,41 @@ body:has(#offline-indicator[style*="block"]) .navbar {
     border-bottom: 2px solid var(--border-light);
     font-weight: 700;
     padding: var(--spacing-lg);
-    color: var(--text-primary);
+    color: var(--text-primary) !important; /* Ensure dark text on light background */
+}
+
+/* Override for colored card headers */
+.card-header.bg-primary,
+.card-header.bg-success,
+.card-header.bg-info,
+.card-header.bg-warning,
+.card-header.bg-danger {
+    background: var(--bs-primary) !important;
+    color: #ffffff !important;
+    border-bottom-color: rgba(255, 255, 255, 0.2);
+}
+
+.card-header.bg-success {
+    background: var(--bs-success) !important;
+}
+
+.card-header.bg-info {
+    background: var(--bs-info) !important;
+}
+
+.card-header.bg-warning {
+    background: var(--bs-warning) !important;
+    color: #000000 !important; /* Black text on yellow */
+}
+
+.card-header.bg-danger {
+    background: var(--bs-danger) !important;
+}
+
+.card-header.bg-light {
+    background: var(--bg-secondary) !important;
+    color: var(--text-primary) !important;
+    border-bottom-color: var(--border-medium);
 }
 
 /* Improved Button Styles */
@@ -1375,10 +1612,74 @@ body:has(#offline-indicator[style*="block"]) .navbar {
 /* Section Spacing */
 section {
     padding: var(--spacing-3xl) 0;
+    color: var(--text-primary); /* Ensure default text color */
 }
 
 section:first-of-type {
     padding-top: var(--spacing-2xl);
+}
+
+/* Ensure all section headings have proper contrast */
+section h1,
+section h2,
+section h3,
+section h4,
+section h5,
+section h6 {
+    color: var(--text-primary);
+}
+
+/* Sections with colored backgrounds should have white text */
+section.bg-primary,
+section.bg-success,
+section.bg-info,
+section.bg-danger {
+    color: #ffffff !important;
+}
+
+section.bg-primary h1,
+section.bg-primary h2,
+section.bg-primary h3,
+section.bg-primary h4,
+section.bg-primary h5,
+section.bg-primary h6,
+section.bg-primary p,
+section.bg-primary .lead,
+section.bg-primary .text-muted {
+    color: #ffffff !important;
+}
+
+section.bg-success h1,
+section.bg-success h2,
+section.bg-success h3,
+section.bg-success h4,
+section.bg-success h5,
+section.bg-success h6,
+section.bg-success p,
+section.bg-success .lead {
+    color: #ffffff !important;
+}
+
+section.bg-info h1,
+section.bg-info h2,
+section.bg-info h3,
+section.bg-info h4,
+section.bg-info h5,
+section.bg-info h6,
+section.bg-info p,
+section.bg-info .lead {
+    color: #ffffff !important;
+}
+
+section.bg-danger h1,
+section.bg-danger h2,
+section.bg-danger h3,
+section.bg-danger h4,
+section.bg-danger h5,
+section.bg-danger h6,
+section.bg-danger p,
+section.bg-danger .lead {
+    color: #ffffff !important;
 }
 
 /* Improved Responsive Design */
@@ -1410,6 +1711,251 @@ section:first-of-type {
     }
 }
 
+/* Choices.js Customization for Availability Zones */
+.choices.is-invalid {
+    border-color: var(--bs-danger);
+}
+
+.choices.is-invalid .choices__inner {
+    border-color: var(--bs-danger);
+}
+
+.choices.is-invalid.is-focused .choices__inner,
+.choices.is-invalid.is-open .choices__inner {
+    border-color: var(--bs-danger);
+    box-shadow: 0 0 0 0.25rem rgba(200, 35, 51, 0.2);
+}
+
+.choices__inner {
+    border: 2px solid var(--border-light);
+    border-radius: var(--radius-md);
+    padding: 0.5rem 0.75rem;
+    min-height: 48px;
+    background-color: var(--bg-primary);
+}
+
+.choices.is-focused .choices__inner,
+.choices.is-open .choices__inner {
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 0.25rem rgba(0, 86, 179, 0.2);
+}
+
+.choices__input {
+    font-size: 0.95rem;
+    color: var(--text-primary);
+    background-color: transparent;
+}
+
+.choices__input::placeholder {
+    color: var(--text-muted);
+    opacity: 0.7;
+}
+
+.choices__list--multiple .choices__item {
+    background-color: var(--bs-primary);
+    color: #ffffff;
+    border: none;
+    border-radius: var(--radius-full);
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin: 0.25rem;
+}
+
+.choices__list--multiple .choices__item.is-highlighted {
+    background-color: var(--bs-primary-dark);
+}
+
+.choices__button {
+    background-color: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: #ffffff;
+    opacity: 1;
+    padding: 0 0.25rem;
+    margin-left: 0.5rem;
+}
+
+.choices__button:hover,
+.choices__button:focus {
+    background-color: rgba(255, 255, 255, 0.3);
+    opacity: 1;
+}
+
+.choices__list--dropdown {
+    border: 2px solid var(--border-light);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    margin-top: 0.25rem;
+    background-color: var(--bg-primary);
+    z-index: 99999 !important; /* Very high z-index to appear above all content */
+    position: absolute !important; /* Ensure it's positioned absolutely */
+    max-height: 300px; /* Limit height and allow scrolling */
+    overflow-y: auto;
+}
+
+/* Allow Choices.js dropdown to overflow card boundaries */
+.card-body {
+    overflow: visible !important; /* Allow dropdown to overflow */
+    position: relative; /* Establish positioning context */
+}
+
+.card {
+    overflow: visible !important; /* Allow dropdown to overflow card */
+}
+
+/* Ensure Choices.js container can overflow */
+.choices {
+    position: relative;
+}
+
+.choices.is-open .choices__list--dropdown {
+    position: absolute !important;
+    top: 100% !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    margin-top: 0.25rem;
+}
+
+/* Ensure all parent containers allow overflow - CRITICAL for dropdown visibility */
+.container,
+.container-fluid,
+.row,
+.col,
+.col-xl-8,
+[class*="col-"],
+[class*="container"] {
+    overflow: visible !important; /* Allow dropdown to overflow containers */
+}
+
+/* Ensure main content area allows overflow */
+#app-content,
+main {
+    overflow: visible !important;
+}
+
+/* Ensure body and html allow overflow */
+body,
+html {
+    overflow-x: hidden; /* Prevent horizontal scroll */
+    overflow-y: auto; /* Allow vertical scroll */
+}
+
+/* When Choices.js dropdown is open, ensure it can appear anywhere */
+.choices.is-open {
+    z-index: 99998; /* High z-index for the container when open */
+}
+
+.choices.is-open .choices__inner {
+    z-index: 99999; /* Even higher for the inner element */
+}
+
+/* Ensure the Choices.js wrapper container can overflow */
+.choices__inner {
+    position: relative;
+}
+
+/* Force dropdown to be visible above all sections */
+.choices.is-open .choices__list--dropdown {
+    position: absolute !important;
+    z-index: 99999 !important;
+    /* Ensure it's not clipped by any parent */
+    clip: unset !important;
+    clip-path: none !important;
+    overflow: visible !important;
+    /* Ensure it can extend beyond any boundaries */
+    transform: translateZ(0); /* Force hardware acceleration */
+    will-change: transform; /* Optimize rendering */
+}
+
+/* Ensure no parent element clips the dropdown - apply to all possible parents */
+.card-body .choices.is-open .choices__list--dropdown,
+.card .choices.is-open .choices__list--dropdown,
+.container .choices.is-open .choices__list--dropdown,
+.container-fluid .choices.is-open .choices__list--dropdown,
+.row .choices.is-open .choices__list--dropdown,
+.col .choices.is-open .choices__list--dropdown,
+[class*="col-"] .choices.is-open .choices__list--dropdown,
+#app-content .choices.is-open .choices__list--dropdown,
+main .choices.is-open .choices__list--dropdown {
+    position: absolute !important;
+    z-index: 99999 !important;
+    overflow: visible !important;
+}
+
+/* Ensure all sections allow overflow */
+section,
+.card,
+.card-body,
+.mb-4,
+.mb-5 {
+    overflow: visible !important;
+}
+
+/* Specifically target the Network Configuration card */
+.card:has(.choices.is-open) {
+    overflow: visible !important;
+    z-index: 1; /* Create stacking context but allow overflow */
+}
+
+/* Ensure the choices container itself can overflow */
+.choices__inner,
+.choices__list {
+    overflow: visible !important;
+}
+
+/* Force all possible parent elements to allow overflow when dropdown is open */
+.choices.is-open,
+.choices.is-open ~ *,
+.choices.is-open .choices__inner,
+.choices.is-open .choices__list {
+    overflow: visible !important;
+}
+
+/* Ensure dropdown container can overflow any section */
+.choices__list--dropdown.is-active,
+.choices__list--dropdown.is-flipped {
+    position: absolute !important;
+    z-index: 99999 !important;
+    overflow: visible !important;
+}
+
+/* Override any Bootstrap or other framework overflow rules */
+.mb-4:has(.choices.is-open),
+.mb-5:has(.choices.is-open),
+.card:has(.choices.is-open),
+.card-body:has(.choices.is-open) {
+    overflow: visible !important;
+    position: relative;
+}
+
+/* Ensure sections don't clip the dropdown */
+section:has(.choices.is-open) {
+    overflow: visible !important;
+    position: relative;
+    z-index: auto;
+}
+
+.choices__list--dropdown .choices__item {
+    padding: 0.75rem 1rem;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-light);
+}
+
+.choices__list--dropdown .choices__item:last-child {
+    border-bottom: none;
+}
+
+.choices__list--dropdown .choices__item--selectable.is-highlighted {
+    background-color: var(--bg-secondary);
+    color: var(--bs-primary);
+}
+
+.choices__placeholder {
+    color: var(--text-muted);
+    opacity: 0.7;
+}
+
 /* Print styles */
 @media print {
     .navbar,
@@ -1437,5 +1983,9 @@ section:first-of-type {
     .install-section {
         border: 2px solid #000;
         page-break-inside: avoid;
+    }
+    
+    .az-dropdown {
+        display: none !important;
     }
 }

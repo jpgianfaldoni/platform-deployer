@@ -1,0 +1,5 @@
+# GCP Configuration
+project_id     = "{{project_id}}"
+region         = "{{region}}"
+project_prefix = "{{project_prefix}}"
+

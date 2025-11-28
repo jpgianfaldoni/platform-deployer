@@ -1,0 +1,17 @@
+{
+  "provider": "azure",
+  "variables": {
+    "required": [],
+    "optional": ["resource_group_name"]
+  },
+  "template_files": [
+    "provider.tf.template",
+    "variables.tf.template",
+    "tfvars.tf.template",
+    "main.tf.template",
+    "outputs.tf.template",
+    "versions.tf.template",
+    "readme.md.template"
+  ]
+}
+

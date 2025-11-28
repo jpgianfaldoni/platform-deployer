@@ -147,8 +147,8 @@ test.describe('GCP Provider Tests', () => {
         project_id: 'test-project'
       });
       
-      const regionField = page.locator('input[name="region"]');
-      await regionField.clear();
+      const regionField = page.locator('select[name="region"]');
+      await regionField.selectOption('');
       
       await FormHelpers.submitConfigForm(page, true); // allowInvalid = true for validation tests
       const validity = await ValidationHelpers.getFieldValidationMessage(page, 'region');
@@ -197,24 +197,8 @@ test.describe('GCP Provider Tests', () => {
         vpc_cidr: '10.0.0.0/22'
       });
       
-      // Remove all zones - clear values instead of removing rows
-      // (The UI prevents removing the last zone, so we clear its value)
-      const zoneInputs = page.locator('#az-container input[name="availability_zones"]');
-      const count = await zoneInputs.count();
-      
-      // Remove zones that can be removed
-      const removeButtons = page.locator('.remove-az-btn');
-      const removeCount = await removeButtons.count();
-      for (let i = removeCount - 1; i > 0; i--) {
-        await removeButtons.nth(i).click();
-        await page.waitForTimeout(200);
-      }
-      
-      // Clear the last zone's value
-      if (count > 0) {
-        await zoneInputs.first().clear();
-        await page.waitForTimeout(200);
-      }
+      // Clear all selected zones using helper
+      await FormHelpers.selectAvailabilityZones(page, []);
       
       await FormHelpers.submitConfigForm(page, true); // allowInvalid=true for validation tests
       await page.waitForTimeout(1000); // Wait for validation to be applied
@@ -231,15 +215,16 @@ test.describe('GCP Provider Tests', () => {
     test('should validate GCP region format', async ({ page }) => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'test',
-        region: 'invalid-region-format',
         pricing_tier: 'STANDARD',
         project_id: 'test-project'
+        // region is intentionally omitted to test required field validation
       });
       
       await FormHelpers.submitConfigForm(page, true); // allowInvalid=true for validation tests
       await page.waitForTimeout(500); // Wait for validation to be applied
-      const hasError = await ValidationHelpers.hasFieldValidationError(page, 'region', 'Invalid GCP region');
-      expect(hasError).toBeTruthy();
+      // Since region is now a select with only valid options, we test required field validation
+      const validity = await ValidationHelpers.getFieldValidationMessage(page, 'region');
+      expect(validity && validity.valueMissing).toBeTruthy();
     });
 
     test('should validate availability zones format for GCP', async ({ page }) => {
@@ -638,6 +623,204 @@ test.describe('GCP Provider Tests', () => {
       
       const projectId = await page.locator('input[name="project_id"]').inputValue();
       expect(projectId).toBe('persist-project');
+    });
+  });
+
+  test.describe('Availability Zone Combobox Tests', () => {
+    test.beforeEach(async ({ page }) => {
+      await FormHelpers.selectProvider(page, 'gcp');
+      await FormHelpers.fillBasicConfig(page, {
+        project_prefix: 'test-gcp',
+        region: 'us-central1',
+        pricing_tier: 'PREMIUM',
+        project_id: 'my-gcp-project'
+      });
+    });
+
+    test('should use multiple select for availability zones', async ({ page }) => {
+      // Verify Choices.js component exists (select is hidden, container is visible)
+      const choicesContainer = page.locator('.choices:has(#availability-zones-select)');
+      await expect(choicesContainer).toBeVisible();
+      
+      // Verify select has multiple attribute
+      const azSelect = page.locator('#availability-zones-select');
+      const isMultiple = await azSelect.getAttribute('multiple');
+      expect(isMultiple).not.toBeNull();
+      
+      // Verify select has options (even though hidden)
+      const options = await azSelect.locator('option').count();
+      expect(options).toBeGreaterThan(1); // At least one option + placeholder
+      
+      // Verify options contain GCP zone format - read from select element
+      const optionText = await azSelect.locator('option').nth(1).textContent();
+      expect(optionText).toMatch(/us-central1-[a-f]/);
+    });
+
+    test('should allow selecting and deselecting multiple availability zones', async ({ page }) => {
+      // Clear any existing selections first
+      await FormHelpers.selectAvailabilityZones(page, []);
+      
+      // Select 2 zones using helper
+      await FormHelpers.selectAvailabilityZones(page, ['us-central1-a', 'us-central1-b']);
+      
+      const selectedCount = await page.evaluate(() => {
+        const select = document.getElementById('availability-zones-select');
+        if (!select) return 0;
+        const choicesInstance = select.choicesInstance;
+        if (choicesInstance && choicesInstance.getValue) {
+          const values = choicesInstance.getValue(true);
+          return Array.isArray(values) ? values.length : 0;
+        }
+        return Array.from(select.selectedOptions).length;
+      });
+      expect(selectedCount).toBe(2);
+      
+      // Deselect one zone
+      await FormHelpers.selectAvailabilityZones(page, ['us-central1-a']);
+      
+      const afterDeselectCount = await page.evaluate(() => {
+        const select = document.getElementById('availability-zones-select');
+        if (!select) return 0;
+        const choicesInstance = select.choicesInstance;
+        if (choicesInstance && choicesInstance.getValue) {
+          const values = choicesInstance.getValue(true);
+          return Array.isArray(values) ? values.length : 0;
+        }
+        return Array.from(select.selectedOptions).length;
+      });
+      expect(afterDeselectCount).toBe(1);
+    });
+
+    test('should enforce minimum availability zones for GCP (2)', async ({ page }) => {
+      // Select only 1 zone (below minimum of 2) using helper
+      await FormHelpers.selectAvailabilityZones(page, ['us-central1-a']);
+      
+      // Should show warning message about minimum
+      const flashMessages = page.locator('#flash-messages .alert');
+      await expect(flashMessages).toBeVisible({ timeout: 5000 });
+      const flashText = await flashMessages.textContent();
+      expect(flashText).toContain('Minimum');
+      expect(flashText).toContain('2');
+    });
+
+    test('should update availability zone options when region changes', async ({ page }) => {
+      // Get initial options from select element (even though hidden)
+      const azSelect = page.locator('#availability-zones-select');
+      const initialOptions = await azSelect.locator('option').allTextContents();
+      expect(initialOptions.some(opt => opt.includes('us-central1'))).toBeTruthy();
+      
+      // Change region
+      await page.selectOption('select[name="region"]', 'us-west1');
+      await page.waitForTimeout(1000); // Wait for Choices.js to update
+      
+      // Verify options updated - read from select element
+      const updatedOptions = await azSelect.locator('option').allTextContents();
+      expect(updatedOptions.some(opt => opt.includes('us-west1'))).toBeTruthy();
+      
+      // Verify selections were cleared - check via Choices.js or select element
+      const selectedCount = await page.evaluate(() => {
+        const select = document.getElementById('availability-zones-select');
+        if (!select) return 0;
+        
+        // Try to get from Choices.js instance first
+        const choicesInstance = select.choicesInstance;
+        if (choicesInstance && choicesInstance.getValue) {
+          const values = choicesInstance.getValue(true); // true = return as array
+          return Array.isArray(values) ? values.length : 0;
+        }
+        
+        // Fallback to select element
+        return Array.from(select.selectedOptions).length;
+      });
+      expect(selectedCount).toBe(0);
+    });
+
+    test('should allow selecting multiple different availability zones', async ({ page }) => {
+      // Select multiple different zones using helper
+      await FormHelpers.selectAvailabilityZones(page, ['us-central1-a', 'us-central1-b', 'us-central1-c']);
+      
+      const selectedCount = await page.evaluate(() => {
+        const select = document.getElementById('availability-zones-select');
+        if (!select) return 0;
+        const choicesInstance = select.choicesInstance;
+        if (choicesInstance && choicesInstance.getValue) {
+          const values = choicesInstance.getValue(true);
+          return Array.isArray(values) ? values.length : 0;
+        }
+        return Array.from(select.selectedOptions).length;
+      });
+      expect(selectedCount).toBe(3);
+      
+      // Verify all selected zones are different
+      const selectedValues = await page.evaluate(() => {
+        const select = document.getElementById('availability-zones-select');
+        if (!select) return [];
+        const choicesInstance = select.choicesInstance;
+        if (choicesInstance && choicesInstance.getValue) {
+          return choicesInstance.getValue(true) || [];
+        }
+        return Array.from(select.selectedOptions).map(opt => opt.value);
+      });
+      const uniqueValues = [...new Set(selectedValues)];
+      expect(uniqueValues.length).toBe(selectedValues.length);
+    });
+
+    test('should enforce minimum availability zones for GCP (2) on submit', async ({ page }) => {
+      // Select only 1 zone (below minimum) using helper
+      await FormHelpers.selectAvailabilityZones(page, ['us-central1-a']);
+      
+      // Try to submit - should fail validation
+      await FormHelpers.submitConfigForm(page, true);
+      await page.waitForTimeout(500);
+      
+      const hasError = await ValidationHelpers.hasAvailabilityZoneError(page, 'availability zone');
+      expect(hasError).toBeTruthy();
+    });
+
+    test('should enforce maximum availability zones for GCP (6)', async ({ page }) => {
+      // Try to select 6 zones (maximum) using helper
+      await FormHelpers.selectAvailabilityZones(page, ['us-central1-a', 'us-central1-b', 'us-central1-c', 'us-central1-d', 'us-central1-e', 'us-central1-f']);
+      
+      // Verify only 6 are selected (maximum)
+      const selectedCount = await page.evaluate(() => {
+        const select = document.getElementById('availability-zones-select');
+        if (!select) return 0;
+        const choicesInstance = select.choicesInstance;
+        if (choicesInstance && choicesInstance.getValue) {
+          const values = choicesInstance.getValue(true);
+          return Array.isArray(values) ? values.length : 0;
+        }
+        return Array.from(select.selectedOptions).length;
+      });
+      expect(selectedCount).toBeLessThanOrEqual(6);
+      
+      // Try to submit with more than 6 - should fail validation
+      await FormHelpers.submitConfigForm(page, true);
+      await page.waitForTimeout(500);
+      const hasError = await ValidationHelpers.hasAvailabilityZoneError(page, 'availability zone');
+      expect(hasError).toBeTruthy();
+    });
+
+    test('should only show valid availability zones for selected region', async ({ page }) => {
+      const azSelect = page.locator('#availability-zones-select');
+      const options = await azSelect.locator('option').allTextContents();
+      
+      // All options should be valid for us-central1
+      const validOptions = options.filter(opt => opt !== 'Select one or more availability zones' && opt !== '');
+      validOptions.forEach(opt => {
+        expect(opt).toMatch(/^us-central1-[a-f]$/);
+      });
+      
+      // Change region
+      await page.selectOption('select[name="region"]', 'us-west1');
+      await page.waitForTimeout(500);
+      
+      // Verify options updated to us-west1
+      const updatedOptions = await azSelect.locator('option').allTextContents();
+      const validUpdatedOptions = updatedOptions.filter(opt => opt !== 'Select one or more availability zones' && opt !== '');
+      validUpdatedOptions.forEach(opt => {
+        expect(opt).toMatch(/^us-west1-[a-f]$/);
+      });
     });
   });
 });

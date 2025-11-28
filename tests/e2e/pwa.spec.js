@@ -9,9 +9,10 @@ test.describe('PWA Functionality Tests', () => {
   });
 
   test('should have manifest.json accessible', async ({ page }) => {
-    // Check manifest link in HTML
+    // Check manifest link in HTML (may have query string for cache busting)
     const manifestLink = page.locator('link[rel="manifest"]');
-    await expect(manifestLink).toHaveAttribute('href', './manifest.json');
+    const href = await manifestLink.getAttribute('href');
+    expect(href).toMatch(/^\.\/manifest\.json(\?.*)?$/);
     
     // Fetch manifest.json and verify it's valid JSON
     const response = await page.request.get('/manifest.json');

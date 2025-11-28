@@ -8,7 +8,9 @@ const dirs = [
   path.join(libsDir, 'bootstrap', 'css'),
   path.join(libsDir, 'bootstrap', 'js'),
   path.join(libsDir, 'bootstrap-icons', 'font'),
-  path.join(libsDir, 'jszip')
+  path.join(libsDir, 'jszip'),
+  path.join(libsDir, 'choices.js', 'css'),
+  path.join(libsDir, 'choices.js', 'js')
 ];
 
 dirs.forEach(dir => {
@@ -39,6 +41,14 @@ const filesToCopy = [
   {
     from: path.join(__dirname, '..', 'node_modules', 'jszip', 'dist', 'jszip.min.js'),
     to: path.join(libsDir, 'jszip', 'jszip.min.js')
+  },
+  {
+    from: path.join(__dirname, '..', 'node_modules', 'choices.js', 'public', 'assets', 'styles', 'choices.min.css'),
+    to: path.join(libsDir, 'choices.js', 'css', 'choices.min.css')
+  },
+  {
+    from: path.join(__dirname, '..', 'node_modules', 'choices.js', 'public', 'assets', 'scripts', 'choices.min.js'),
+    to: path.join(libsDir, 'choices.js', 'js', 'choices.min.js')
   }
 ];
 

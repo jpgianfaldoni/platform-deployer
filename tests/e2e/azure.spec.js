@@ -147,8 +147,8 @@ test.describe('Azure Provider Tests', () => {
         resource_group_name: 'rg-test'
       });
       
-      const regionField = page.locator('input[name="region"]');
-      await regionField.clear();
+      const regionField = page.locator('select[name="region"]');
+      await regionField.selectOption('');
       
       await FormHelpers.submitConfigForm(page, true); // allowInvalid = true for validation tests
       const validity = await ValidationHelpers.getFieldValidationMessage(page, 'region');
@@ -226,24 +226,8 @@ test.describe('Azure Provider Tests', () => {
         vpc_cidr: '10.0.0.0/22'
       });
       
-      // Remove all zones - clear values instead of removing rows
-      // (The UI prevents removing the last zone, so we clear its value)
-      const zoneInputs = page.locator('#az-container input[name="availability_zones"]');
-      const count = await zoneInputs.count();
-      
-      // Remove zones that can be removed
-      const removeButtons = page.locator('.remove-az-btn');
-      const removeCount = await removeButtons.count();
-      for (let i = removeCount - 1; i > 0; i--) {
-        await removeButtons.nth(i).click();
-        await page.waitForTimeout(200);
-      }
-      
-      // Clear the last zone's value
-      if (count > 0) {
-        await zoneInputs.first().clear();
-        await page.waitForTimeout(200);
-      }
+      // Clear all selected zones using helper
+      await FormHelpers.selectAvailabilityZones(page, []);
       
       await FormHelpers.submitConfigForm(page, true); // allowInvalid=true for validation tests
       await page.waitForTimeout(1000); // Wait for validation to be applied
@@ -260,15 +244,16 @@ test.describe('Azure Provider Tests', () => {
     test('should validate Azure region format', async ({ page }) => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'test',
-        region: 'invalid-region-format',
         pricing_tier: 'STANDARD',
         resource_group_name: 'rg-test'
+        // region is intentionally omitted to test required field validation
       });
       
       await FormHelpers.submitConfigForm(page, true); // allowInvalid=true for validation tests
       await page.waitForTimeout(500); // Wait for validation to be applied
-      const hasError = await ValidationHelpers.hasFieldValidationError(page, 'region', 'Invalid AZURE region');
-      expect(hasError).toBeTruthy();
+      // Since region is now a select with only valid options, we test required field validation
+      const validity = await ValidationHelpers.getFieldValidationMessage(page, 'region');
+      expect(validity && validity.valueMissing).toBeTruthy();
     });
 
     test('should validate availability zones as numeric', async ({ page }) => {
@@ -451,12 +436,8 @@ test.describe('Azure Provider Tests', () => {
       const count1 = subnets1 ? subnets1.length : 0;
       expect(count1).toBeGreaterThan(0);
       
-      // Add another zone
-      await page.locator('#add-az').click();
-      await page.waitForTimeout(500);
-      const zoneInputs = page.locator('#az-container input[name="availability_zones"]');
-      const count = await zoneInputs.count();
-      await zoneInputs.nth(count - 1).fill('2');
+      // Add another zone using multiple select
+      await FormHelpers.selectAvailabilityZones(page, ['1', '2']);
       await page.waitForTimeout(2000);
       
       const subnets2 = await FormHelpers.getSubnetPreview(page);
@@ -633,6 +614,169 @@ test.describe('Azure Provider Tests', () => {
       
       const resourceGroup = await page.locator('input[name="resource_group_name"]').inputValue();
       expect(resourceGroup).toBe('rg-persist');
+    });
+  });
+
+  test.describe('Availability Zone Combobox Tests', () => {
+    test.beforeEach(async ({ page }) => {
+      await FormHelpers.selectProvider(page, 'azure');
+      await FormHelpers.fillBasicConfig(page, {
+        project_prefix: 'test-azure',
+        region: 'eastus',
+        pricing_tier: 'PREMIUM',
+        resource_group_name: 'rg-test'
+      });
+    });
+
+    test('should use multiple select for availability zones', async ({ page }) => {
+      // Verify Choices.js component exists (select is hidden, container is visible)
+      const choicesContainer = page.locator('.choices:has(#availability-zones-select)');
+      await expect(choicesContainer).toBeVisible();
+      
+      // Verify select has multiple attribute
+      const azSelect = page.locator('#availability-zones-select');
+      const isMultiple = await azSelect.getAttribute('multiple');
+      expect(isMultiple).not.toBeNull();
+      
+      // Verify select has options (even though hidden)
+      const options = await azSelect.locator('option').count();
+      expect(options).toBeGreaterThan(1); // At least one option + placeholder
+      
+      // Verify options contain Azure zone format (numeric) - read from select element
+      const optionText = await azSelect.locator('option').nth(1).textContent();
+      expect(optionText).toMatch(/Zone [1-3]/);
+    });
+
+    test('should allow selecting and deselecting multiple availability zones', async ({ page }) => {
+      // Use helper function to select zones (works with Choices.js)
+      await FormHelpers.selectAvailabilityZones(page, ['1', '2']);
+      
+      const selectedCount = await page.evaluate(() => {
+        const select = document.getElementById('availability-zones-select');
+        if (!select) return 0;
+        const choicesInstance = select._choicesjs || select.choicesjs;
+        if (choicesInstance && choicesInstance.getValue) {
+          const values = choicesInstance.getValue(true);
+          return Array.isArray(values) ? values.length : 0;
+        }
+        return Array.from(select.selectedOptions).length;
+      });
+      expect(selectedCount).toBe(2);
+      
+      // Deselect one zone
+      await FormHelpers.selectAvailabilityZones(page, ['1']);
+      
+      const afterDeselectCount = await page.evaluate(() => {
+        const select = document.getElementById('availability-zones-select');
+        if (!select) return 0;
+        const choicesInstance = select._choicesjs || select.choicesjs;
+        if (choicesInstance && choicesInstance.getValue) {
+          const values = choicesInstance.getValue(true);
+          return Array.isArray(values) ? values.length : 0;
+        }
+        return Array.from(select.selectedOptions).length;
+      });
+      expect(afterDeselectCount).toBe(1);
+    });
+
+    test('should enforce minimum availability zones for Azure (1)', async ({ page }) => {
+      // Deselect all zones using Choices.js API
+      await page.evaluate(() => {
+        const select = document.getElementById('availability-zones-select');
+        if (!select) return;
+        const choicesInstance = select.choicesInstance;
+        if (choicesInstance && choicesInstance.setValue) {
+          choicesInstance.setValue([]);
+        } else {
+          Array.from(select.options).forEach(option => {
+            option.selected = false;
+          });
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      });
+      await page.waitForTimeout(500);
+      
+      // Should show warning message about minimum
+      const flashMessages = page.locator('#flash-messages .alert');
+      await expect(flashMessages).toBeVisible({ timeout: 5000 });
+      const flashText = await flashMessages.textContent();
+      expect(flashText).toContain('Minimum');
+      expect(flashText).toContain('1');
+    });
+
+    test('should allow selecting multiple different availability zones', async ({ page }) => {
+      // Select multiple different zones
+      await FormHelpers.selectAvailabilityZones(page, ['1', '2', '3']);
+      
+      const selectedCount = await page.evaluate(() => {
+        const select = document.getElementById('availability-zones-select');
+        if (!select) return 0;
+        const choicesInstance = select.choicesInstance;
+        if (choicesInstance && choicesInstance.getValue) {
+          const values = choicesInstance.getValue(true);
+          return Array.isArray(values) ? values.length : 0;
+        }
+        return Array.from(select.selectedOptions).length;
+      });
+      expect(selectedCount).toBe(3);
+      
+      // Verify all selected zones are different
+      const selectedValues = await page.evaluate(() => {
+        const select = document.getElementById('availability-zones-select');
+        if (!select) return [];
+        const choicesInstance = select.choicesInstance;
+        if (choicesInstance && choicesInstance.getValue) {
+          return choicesInstance.getValue(true) || [];
+        }
+        return Array.from(select.selectedOptions).map(opt => opt.value);
+      });
+      const uniqueValues = [...new Set(selectedValues)];
+      expect(uniqueValues.length).toBe(selectedValues.length);
+    });
+
+    test('should enforce minimum availability zones for Azure (1) on submit', async ({ page }) => {
+      // Deselect all zones using helper
+      await FormHelpers.selectAvailabilityZones(page, []);
+      
+      // Try to submit - should fail validation
+      await FormHelpers.submitConfigForm(page, true);
+      await page.waitForTimeout(500);
+      
+      const hasError = await ValidationHelpers.hasAvailabilityZoneError(page, 'availability zone');
+      expect(hasError).toBeTruthy();
+    });
+
+    test('should enforce maximum availability zones for Azure (3)', async ({ page }) => {
+      // Select all 3 zones (maximum)
+      await FormHelpers.selectAvailabilityZones(page, ['1', '2', '3']);
+      
+      const selectedCount = await page.evaluate(() => {
+        const select = document.getElementById('availability-zones-select');
+        if (!select) return 0;
+        const choicesInstance = select.choicesInstance;
+        if (choicesInstance && choicesInstance.getValue) {
+          const values = choicesInstance.getValue(true);
+          return Array.isArray(values) ? values.length : 0;
+        }
+        return Array.from(select.selectedOptions).length;
+      });
+      expect(selectedCount).toBeLessThanOrEqual(3);
+      
+      // Verify we can select exactly 3 zones
+      expect(selectedCount).toBe(3);
+    });
+
+    test('should only show valid availability zones for Azure (1, 2, 3)', async ({ page }) => {
+      const azSelect = page.locator('#availability-zones-select');
+      // Read option labels from the select element (even though it's hidden)
+      const options = await azSelect.locator('option').allTextContents();
+      
+      // All options should be valid Azure zones (Zone 1, Zone 2, or Zone 3)
+      const validOptions = options.filter(opt => opt !== 'Select one or more availability zones' && opt !== '' && opt.trim() !== '');
+      expect(validOptions.length).toBeGreaterThan(0);
+      validOptions.forEach(opt => {
+        expect(opt.trim()).toMatch(/^Zone [1-3]$/);
+      });
     });
   });
 });

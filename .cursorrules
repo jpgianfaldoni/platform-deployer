@@ -1,0 +1,162 @@
+# Frontend Design Skill - Adapted from Claude Code
+
+## Purpose
+Create distinctive, production-grade frontend interfaces with high design quality.
+Avoid generic AI aesthetics. Generate creative, polished code with exceptional attention to details.
+
+## Design Thinking Process
+
+Before coding, ALWAYS consider:
+
+1. **Purpose & Context**
+   - What problem does this interface solve?
+   - Who are the users?
+   - What's the core functionality?
+
+2. **Aesthetic Direction** (Choose ONE and commit BOLDLY):
+   - Brutally minimal
+   - Maximalist chaos
+   - Retro-futuristic
+   - Organic/natural
+   - Luxury/refined
+   - Playful/toy-like
+   - Editorial/magazine
+   - Brutalist/raw
+   - Art deco/geometric
+   - Soft/pastel
+   - Industrial/utilitarian
+   
+3. **Differentiation Question**
+   - What makes this UNFORGETTABLE?
+   - What's the ONE thing someone will remember?
+
+4. **Technical Constraints**
+   - Framework requirements
+   - Performance needs
+   - Accessibility standards (WCAG AA minimum)
+
+## Core Design Principles
+
+### Typography
+- Choose beautiful, unique, and interesting fonts
+- AVOID: Arial, Roboto, Inter, system fonts
+- PREFER: Distinctive choices that elevate aesthetics
+- Pair a display font with a refined body font
+- Examples of interesting fonts:
+  - Display: Fraunces, Cabinet Grotesk, Sporting Grotesque, Clash Display
+  - Body: Manrope, Plus Jakarta Sans, Satoshi, General Sans
+- Use variable fonts when available
+- Implement proper font loading strategies
+
+### Color & Theme
+- Commit to a cohesive aesthetic with CSS variables
+- Dominant colors with sharp accents (not evenly distributed)
+- AVOID: Generic purple gradients on white backgrounds
+- Consider: unexpected combinations, bold contrasts, or refined monochromes
+- Implement dark mode when relevant
+- Use semantic color naming
+
+### Motion & Animation
+- High-impact moments over scattered micro-interactions
+- One well-orchestrated page load with staggered reveals (animation-delay)
+- Scroll-triggered animations that surprise
+- Hover states that delight
+- CSS-only solutions preferred for HTML
+- Use Framer Motion for React when needed
+- Focus on: entrance animations, state transitions, loading sequences
+
+### Spatial Composition
+- Break the grid intentionally
+- Use asymmetry purposefully
+- Overlap elements with z-index layers
+- Diagonal flow and unexpected layouts
+- Generous negative space OR controlled density
+- Never default to predictable centered layouts
+
+### Backgrounds & Visual Details
+Create atmosphere and depth:
+- Gradient meshes
+- Noise textures
+- Geometric patterns
+- Layered transparencies
+- Dramatic shadows
+- Decorative borders
+- Custom cursors
+- Grain overlays
+- Subtle animations on background elements
+
+## What to AVOID
+
+NEVER use generic AI aesthetics:
+- ❌ Inter, Roboto, Arial, system fonts
+- ❌ Purple gradients on white backgrounds
+- ❌ Predictable card layouts
+- ❌ Cookie-cutter components
+- ❌ Same design patterns across different projects
+- ❌ Space Grotesk (overused)
+- ❌ Generic blue buttons
+- ❌ Boring centered layouts
+
+## Implementation Standards
+
+### Code Quality
+- Production-grade, functional code
+- TypeScript for type safety
+- Semantic HTML5
+- Accessible (ARIA labels, keyboard navigation)
+- Responsive (mobile-first approach)
+- Performance optimized (lazy loading, code splitting)
+
+### Component Architecture
+- Reusable, composable components
+- Props properly typed
+- Include loading, error, and empty states
+- Consistent naming conventions
+- Self-documenting code
+
+### Styling Approach
+- Tailwind CSS preferred for utility-first styling
+- CSS variables for theme consistency
+- CSS modules or styled-components when appropriate
+- BEM naming if using vanilla CSS
+- Scoped styles to prevent leakage
+
+### Libraries & Tools
+When appropriate, use:
+- Framer Motion (React animations)
+- Radix UI / shadcn/ui (accessible primitives)
+- Lucide React (consistent icons)
+- clsx / cn (conditional classes)
+
+## Complexity Matching
+
+- **Maximalist designs**: Elaborate code with extensive animations and effects
+- **Minimalist designs**: Restraint, precision, spacing, typography, subtle details
+- Elegance = executing the vision well, regardless of complexity
+
+## Creative Mandate
+
+- NO two designs should look the same
+- Vary between light and dark themes
+- Choose different fonts for each project
+- Match aesthetic to context and purpose
+- Think outside the box
+- Commit fully to distinctive vision
+- Show what's truly possible with creative frontend development
+
+## Response Format
+
+When asked to create a frontend component/page:
+
+1. First, briefly explain:
+   - The chosen aesthetic direction
+   - Key design decisions
+   - One memorable differentiator
+
+2. Then provide the implementation with:
+   - Complete, working code
+   - Comments explaining creative choices
+   - Styling that matches the aesthetic vision
+   - All necessary imports and dependencies
+
+Remember: You're capable of extraordinary creative work. Don't hold back!

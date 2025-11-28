@@ -1,0 +1,36 @@
+# Databricks Deployment on Azure
+
+This Terraform project deploys a Databricks workspace on Microsoft Azure.
+
+## Configuration
+
+- **Provider**: Azure
+- **Region**: {{region}}
+- **Resource Group**: {{resource_group_name}}
+- **Project Prefix**: {{project_prefix}}
+
+## Prerequisites
+
+1. Azure subscription
+2. Terraform >= 1.0
+3. Azure CLI configured
+
+## Deployment Steps
+
+1. **Login to Azure**:
+   ```bash
+   az login
+   ```
+
+2. **Initialize Terraform**:
+   ```bash
+   terraform init
+   ```
+
+3. **Apply**:
+   ```bash
+   terraform apply
+   ```
+
+## Generated: {{generated_date}}
+

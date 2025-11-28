@@ -151,19 +151,40 @@ class Validators {
   }
 
   /**
+   * Get availability zone limits for a provider
+   */
+  static getAvailabilityZoneLimits(provider) {
+    const limits = {
+      aws: { min: 2, max: 6 },
+      azure: { min: 1, max: 3 },
+      gcp: { min: 2, max: 6 }
+    };
+    return limits[provider?.toLowerCase()] || { min: 1, max: 3 };
+  }
+
+  /**
    * Validate availability zones
    */
-  static validateAvailabilityZones(zones, provider, region, minZones = 1, maxZones = 3) {
+  static validateAvailabilityZones(zones, provider, region) {
     if (!zones || zones.length === 0) {
-      return { valid: false, message: 'At least one availability zone is required' };
+      const limits = this.getAvailabilityZoneLimits(provider);
+      return { valid: false, message: `At least ${limits.min} availability zone(s) required for ${provider?.toUpperCase() || 'provider'}` };
     }
     
-    if (zones.length < minZones) {
-      return { valid: false, message: `At least ${minZones} availability zone(s) required` };
+    const limits = this.getAvailabilityZoneLimits(provider);
+    
+    if (zones.length < limits.min) {
+      return { valid: false, message: `At least ${limits.min} availability zone(s) required for ${provider?.toUpperCase() || 'provider'}` };
     }
     
-    if (zones.length > maxZones) {
-      return { valid: false, message: `Maximum ${maxZones} availability zones allowed` };
+    if (zones.length > limits.max) {
+      return { valid: false, message: `Maximum ${limits.max} availability zone(s) allowed for ${provider?.toUpperCase() || 'provider'}` };
+    }
+    
+    // Check for duplicates
+    const uniqueZones = [...new Set(zones)];
+    if (uniqueZones.length !== zones.length) {
+      return { valid: false, message: 'Duplicate availability zones are not allowed' };
     }
     
     // Basic format validation
@@ -172,8 +193,8 @@ class Validators {
         return { valid: false, message: `AWS availability zone must start with region '${region}'` };
       } else if (provider === 'gcp' && region && !zone.startsWith(region)) {
         return { valid: false, message: `GCP availability zone must start with region '${region}'` };
-      } else if (provider === 'azure' && !/^\d+$/.test(zone)) {
-        return { valid: false, message: 'Azure availability zones must be numeric (1, 2, 3)' };
+      } else if (provider === 'azure' && !/^[1-3]$/.test(zone)) {
+        return { valid: false, message: 'Azure availability zones must be numeric (1, 2, or 3)' };
       }
     }
     

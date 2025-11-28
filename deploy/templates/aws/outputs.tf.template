@@ -1,0 +1,16 @@
+# Outputs
+output "workspace_url" {
+  description = "Databricks workspace URL"
+  value       = databricks_mws_workspaces.this.workspace_url
+}
+
+output "workspace_id" {
+  description = "Databricks workspace ID"
+  value       = databricks_mws_workspaces.this.workspace_id
+}
+
+output "vpc_id" {
+  description = "VPC ID"
+  value       = local.vpc_id
+}
+

@@ -253,28 +253,55 @@ class ValidationHelpers {
   }
 
   /**
-   * Check if availability zones container has validation error
+   * Check if availability zones select has validation error
    * @param {Page} page - Playwright page object
    * @param {string} errorText - Optional text to search for in error message
-   * @returns {Promise<boolean>} True if container has validation error
+   * @returns {Promise<boolean>} True if select has validation error
    */
   static async hasAvailabilityZoneError(page, errorText = null) {
-    const container = page.locator('#az-container');
+    const azSelect = page.locator('#availability-zones-select');
     
-    const hasInvalidAttr = await container.getAttribute('data-invalid');
-    if (hasInvalidAttr !== 'true') {
-      return false;
+    // Find Choices.js container - it's a sibling or parent of the select
+    const choicesContainer = page.locator('.choices:has(#availability-zones-select)').or(
+      page.locator('#availability-zones-select').locator('xpath=..').locator('.choices')
+    ).first();
+    
+    // Wait for container to exist
+    try {
+      await choicesContainer.waitFor({ timeout: 2000, state: 'attached' });
+    } catch {
+      // Container might not exist, check select directly
     }
     
-    if (errorText) {
-      const errorMessage = await container.getAttribute('data-error');
-      if (errorMessage && errorMessage.toLowerCase().includes(errorText.toLowerCase())) {
+    // Check if Choices.js container has invalid class
+    try {
+      const hasInvalidClass = await choicesContainer.getAttribute('class');
+      if (hasInvalidClass && hasInvalidClass.includes('is-invalid')) {
+        if (errorText) {
+          const errorMessage = await azSelect.getAttribute('data-error').catch(() => null);
+          if (errorMessage && errorMessage.toLowerCase().includes(errorText.toLowerCase())) {
+            return true;
+          }
+        }
         return true;
       }
-      return false;
+    } catch {
+      // Container might not be found, continue to check select
     }
     
-    return true;
+    // Fallback: check data-invalid attribute on select
+    const hasInvalidAttr = await azSelect.getAttribute('data-invalid').catch(() => null);
+    if (hasInvalidAttr === 'true') {
+      if (errorText) {
+        const errorMessage = await azSelect.getAttribute('data-error').catch(() => null);
+        if (errorMessage && errorMessage.toLowerCase().includes(errorText.toLowerCase())) {
+          return true;
+        }
+      }
+      return true;
+    }
+    
+    return false;
   }
 
   /**

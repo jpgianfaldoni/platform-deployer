@@ -1,0 +1,19 @@
+# Azure Configuration Variables
+variable "resource_group_name" {
+  description = "Azure Resource Group name"
+  type        = string
+  default     = "{{resource_group_name}}"
+}
+
+variable "region" {
+  description = "Azure region"
+  type        = string
+  default     = "{{region}}"
+}
+
+variable "project_prefix" {
+  description = "Prefix for all resource names"
+  type        = string
+  default     = "{{project_prefix}}"
+}
+

@@ -1,6 +1,45 @@
 // Service Worker for Databricks Deployer PWA
-const CACHE_NAME = 'databricks-deployer-v1';
+const CACHE_NAME = 'databricks-deployer-v2';
 const BASE_PATH = self.location.pathname.replace('/sw.js', '') || './';
+
+// Template files to cache
+const templateFiles = [
+  // AWS templates
+  'templates/aws/config.json',
+  'templates/aws/provider.tf.template',
+  'templates/aws/variables.tf.template',
+  'templates/aws/tfvars.tf.template',
+  'templates/aws/main.tf.template',
+  'templates/aws/outputs.tf.template',
+  'templates/aws/versions.tf.template',
+  'templates/aws/readme.md.template',
+  // Azure templates
+  'templates/azure/config.json',
+  'templates/azure/provider.tf.template',
+  'templates/azure/variables.tf.template',
+  'templates/azure/tfvars.tf.template',
+  'templates/azure/main.tf.template',
+  'templates/azure/outputs.tf.template',
+  'templates/azure/versions.tf.template',
+  'templates/azure/readme.md.template',
+  // GCP templates
+  'templates/gcp/config.json',
+  'templates/gcp/provider.tf.template',
+  'templates/gcp/variables.tf.template',
+  'templates/gcp/tfvars.tf.template',
+  'templates/gcp/main.tf.template',
+  'templates/gcp/outputs.tf.template',
+  'templates/gcp/versions.tf.template',
+  'templates/gcp/readme.md.template',
+  // Module templates
+  'templates/modules/network/main.tf.template',
+  'templates/modules/network/variables.tf.template',
+  'templates/modules/network/outputs.tf.template',
+  'templates/modules/databricks/main.tf.template',
+  'templates/modules/databricks/variables.tf.template',
+  'templates/modules/databricks/outputs.tf.template'
+];
+
 const urlsToCache = [
   BASE_PATH,
   BASE_PATH + 'index.html',
@@ -9,6 +48,8 @@ const urlsToCache = [
   BASE_PATH + 'js/app.js',
   BASE_PATH + 'js/network-calculator.js',
   BASE_PATH + 'js/terraform-generator.js',
+  BASE_PATH + 'js/template-loader.js',
+  BASE_PATH + 'js/template-engine.js',
   BASE_PATH + 'js/validators.js',
   BASE_PATH + 'js/utils.js',
   // Local libraries
@@ -17,7 +58,9 @@ const urlsToCache = [
   BASE_PATH + 'libs/bootstrap-icons/font/bootstrap-icons.css',
   BASE_PATH + 'libs/bootstrap-icons/font/fonts/bootstrap-icons.woff',
   BASE_PATH + 'libs/bootstrap-icons/font/fonts/bootstrap-icons.woff2',
-  BASE_PATH + 'libs/jszip/jszip.min.js'
+  BASE_PATH + 'libs/jszip/jszip.min.js',
+  // Template files
+  ...templateFiles.map(file => BASE_PATH + file)
 ];
 
 // Install event - cache resources

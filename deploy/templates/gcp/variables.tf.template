@@ -1,0 +1,19 @@
+# GCP Configuration Variables
+variable "project_id" {
+  description = "GCP Project ID"
+  type        = string
+  default     = "{{project_id}}"
+}
+
+variable "region" {
+  description = "GCP region"
+  type        = string
+  default     = "{{region}}"
+}
+
+variable "project_prefix" {
+  description = "Prefix for all resource names"
+  type        = string
+  default     = "{{project_prefix}}"
+}
+

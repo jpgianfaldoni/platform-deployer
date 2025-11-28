@@ -139,8 +139,8 @@ test.describe('AWS Provider Tests', () => {
         pricing_tier: 'STANDARD'
       });
       
-      const regionField = page.locator('input[name="region"]');
-      await regionField.clear();
+      const regionField = page.locator('select[name="region"]');
+      await regionField.selectOption('');
       
       await FormHelpers.submitConfigForm(page, true); // allowInvalid = true for validation tests
       const validity = await ValidationHelpers.getFieldValidationMessage(page, 'region');
@@ -186,24 +186,8 @@ test.describe('AWS Provider Tests', () => {
         vpc_cidr: '10.0.0.0/22'
       });
       
-      // Remove all zones - clear values instead of removing rows
-      // (The UI prevents removing the last zone, so we clear its value)
-      const zoneInputs = page.locator('#az-container input[name="availability_zones"]');
-      const count = await zoneInputs.count();
-      
-      // Remove zones that can be removed
-      const removeButtons = page.locator('.remove-az-btn');
-      const removeCount = await removeButtons.count();
-      for (let i = removeCount - 1; i > 0; i--) {
-        await removeButtons.nth(i).click();
-        await page.waitForTimeout(200);
-      }
-      
-      // Clear the last zone's value
-      if (count > 0) {
-        await zoneInputs.first().clear();
-        await page.waitForTimeout(200);
-      }
+      // Clear all selected zones using helper
+      await FormHelpers.selectAvailabilityZones(page, []);
       
       await FormHelpers.submitConfigForm(page, true); // allowInvalid=true for validation tests
       await page.waitForTimeout(1000); // Wait for validation to be applied
@@ -246,14 +230,15 @@ test.describe('AWS Provider Tests', () => {
     test('should validate AWS region format', async ({ page }) => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'test',
-        region: 'invalid-region',
         pricing_tier: 'STANDARD'
+        // region is intentionally omitted to test required field validation
       });
       
       await FormHelpers.submitConfigForm(page, true); // allowInvalid=true for validation tests
       await page.waitForTimeout(500); // Wait for validation to be applied
-      const hasError = await ValidationHelpers.hasFieldValidationError(page, 'region', 'Invalid AWS region');
-      expect(hasError).toBeTruthy();
+      // Since region is now a select with only valid options, we test required field validation
+      const validity = await ValidationHelpers.getFieldValidationMessage(page, 'region');
+      expect(validity && validity.valueMissing).toBeTruthy();
     });
 
     test('should validate VPC CIDR format', async ({ page }) => {
@@ -464,12 +449,8 @@ test.describe('AWS Provider Tests', () => {
       const count1 = subnets1 ? subnets1.length : 0;
       expect(count1).toBeGreaterThan(0);
       
-      // Add another zone
-      await page.locator('#add-az').click();
-      await page.waitForTimeout(500);
-      const zoneInputs = page.locator('#az-container input[name="availability_zones"]');
-      const count = await zoneInputs.count();
-      await zoneInputs.nth(count - 1).fill('us-east-1b');
+      // Add another zone using Choices.js helper
+      await FormHelpers.selectAvailabilityZones(page, ['us-east-1a', 'us-east-1b']);
       await page.waitForTimeout(2000);
       
       const subnets2 = await FormHelpers.getSubnetPreview(page);
@@ -529,6 +510,239 @@ test.describe('AWS Provider Tests', () => {
       
       // Should have one more subnet (service subnet)
       expect(count2).toBe(count1 + 1);
+    });
+
+    test('should use Choices.js for availability zones', async ({ page }) => {
+      await FormHelpers.selectProvider(page, 'aws');
+      await FormHelpers.fillBasicConfig(page, {
+        project_prefix: 'test-aws',
+        region: 'us-east-1',
+        pricing_tier: 'STANDARD'
+      });
+      
+      // Verify Choices.js component exists (select is hidden, container is visible)
+      const choicesContainer = page.locator('.choices:has(#availability-zones-select)');
+      await expect(choicesContainer).toBeVisible();
+      
+      // Verify search input exists (use specific selector for the visible input, not the hidden select)
+      const searchInput = choicesContainer.locator('.choices__inner input.choices__input--cloned').first();
+      await expect(searchInput).toBeVisible();
+      
+      // Click to open dropdown and type to search
+      await choicesContainer.click();
+      await page.waitForTimeout(200);
+      await searchInput.fill('us-east-1a');
+      await page.waitForTimeout(300);
+      
+      // Verify dropdown has options
+      const dropdownItems = choicesContainer.locator('.choices__list--dropdown .choices__item');
+      const itemCount = await dropdownItems.count();
+      expect(itemCount).toBeGreaterThan(0);
+    });
+
+    test('should allow selecting and deselecting multiple availability zones', async ({ page }) => {
+      await FormHelpers.selectProvider(page, 'aws');
+      await FormHelpers.fillBasicConfig(page, {
+        project_prefix: 'test-aws',
+        region: 'us-east-1',
+        pricing_tier: 'STANDARD'
+      });
+      
+      // Select 2 zones using helper
+      await FormHelpers.selectAvailabilityZones(page, ['us-east-1a', 'us-east-1b']);
+      
+      // Verify 2 tags are visible
+      const tags = page.locator('.choices__list--multiple .choices__item');
+      await page.waitForTimeout(300);
+      const tagCount = await tags.count();
+      expect(tagCount).toBe(2);
+      
+      // Remove one tag
+      const removeButtons = page.locator('.choices__button[data-button-type="remove-item"]');
+      await removeButtons.first().click();
+      await page.waitForTimeout(200);
+      
+      // Verify only 1 tag remains
+      const afterRemoveCount = await tags.count();
+      expect(afterRemoveCount).toBe(1);
+    });
+
+    test('should enforce minimum availability zones for AWS (2)', async ({ page }) => {
+      await FormHelpers.selectProvider(page, 'aws');
+      await FormHelpers.fillBasicConfig(page, {
+        project_prefix: 'test-aws',
+        region: 'us-east-1',
+        pricing_tier: 'STANDARD'
+      });
+      
+      // Remove all tags first
+      const removeButtons = page.locator('#az-tags-list .az-tag-remove');
+      const tagCount = await removeButtons.count();
+      for (let i = tagCount - 1; i >= 0; i--) {
+        await removeButtons.nth(i).click();
+        await page.waitForTimeout(100);
+      }
+      
+      // Select only 1 zone (below minimum of 2)
+      const azInput = page.locator('#availability-zones-input');
+      await azInput.fill('us-east-1a');
+      await page.waitForTimeout(200);
+      await page.locator('#az-dropdown .az-dropdown-item').first().click();
+      await page.waitForTimeout(300);
+      
+      // Try to submit with only 1 zone - should fail validation
+      await FormHelpers.submitConfigForm(page, true);
+      await page.waitForTimeout(500);
+      const hasError = await ValidationHelpers.hasAvailabilityZoneError(page, 'availability zone');
+      expect(hasError).toBeTruthy();
+    });
+
+    test('should update availability zone options when region changes', async ({ page }) => {
+      await FormHelpers.selectProvider(page, 'aws');
+      await FormHelpers.fillBasicConfig(page, {
+        project_prefix: 'test-aws',
+        region: 'us-east-1',
+        pricing_tier: 'STANDARD'
+      });
+      
+      // Get initial options from select element
+      const azSelect = page.locator('#availability-zones-select');
+      const initialOptions = await azSelect.locator('option').allTextContents();
+      expect(initialOptions.some(opt => opt.includes('us-east-1'))).toBeTruthy();
+      
+      // Change region
+      await page.selectOption('select[name="region"]', 'us-west-2');
+      await page.waitForTimeout(1000); // Wait for Choices.js to update
+      
+      // Verify options updated - read from select element
+      const updatedOptions = await azSelect.locator('option').allTextContents();
+      expect(updatedOptions.some(opt => opt.includes('us-west-2'))).toBeTruthy();
+      
+      // Verify tags were cleared
+      const tags = page.locator('.choices__list--multiple .choices__item');
+      const tagCount = await tags.count();
+      expect(tagCount).toBe(0);
+    });
+
+    test('should allow selecting multiple different availability zones', async ({ page }) => {
+      await FormHelpers.selectProvider(page, 'aws');
+      await FormHelpers.fillBasicConfig(page, {
+        project_prefix: 'test-aws',
+        region: 'us-east-1',
+        pricing_tier: 'STANDARD'
+      });
+      
+      const zones = ['us-east-1a', 'us-east-1b', 'us-east-1c'];
+      
+      // Select multiple different zones using helper
+      await FormHelpers.selectAvailabilityZones(page, zones);
+      
+      // Verify all tags are visible
+      const tags = page.locator('.choices__list--multiple .choices__item');
+      const tagCount = await tags.count();
+      expect(tagCount).toBe(3);
+      
+      // Verify all zones are different (check tag text content)
+      const tagTexts = await tags.allTextContents();
+      const uniqueTexts = [...new Set(tagTexts.map(t => t.trim().replace(/×/g, '').trim()))];
+      expect(uniqueTexts.length).toBe(3);
+    });
+
+    test('should enforce minimum availability zones for AWS (2) on submit', async ({ page }) => {
+      await FormHelpers.selectProvider(page, 'aws');
+      await FormHelpers.fillBasicConfig(page, {
+        project_prefix: 'test-aws',
+        region: 'us-east-1',
+        pricing_tier: 'STANDARD'
+      });
+      
+      // Remove all tags first
+      const removeButtons = page.locator('#az-tags-list .az-tag-remove');
+      const tagCount = await removeButtons.count();
+      for (let i = tagCount - 1; i >= 0; i--) {
+        await removeButtons.nth(i).click();
+        await page.waitForTimeout(100);
+      }
+      
+      // Select only 1 zone (below minimum)
+      const azInput = page.locator('#availability-zones-input');
+      await azInput.fill('us-east-1a');
+      await page.waitForTimeout(200);
+      await page.locator('#az-dropdown .az-dropdown-item').first().click();
+      await page.waitForTimeout(300);
+      
+      // Try to submit - should fail validation
+      await FormHelpers.submitConfigForm(page, true);
+      await page.waitForTimeout(500);
+      
+      const hasError = await ValidationHelpers.hasAvailabilityZoneError(page, 'availability zone');
+      expect(hasError).toBeTruthy();
+    });
+
+    test('should enforce maximum availability zones for AWS (6)', async ({ page }) => {
+      await FormHelpers.selectProvider(page, 'aws');
+      await FormHelpers.fillBasicConfig(page, {
+        project_prefix: 'test-aws',
+        region: 'us-east-1',
+        pricing_tier: 'STANDARD'
+      });
+      
+      const zones = ['us-east-1a', 'us-east-1b', 'us-east-1c', 'us-east-1d', 'us-east-1e', 'us-east-1f'];
+      
+      // Select 6 zones (maximum) using helper
+      await FormHelpers.selectAvailabilityZones(page, zones);
+      
+      // Verify 6 tags are visible
+      const tags = page.locator('.choices__list--multiple .choices__item');
+      await page.waitForTimeout(300);
+      const tagCount = await tags.count();
+      expect(tagCount).toBeLessThanOrEqual(6);
+      
+      // Try to add one more - Choices.js should prevent it (already selected)
+      await page.waitForTimeout(200);
+    });
+
+    test('should only show valid availability zones for selected region', async ({ page }) => {
+      await FormHelpers.selectProvider(page, 'aws');
+      await FormHelpers.fillBasicConfig(page, {
+        project_prefix: 'test-aws',
+        region: 'us-east-1',
+        pricing_tier: 'STANDARD'
+      });
+      
+      const azInput = page.locator('#availability-zones-input');
+      
+      // Type to see options
+      await azInput.fill('us-east-1');
+      await page.waitForTimeout(300);
+      
+      const dropdown = page.locator('#az-dropdown');
+      await expect(dropdown).toBeVisible();
+      const items = dropdown.locator('.az-dropdown-item');
+      const itemCount = await items.count();
+      
+      // All options should be valid for us-east-1
+      for (let i = 0; i < itemCount; i++) {
+        const text = await items.nth(i).textContent();
+        expect(text).toMatch(/^us-east-1[a-f]$/);
+      }
+      
+      // Change region
+      await page.selectOption('select[name="region"]', 'us-west-2');
+      await page.waitForTimeout(500);
+      
+      // Clear and type again to see new options
+      await azInput.fill('');
+      await azInput.fill('us-west-2');
+      await page.waitForTimeout(300);
+      
+      // Verify options updated to us-west-2
+      const updatedItems = dropdown.locator('.az-dropdown-item');
+      const updatedCount = await updatedItems.count();
+      for (let i = 0; i < updatedCount; i++) {
+        const text = await updatedItems.nth(i).textContent();
+        expect(text).toMatch(/^us-west-2[a-f]$/);
+      }
     });
   });
 
@@ -655,7 +869,7 @@ test.describe('AWS Provider Tests', () => {
       const projectPrefix = await page.locator('input[name="project_prefix"]').inputValue();
       expect(projectPrefix).toBe('persist-test');
       
-      const region = await page.locator('input[name="region"]').inputValue();
+      const region = await page.locator('select[name="region"]').inputValue();
       expect(region).toBe('us-east-1');
     });
 

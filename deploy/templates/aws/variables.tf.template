@@ -1,0 +1,121 @@
+# AWS Configuration Variables
+variable "aws_region" {
+  description = "AWS region for resource deployment"
+  type        = string
+  default     = "{{region}}"
+}
+
+variable "project_prefix" {
+  description = "Prefix for all resource names"
+  type        = string
+  default     = "{{project_prefix}}"
+  
+  validation {
+    condition     = can(regex("^[a-z0-9][a-z0-9-]*[a-z0-9]$", var.project_prefix))
+    error_message = "Project prefix must contain only lowercase letters, numbers, and hyphens."
+  }
+}
+
+# VPC Configuration
+variable "vpc_cidr" {
+  description = "CIDR block for the VPC"
+  type        = string
+  default     = "{{vpc_cidr}}"
+  
+  validation {
+    condition     = can(cidrhost(var.vpc_cidr, 0))
+    error_message = "VPC CIDR must be a valid IPv4 CIDR block."
+  }
+}
+
+variable "create_new_vpc" {
+  description = "Whether to create a new VPC or use an existing one"
+  type        = bool
+  default     = {{create_new_vpc}}
+}
+
+variable "existing_vpc_id" {
+  description = "ID of existing VPC to use (required if create_new_vpc is false)"
+  type        = string
+  default     = ""
+}
+
+variable "availability_zones" {
+  description = "List of availability zones for subnet deployment"
+  type        = list(string)
+  default     = {{availability_zones}}
+}
+
+# Subnet Configuration
+{{#each calculated_subnets}}
+variable "{{name_replace}}_subnet_cidr" {
+  description = "CIDR block for {{name}} subnet"
+  type        = string
+  default     = "{{cidr}}"
+}
+
+{{/each}}
+# Databricks Configuration
+variable "databricks_account_id" {
+  description = "Databricks account ID"
+  type        = string
+  sensitive   = true
+}
+
+variable "pricing_tier" {
+  description = "Databricks workspace pricing tier"
+  type        = string
+  default     = "{{pricing_tier}}"
+  
+  validation {
+    condition = contains([
+      "STANDARD",
+      "PREMIUM", 
+      "ENTERPRISE"
+    ], var.pricing_tier)
+    error_message = "Pricing tier must be STANDARD, PREMIUM, or ENTERPRISE."
+  }
+}
+
+variable "workspace_name" {
+  description = "Name of the Databricks workspace"
+  type        = string
+  default     = "{{project_prefix}}-workspace"
+}
+
+# Security Configuration
+variable "enable_private_link" {
+  description = "Enable AWS PrivateLink for private connectivity"
+  type        = bool
+  default     = {{enable_private_link}}
+}
+
+{{#if cross_account_role_arn}}
+variable "cross_account_role_arn" {
+  description = "ARN of cross-account IAM role for Databricks access"
+  type        = string
+  default     = "{{cross_account_role_arn}}"
+}
+{{/if}}
+
+# Advanced Configuration
+variable "enable_nat_gateway" {
+  description = "Enable NAT Gateway for private subnet internet access"
+  type        = bool
+  default     = {{enable_nat_gateway}}
+}
+
+variable "common_tags" {
+  description = "Common tags to apply to all resources"
+  type        = map(string)
+  default = merge(
+    {{common_tags}},
+    {
+      Project     = "{{project_prefix}}"
+      Environment = "dev"
+      ManagedBy   = "terraform"
+      Provider    = "aws"
+    }
+  )
+}
+

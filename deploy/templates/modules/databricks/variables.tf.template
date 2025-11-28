@@ -1,0 +1,6 @@
+# Databricks Module Variables
+variable "workspace_name" {
+  description = "Workspace name"
+  type        = string
+}
+

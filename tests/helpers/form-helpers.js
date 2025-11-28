@@ -34,10 +34,10 @@ class FormHelpers {
     }
     
     if (config.region) {
-      const field = page.locator('input[name="region"]');
+      const field = page.locator('select[name="region"]');
       await field.waitFor({ state: 'visible', timeout: 5000 });
-      await field.fill(config.region);
-      await field.blur();
+      await field.selectOption(config.region);
+      await page.waitForTimeout(300); // Wait for any dependent fields to update
     }
     
     if (config.pricing_tier) {
@@ -91,41 +91,10 @@ class FormHelpers {
       await page.waitForTimeout(800); // Wait for subnet calculation
     }
     
-    // Set availability zones
+    // Set availability zones (Choices.js component)
     if (config.availability_zones && Array.isArray(config.availability_zones)) {
-      // Wait for zone container to be ready
-      await page.waitForSelector('#az-container', { timeout: 5000 });
-      
-      // Get current zone inputs
-      const zoneInputs = page.locator('#az-container input[name="availability_zones"]');
-      const currentCount = await zoneInputs.count();
-      
-      // Update existing zones
-      for (let i = 0; i < Math.min(config.availability_zones.length, currentCount); i++) {
-        await zoneInputs.nth(i).fill(config.availability_zones[i]);
-      }
-      
-      // Add additional zones if needed
-      if (config.availability_zones.length > currentCount) {
-        for (let i = currentCount; i < config.availability_zones.length; i++) {
-          await page.locator('#add-az').click();
-          await page.waitForTimeout(300);
-          const newZoneInputs = page.locator('#az-container input[name="availability_zones"]');
-          await newZoneInputs.nth(i).fill(config.availability_zones[i]);
-        }
-      }
-      
-      // Remove extra zones if needed (keep at least one)
-      if (currentCount > config.availability_zones.length && currentCount > 1) {
-        const removeButtons = page.locator('.remove-az-btn');
-        const removeCount = await removeButtons.count();
-        for (let i = removeCount - 1; i >= config.availability_zones.length; i--) {
-          await removeButtons.nth(i).click();
-          await page.waitForTimeout(200);
-        }
-      }
-      
-      await page.waitForTimeout(500); // Wait for subnet calculation
+      // Use the helper function which handles Choices.js correctly
+      await this.selectAvailabilityZones(page, config.availability_zones);
     }
     
     // Toggle private link
@@ -370,6 +339,72 @@ class FormHelpers {
       used_ips: usedIPs?.trim() || '',
       utilization_percent: utilization?.trim() || ''
     };
+  }
+
+  /**
+   * Select availability zones using Choices.js API
+   * @param {Page} page - Playwright page object
+   * @param {string[]} zones - Array of zone values to select
+   */
+  static async selectAvailabilityZones(page, zones) {
+    // Wait for Choices.js container to be ready (the select itself is hidden)
+    await page.waitForSelector('.choices:has(#availability-zones-select)', { timeout: 10000, state: 'visible' });
+    // Wait a bit for Choices.js to fully initialize
+    await page.waitForTimeout(500);
+    
+    // Use JavaScript to interact with Choices.js instance
+    await page.evaluate((zoneValues) => {
+      const select = document.getElementById('availability-zones-select');
+      if (!select) {
+        throw new Error('Availability zones select not found');
+      }
+      
+      // Get Choices.js instance - it's stored on the select element as choicesInstance
+      const choicesInstance = select.choicesInstance;
+      
+      if (choicesInstance && typeof choicesInstance.setValue === 'function') {
+        // Use Choices.js API - clear first then set new values
+        // removeActiveItems removes all selected items
+        if (typeof choicesInstance.removeActiveItems === 'function') {
+          choicesInstance.removeActiveItems();
+        } else {
+          // Fallback: set empty value first
+          choicesInstance.setValue([]);
+        }
+        
+        // Now set the new values
+        if (zoneValues && zoneValues.length > 0) {
+          choicesInstance.setValue(zoneValues);
+        }
+        
+        // Trigger change event to update the form
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      } else {
+        // Fallback: directly set values on select element and trigger events
+        // Clear existing selections
+        Array.from(select.options).forEach(option => {
+          option.selected = false;
+        });
+        
+        // Set new selections
+        zoneValues.forEach(zoneValue => {
+          const option = select.querySelector(`option[value="${zoneValue}"]`);
+          if (option) {
+            option.selected = true;
+          }
+        });
+        
+        // Trigger change event (bubbles for form validation)
+        const changeEvent = new Event('change', { bubbles: true, cancelable: true });
+        select.dispatchEvent(changeEvent);
+        
+        // Also trigger input event for Choices.js
+        const inputEvent = new Event('input', { bubbles: true, cancelable: true });
+        select.dispatchEvent(inputEvent);
+      }
+    }, zones);
+    
+    await page.waitForTimeout(500); // Wait for UI to update and subnet calculation
   }
 }
 

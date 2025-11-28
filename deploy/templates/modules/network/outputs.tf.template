@@ -1,0 +1,6 @@
+# Network Module Outputs
+output "vpc_id" {
+  description = "VPC ID"
+  value       = "Configured in main.tf"
+}
+

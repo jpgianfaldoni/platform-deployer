@@ -1,0 +1,46 @@
+# Databricks Deployment on AWS
+
+This Terraform project deploys a Databricks workspace on Amazon Web Services.
+
+## Configuration
+
+- **Provider**: AWS
+- **Region**: {{region}}
+- **Project Prefix**: {{project_prefix}}
+- **Pricing Tier**: {{pricing_tier}}
+- **VPC CIDR**: {{vpc_cidr}}
+- **Private Link**: {{private_link_status}}
+
+## Prerequisites
+
+1. AWS account with appropriate permissions
+2. Databricks account ID
+3. Terraform >= 1.0 installed
+4. AWS CLI configured
+
+## Deployment Steps
+
+1. **Set your Databricks account ID** in `terraform.tfvars`
+
+2. **Configure AWS credentials**:
+   ```bash
+   aws configure
+   ```
+
+3. **Initialize Terraform**:
+   ```bash
+   terraform init
+   ```
+
+4. **Review the plan**:
+   ```bash
+   terraform plan
+   ```
+
+5. **Apply the configuration**:
+   ```bash
+   terraform apply
+   ```
+
+## Generated: {{generated_date}}
+
