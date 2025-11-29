@@ -155,7 +155,15 @@ test.describe('GCP Provider Tests', () => {
         project_id: 'test-project'
       });
       
-      await page.selectOption('select[name="pricing_tier"]', '');
+      // Clear the select value using JavaScript since it always has a default selection
+      await page.evaluate(() => {
+        const select = document.querySelector('select[name="pricing_tier"]');
+        if (select) {
+          select.value = '';
+          select.selectedIndex = -1;
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      });
       
       await FormHelpers.submitConfigForm(page, true); // allowInvalid = true for validation tests
       const validity = await ValidationHelpers.getFieldValidationMessage(page, 'pricing_tier');

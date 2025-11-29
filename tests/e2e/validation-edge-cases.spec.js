@@ -259,9 +259,23 @@ test.describe('Provider Switch Tests', () => {
     await FormHelpers.selectProvider(page, 'aws');
     await expect(page).toHaveURL(/.*#\/configure/);
     
+    // Wait for form to render
+    await page.waitForTimeout(500);
+    
     // Verify AWS-specific options (Enterprise tier available)
-    const pricingOptions = await page.locator('select[name="pricing_tier"] option').allTextContents();
-    expect(pricingOptions.some(opt => opt.includes('ENTERPRISE') || opt.includes('Enterprise'))).toBeTruthy();
+    const pricingSelect = page.locator('select[name="pricing_tier"]');
+    await pricingSelect.waitFor({ state: 'visible', timeout: 5000 });
+    
+    // Wait a bit more for options to be populated
+    await page.waitForTimeout(300);
+    
+    const pricingOptions = await pricingSelect.locator('option').allTextContents();
+    const hasEnterprise = pricingOptions.some(opt => 
+      opt.includes('ENTERPRISE') || 
+      opt.includes('Enterprise') || 
+      opt.toLowerCase().includes('enterprise')
+    );
+    expect(hasEnterprise).toBeTruthy();
     
     // Verify Project ID field is NOT visible (GCP-specific)
     const projectIdField = page.locator('input[name="project_id"]');

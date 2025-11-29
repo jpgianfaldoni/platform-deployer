@@ -22,10 +22,11 @@ test.describe('Basic Application Tests', () => {
   });
 
   test('should display navbar with main elements', async ({ page }) => {
-    // Check navbar brand
+    // Check navbar brand (which serves as home link)
     const navbarBrand = page.locator('.navbar-brand');
     await expect(navbarBrand).toBeVisible();
     await expect(navbarBrand).toContainText('One-Click Deployer');
+    await expect(navbarBrand).toHaveAttribute('href', '#/');
     
     // On mobile, menu might be collapsed - check if toggler exists
     const navbarToggler = page.locator('.navbar-toggler');
@@ -38,10 +39,6 @@ test.describe('Basic Application Tests', () => {
     }
     
     // Check navigation links
-    const homeLink = page.locator('a.nav-link[href="#/"]').first();
-    await expect(homeLink).toBeVisible();
-    await expect(homeLink).toContainText('Home');
-    
     const startOverLink = page.locator('a.nav-link[href="#/reset"]');
     await expect(startOverLink).toBeVisible();
     await expect(startOverLink).toContainText('Start Over');
@@ -57,18 +54,10 @@ test.describe('Basic Application Tests', () => {
   });
 
   test('should navigate to home route', async ({ page }) => {
-    // On mobile, menu might be collapsed - open it first
-    const navbarToggler = page.locator('.navbar-toggler');
-    const isMobile = await navbarToggler.isVisible();
-    
-    if (isMobile) {
-      await navbarToggler.click();
-      await page.waitForTimeout(300); // Wait for menu animation
-    }
-    
-    // Click home link
-    const homeLink = page.locator('a.nav-link[href="#/"]').first();
-    await homeLink.click();
+    // Click navbar brand which serves as home link
+    const navbarBrand = page.locator('.navbar-brand[href="#/"]');
+    await expect(navbarBrand).toBeVisible();
+    await navbarBrand.click();
     
     // Wait for navigation
     await page.waitForTimeout(500);

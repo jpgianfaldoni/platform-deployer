@@ -101,7 +101,11 @@ test.describe('AWS Provider Tests', () => {
         enable_private_link: false
       });
 
-      await expect(page.locator('#subnets-preview')).toBeVisible({ timeout: 5000 });
+      // When using existing VPC, subnet preview should not be visible
+      const subnetPreview = page.locator('#subnets-preview');
+      const isVisible = await subnetPreview.isVisible().catch(() => false);
+      expect(isVisible).toBe(false);
+      
       await page.waitForTimeout(1000);
       await FormHelpers.submitConfigForm(page);
       await page.waitForTimeout(1000);
@@ -139,7 +143,15 @@ test.describe('AWS Provider Tests', () => {
         region: 'us-east-1'
       });
       
-      await page.selectOption('select[name="pricing_tier"]', '');
+      // Clear the select value using JavaScript since it always has a default selection
+      await page.evaluate(() => {
+        const select = document.querySelector('select[name="pricing_tier"]');
+        if (select) {
+          select.value = '';
+          select.selectedIndex = -1;
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      });
       
       await FormHelpers.submitConfigForm(page, true); // allowInvalid = true for validation tests
       const validity = await ValidationHelpers.getFieldValidationMessage(page, 'pricing_tier');
@@ -474,6 +486,89 @@ test.describe('AWS Provider Tests', () => {
       
       // Should have one more subnet (service subnet)
       expect(count2).toBe(count1 + 1);
+    });
+
+    test('should show subnet size slider when Create New VPC is enabled', async ({ page }) => {
+      await FormHelpers.fillNetworkConfig(page, {
+        vpc_cidr: '10.0.0.0/20',
+        availability_zones: ['us-east-1a', 'us-east-1b']
+      });
+      
+      await page.waitForTimeout(2000);
+      
+      // Slider should be visible when Create New VPC is checked
+      const sliderContainer = page.locator('#subnet-size-slider-container');
+      await expect(sliderContainer).toBeVisible();
+      
+      // Slider should be enabled when all required fields are filled
+      const slider = page.locator('#subnet-size-slider');
+      const isDisabled = await slider.getAttribute('disabled').then(v => v !== null).catch(() => false);
+      expect(isDisabled).toBe(false);
+    });
+
+    test('should hide subnet size slider when Create New VPC is disabled', async ({ page }) => {
+      // Disable Create New VPC
+      const createNewVpc = page.locator('#create_new_vpc');
+      await createNewVpc.uncheck();
+      await page.waitForTimeout(500);
+      
+      // Slider should be hidden
+      const sliderContainer = page.locator('#subnet-size-slider-container');
+      await expect(sliderContainer).not.toBeVisible();
+      
+      // Preview should also be hidden
+      const preview = page.locator('#subnets-preview');
+      await expect(preview).not.toBeVisible();
+    });
+
+    test('should recalculate subnets when subnet size slider changes', async ({ page }) => {
+      await FormHelpers.fillNetworkConfig(page, {
+        vpc_cidr: '10.0.0.0/20',
+        availability_zones: ['us-east-1a', 'us-east-1b']
+      });
+      
+      await page.waitForTimeout(2000);
+      
+      // Get initial subnet sizes
+      const subnets1 = await FormHelpers.getSubnetPreview(page);
+      expect(subnets1).not.toBeNull();
+      expect(subnets1.length).toBeGreaterThan(0);
+      const initialSize = subnets1[0].cidr.split('/')[1];
+      
+      // Change slider value
+      const slider = page.locator('#subnet-size-slider');
+      const currentValue = await slider.inputValue();
+      const newValue = currentValue === '26' ? '24' : '26';
+      await slider.fill(newValue);
+      await slider.dispatchEvent('change');
+      await page.waitForTimeout(2000);
+      
+      // Get new subnet sizes
+      const subnets2 = await FormHelpers.getSubnetPreview(page);
+      expect(subnets2).not.toBeNull();
+      expect(subnets2.length).toBeGreaterThan(0);
+      const newSize = subnets2[0].cidr.split('/')[1];
+      
+      // Sizes should be different
+      expect(newSize).not.toBe(initialSize);
+    });
+
+    test('should show subnet preview when Create New VPC is enabled', async ({ page }) => {
+      await FormHelpers.fillNetworkConfig(page, {
+        vpc_cidr: '10.0.0.0/20',
+        availability_zones: ['us-east-1a', 'us-east-1b']
+      });
+      
+      await page.waitForTimeout(2000);
+      
+      // Preview should be visible
+      const preview = page.locator('#subnets-preview');
+      await expect(preview).toBeVisible();
+      
+      // Should have subnet cards
+      const subnetCards = page.locator('.subnet-card');
+      const count = await subnetCards.count();
+      expect(count).toBeGreaterThan(0);
     });
 
     test('should use Choices.js for availability zones', async ({ page }) => {

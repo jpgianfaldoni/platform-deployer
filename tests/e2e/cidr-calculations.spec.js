@@ -272,7 +272,7 @@ test.describe('CIDR Calculations', () => {
         if (calculatedSummary.error) return false;
         
         // Get displayed utilization
-        const displayedUtilization = parseFloat(document.querySelector('.text-info')?.textContent?.replace('%', '') || '0');
+        const displayedUtilization = parseFloat(document.querySelector('#network-utilization-percent')?.textContent?.replace('%', '') || '0');
         
         // Allow small rounding differences
         return Math.abs(calculatedSummary.utilization_percent - displayedUtilization) < 1;
@@ -373,9 +373,35 @@ test.describe('CIDR Calculations', () => {
         enable_private_link: true
       });
       
-      await page.waitForTimeout(3000);
+      // Wait for subnet preview to appear
+      await page.waitForSelector('#subnets-preview', { state: 'visible', timeout: 10000 });
       
-      const subnets = await FormHelpers.getSubnetPreview(page);
+      // Wait for subnet cards to appear - check if slider is enabled first
+      const slider = page.locator('#subnet-size-slider');
+      const isSliderDisabled = await slider.getAttribute('disabled').then(v => v !== null).catch(() => false);
+      
+      // If slider is disabled, wait a bit more for calculations
+      if (isSliderDisabled) {
+        await page.waitForTimeout(2000);
+      }
+      
+      // Wait for subnet cards with multiple retries
+      let subnets = null;
+      for (let i = 0; i < 15; i++) {
+        await page.waitForTimeout(500);
+        subnets = await FormHelpers.getSubnetPreview(page);
+        if (subnets && subnets.length > 0) {
+          break;
+        }
+        // Check if there's an error message instead
+        const errorAlert = page.locator('#subnets-container .alert');
+        const hasError = await errorAlert.count() > 0;
+        if (hasError) {
+          const errorText = await errorAlert.textContent();
+          console.log('Subnet calculation error:', errorText);
+        }
+      }
+      
       expect(subnets).not.toBeNull();
       expect(subnets.length).toBeGreaterThan(0);
       

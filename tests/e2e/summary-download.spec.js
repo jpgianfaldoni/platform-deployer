@@ -69,6 +69,34 @@ test.describe('Summary Page Tests', () => {
       const subnetsSection = page.locator('text=Subnet').first();
       await expect(subnetsSection).toBeVisible();
     });
+
+    test('should display subnet count in Network Configuration section', async ({ page }) => {
+      await FormHelpers.selectProvider(page, 'aws');
+      await FormHelpers.fillBasicConfig(page, {
+        project_prefix: 'aws-subnet-count',
+        region: 'us-west-2',
+        pricing_tier: 'STANDARD'
+      });
+      await FormHelpers.fillNetworkConfig(page, {
+        vpc_cidr: '10.0.0.0/20',
+        availability_zones: ['us-west-2a', 'us-west-2b']
+      });
+      await page.waitForTimeout(1000);
+      await FormHelpers.submitConfigForm(page);
+      await expect(page).toHaveURL(/.*#\/summary/, { timeout: 10000 });
+      
+      // Verify subnet count appears in Network Configuration section
+      const networkConfigSection = page.locator('text=Network Configuration').locator('..');
+      await expect(networkConfigSection).toBeVisible();
+      
+      // Check for subnet count badge (should show "X subnet(s)")
+      const subnetCountText = page.locator('text=/\\d+ subnet/');
+      await expect(subnetCountText).toBeVisible({ timeout: 5000 });
+      
+      // Verify it's in the Network Configuration table
+      const pageContent = await page.content();
+      expect(pageContent).toMatch(/\d+\s+subnet/i);
+    });
   });
 
   test.describe('Azure Summary Verification', () => {

@@ -197,6 +197,86 @@ class NetworkCalculator {
   }
 
   /**
+   * Calculate subnet size limits based on VPC CIDR, number of AZs, and private link setting
+   * Returns min, max, and default subnet sizes that the user can choose from
+   * @param {string} vpcCIDR - The VPC CIDR block (e.g., "10.0.0.0/16")
+   * @param {number} numAZs - Number of availability zones
+   * @param {boolean} enablePrivateLink - Whether private link/endpoint is enabled
+   * @returns {Object} { min, max, default, totalSubnets, maxNodes }
+   */
+  calculateSubnetSizeLimits(vpcCIDR, numAZs, enablePrivateLink = false) {
+    if (!this.validateCIDR(vpcCIDR)) {
+      return { error: 'Invalid VPC CIDR format' };
+    }
+
+    const vpcPrefix = parseInt(vpcCIDR.split('/')[1], 10);
+    const totalVPCIPs = CIDRUtils.getSubnetSize(vpcPrefix);
+    
+    // Databricks minimum subnet size: /26 (~60 usable IPs, supports ~30 nodes)
+    const minSubnetSize = this.MIN_SUBNET_SIZE; // /26
+    
+    // Calculate number of subnets needed
+    let numSubnets;
+    if (this.provider === 'gcp') {
+      // GCP: host + pods + service (if privatelink)
+      numSubnets = enablePrivateLink ? 3 : 2;
+    } else {
+      // AWS/Azure: 2 subnets per AZ (private + public) + service (if privatelink)
+      numSubnets = (numAZs * 2) + (enablePrivateLink ? 1 : 0);
+    }
+    
+    // Calculate maximum subnet size that can fit all subnets
+    // We need numSubnets subnets to fit in the VPC
+    // Maximum subnet prefix = log2(totalVPCIPs / numSubnets)
+    const maxIPsPerSubnet = Math.floor(totalVPCIPs / numSubnets);
+    
+    // Convert to prefix length (higher prefix = smaller subnet)
+    // For example, if maxIPsPerSubnet = 256, then prefix = 32 - log2(256) = 32 - 8 = 24
+    let maxSubnetSize = 32 - Math.floor(Math.log2(maxIPsPerSubnet));
+    
+    // Ensure max is at least vpcPrefix + 1 (subnet must be smaller than VPC)
+    maxSubnetSize = Math.max(maxSubnetSize, vpcPrefix + 1);
+    
+    // Ensure max doesn't exceed /28 (smallest practical subnet)
+    maxSubnetSize = Math.min(maxSubnetSize, 28);
+    
+    // If max is smaller (larger prefix) than min, adjust
+    // This means VPC is too small for the configuration
+    if (maxSubnetSize > minSubnetSize) {
+      return { 
+        error: 'VPC CIDR is too small for the requested configuration',
+        min: minSubnetSize,
+        max: maxSubnetSize,
+        totalSubnets: numSubnets,
+        valid: false
+      };
+    }
+    
+    // Default: middle point between min and max, favoring larger subnets
+    const defaultSubnetSize = Math.ceil((minSubnetSize + maxSubnetSize) / 2);
+    
+    // Calculate max nodes for each subnet size option
+    const getMaxNodes = (prefix) => {
+      // Each Databricks node requires 2 IPs
+      // Subnet loses 5 IPs for AWS (network, broadcast, gateway, DNS, future use)
+      const ips = CIDRUtils.getSubnetSize(prefix);
+      const usableIPs = Math.max(0, ips - 5);
+      return Math.floor(usableIPs / 2);
+    };
+    
+    return {
+      min: maxSubnetSize,  // Larger subnets (smaller prefix = more IPs)
+      max: minSubnetSize,  // Smaller subnets (larger prefix = fewer IPs)
+      default: defaultSubnetSize,
+      totalSubnets: numSubnets,
+      vpcPrefix: vpcPrefix,
+      valid: true,
+      getMaxNodes: getMaxNodes,
+      getIPsForSize: (prefix) => CIDRUtils.getSubnetSize(prefix)
+    };
+  }
+
+  /**
    * Get default subnet sizes for the provider
    */
   getDefaultSubnetSizes(vpcSize, pricingTier = null) {
@@ -253,10 +333,17 @@ class NetworkCalculator {
   /**
    * Get next subnet CIDR starting from a given IP address
    * Ensures the subnet is aligned to its network boundary
+   * If startIP is past the aligned boundary, advance to the next aligned block
    */
   getNextSubnetCIDR(startIP, prefixLen) {
     const mask = CIDRUtils.getMask(prefixLen);
-    const network = startIP & mask;
+    const alignedNetwork = startIP & mask;
+    
+    // If startIP is exactly at the boundary, use it
+    // Otherwise, advance to the next aligned block
+    const subnetSize = CIDRUtils.getSubnetSize(prefixLen);
+    const network = (startIP > alignedNetwork) ? alignedNetwork + subnetSize : alignedNetwork;
+    
     return `${this.intToIp(network)}/${prefixLen}`;
   }
 
@@ -273,8 +360,13 @@ class NetworkCalculator {
 
   /**
    * Allocate subnet CIDRs within the VPC
+   * @param {string} vpcCIDR - VPC CIDR block
+   * @param {string[]} availabilityZones - List of availability zones
+   * @param {string} pricingTier - Databricks pricing tier
+   * @param {boolean} enablePrivateLink - Whether private link is enabled
+   * @param {number|null} customSubnetSize - Optional custom subnet size (prefix length)
    */
-  allocateSubnets(vpcCIDR, availabilityZones, pricingTier = null, enablePrivateLink = false) {
+  allocateSubnets(vpcCIDR, availabilityZones, pricingTier = null, enablePrivateLink = false, customSubnetSize = null) {
     if (!this.validateCIDR(vpcCIDR)) {
       throw new Error('Invalid VPC CIDR format');
     }
@@ -284,7 +376,25 @@ class NetworkCalculator {
     const vpcNetworkIP = this.ipToInt(vpcIP);
     
     // Get subnet sizes for the provider
-    const subnetSizes = this.getDefaultSubnetSizes(vpcSize, pricingTier);
+    let subnetSizes = this.getDefaultSubnetSizes(vpcSize, pricingTier);
+    
+    // Override with custom subnet size if provided
+    if (customSubnetSize !== null && typeof customSubnetSize === 'number') {
+      if (this.provider === 'gcp') {
+        subnetSizes = {
+          host: customSubnetSize + 1, // Host subnet slightly smaller
+          pods: customSubnetSize,      // Pods subnet uses main size
+          service: this.SERVICE_SUBNET_SIZE
+        };
+      } else {
+        // AWS/Azure
+        subnetSizes = {
+          private: customSubnetSize,
+          public: customSubnetSize,
+          service: this.SERVICE_SUBNET_SIZE
+        };
+      }
+    }
     
     const subnets = [];
     let currentIP = vpcNetworkIP;

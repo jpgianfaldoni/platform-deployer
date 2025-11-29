@@ -300,8 +300,8 @@ class App {
     if (!azSelect) return [];
     
     // Check if Choices.js is initialized
-    if (azSelect.choices) {
-      return azSelect.choices.getValue(true) || [];
+    if (azSelect.choicesInstance) {
+      return azSelect.choicesInstance.getValue(true) || [];
     }
     
     // Fallback: get from select options
@@ -1316,6 +1316,46 @@ class App {
                     </select>
                     <div class="form-text">Type to search and select availability zones. Selected zones will appear as tags.</div>
                   </div>
+                  <div id="subnet-size-slider-container" class="mb-4" style="display: none;">
+                    <label class="form-label fw-semibold">
+                      <i class="bi bi-sliders me-2"></i>
+                      Subnet Size
+                      <span class="text-muted small ms-2" id="subnet-size-info"></span>
+                    </label>
+                    <div class="subnet-slider-wrapper">
+                      <input type="range" class="form-range subnet-size-slider" id="subnet-size-slider" 
+                             min="17" max="28" step="1" value="26" name="custom_subnet_size">
+                      <div class="slider-labels d-flex justify-content-between mt-1">
+                        <span class="small text-muted" id="slider-label-min">Larger subnets</span>
+                        <span class="small text-muted" id="slider-label-max">Smaller subnets</span>
+                      </div>
+                    </div>
+                    <div class="subnet-size-details mt-3">
+                      <div class="row g-2 text-center">
+                        <div class="col-4">
+                          <div class="subnet-metric">
+                            <div class="h5 mb-0 text-primary" id="subnet-size-display">/<span>26</span></div>
+                            <div class="small text-muted">Subnet Prefix</div>
+                          </div>
+                        </div>
+                        <div class="col-4">
+                          <div class="subnet-metric">
+                            <div class="h5 mb-0 text-success" id="subnet-ips-display">64</div>
+                            <div class="small text-muted">IPs per Subnet</div>
+                          </div>
+                        </div>
+                        <div class="col-4">
+                          <div class="subnet-metric">
+                            <div class="h5 mb-0 text-info" id="subnet-nodes-display">~30</div>
+                            <div class="small text-muted">Max Nodes</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="form-text mt-2" id="subnet-size-description">
+                      Adjust the subnet size based on your expected cluster size. Larger subnets support more concurrent nodes.
+                    </div>
+                  </div>
                   <div id="subnets-preview" class="mt-4" style="display: none;">
                     <h6 class="fw-bold text-primary mb-3">
                       <i class="bi bi-calculator me-2"></i>
@@ -1382,31 +1422,218 @@ class App {
     const privateLinkCheckbox = document.getElementById('enable_private_link');
     const privateLinkWarning = document.getElementById('private-link-warning');
     
+    // Subnet size slider elements
+    const subnetSizeSliderContainer = document.getElementById('subnet-size-slider-container');
+    const subnetSizeSlider = document.getElementById('subnet-size-slider');
+    const subnetSizeDisplay = document.querySelector('#subnet-size-display span');
+    const subnetIpsDisplay = document.getElementById('subnet-ips-display');
+    const subnetNodesDisplay = document.getElementById('subnet-nodes-display');
+    const sliderLabelMin = document.getElementById('slider-label-min');
+    const sliderLabelMax = document.getElementById('slider-label-max');
+    
+    // Store current slider limits
+    let currentSliderLimits = null;
+    
+    // Function to update slider display values
+    const updateSliderDisplay = (prefixSize) => {
+      if (!subnetSizeDisplay || !subnetIpsDisplay || !subnetNodesDisplay) return;
+      
+      const ips = Math.pow(2, 32 - prefixSize);
+      // Each Databricks node requires 2 IPs, minus 5 reserved
+      const usableIPs = Math.max(0, ips - 5);
+      const maxNodes = Math.floor(usableIPs / 2);
+      
+      subnetSizeDisplay.textContent = prefixSize;
+      subnetIpsDisplay.textContent = Utils.formatNumber(ips);
+      subnetNodesDisplay.textContent = `~${Utils.formatNumber(maxNodes)}`;
+    };
+    
+    // Function to check if "Create New VPC" is active
+    const isCreateNewVpcActive = () => {
+      const createNewVpcCheckbox = document.getElementById('create_new_vpc');
+      return createNewVpcCheckbox?.checked !== false;
+    };
+    
+    // Function to update slider limits based on current configuration
+    const updateSliderLimits = () => {
+      const vpcCidr = vpcCidrInput?.value;
+      const enablePrivateLink = privateLinkCheckbox?.checked || false;
+      const zones = this.getSelectedAvailabilityZones();
+      const createNewVpc = isCreateNewVpcActive();
+      
+      // Always show slider container when Create New VPC is active
+      if (!createNewVpc) {
+        if (subnetSizeSliderContainer) {
+          subnetSizeSliderContainer.style.display = 'none';
+        }
+        currentSliderLimits = null;
+        return;
+      }
+      
+      // Show slider container when Create New VPC is active
+      if (subnetSizeSliderContainer) {
+        subnetSizeSliderContainer.style.display = 'block';
+      }
+      
+      // If missing data, show disabled state
+      if (!vpcCidr || zones.length === 0) {
+        if (subnetSizeSlider) {
+          subnetSizeSlider.disabled = true;
+          subnetSizeSlider.classList.add('disabled');
+        }
+        if (sliderLabelMin) {
+          sliderLabelMin.textContent = 'Larger subnets';
+        }
+        if (sliderLabelMax) {
+          sliderLabelMax.textContent = 'Smaller subnets';
+        }
+        // Show placeholder values
+        if (subnetSizeDisplay) subnetSizeDisplay.textContent = '--';
+        if (subnetIpsDisplay) subnetIpsDisplay.textContent = '--';
+        if (subnetNodesDisplay) subnetNodesDisplay.textContent = '--';
+        currentSliderLimits = null;
+        return;
+      }
+      
+      try {
+        const networkCalc = new NetworkCalculator(this.currentProvider);
+        const limits = networkCalc.calculateSubnetSizeLimits(vpcCidr, zones.length, enablePrivateLink);
+        
+        if (limits.error || !limits.valid) {
+          if (subnetSizeSlider) {
+            subnetSizeSlider.disabled = true;
+            subnetSizeSlider.classList.add('disabled');
+          }
+          currentSliderLimits = null;
+          return;
+        }
+        
+        currentSliderLimits = limits;
+        
+        // Enable slider
+        if (subnetSizeSlider) {
+          subnetSizeSlider.disabled = false;
+          subnetSizeSlider.classList.remove('disabled');
+          subnetSizeSlider.min = limits.min;
+          subnetSizeSlider.max = limits.max;
+          
+          // Set default value if current value is out of range
+          const currentValue = parseInt(subnetSizeSlider.value, 10);
+          if (currentValue < limits.min || currentValue > limits.max) {
+            subnetSizeSlider.value = limits.default;
+          }
+          
+          // Update labels
+          if (sliderLabelMin) {
+            const minIps = Math.pow(2, 32 - limits.min);
+            sliderLabelMin.textContent = `/${limits.min} (${Utils.formatNumber(minIps)} IPs)`;
+          }
+          if (sliderLabelMax) {
+            const maxIps = Math.pow(2, 32 - limits.max);
+            sliderLabelMax.textContent = `/${limits.max} (${Utils.formatNumber(maxIps)} IPs)`;
+          }
+          
+          // Update display
+          updateSliderDisplay(parseInt(subnetSizeSlider.value, 10));
+        }
+      } catch (err) {
+        console.error('Error calculating subnet limits:', err);
+        if (subnetSizeSlider) {
+          subnetSizeSlider.disabled = true;
+          subnetSizeSlider.classList.add('disabled');
+        }
+        currentSliderLimits = null;
+      }
+    };
+    
+    // Add slider event listener
+    if (subnetSizeSlider) {
+      subnetSizeSlider.addEventListener('input', () => {
+        const value = parseInt(subnetSizeSlider.value, 10);
+        updateSliderDisplay(value);
+      });
+      
+      subnetSizeSlider.addEventListener('change', () => {
+        if (typeof calculateSubnets === 'function') {
+          calculateSubnets();
+        }
+      });
+    }
+    
     const calculateSubnets = Utils.debounce(() => {
       const vpcCidr = vpcCidrInput?.value;
       const pricingTier = pricingTierSelect?.value;
       const enablePrivateLink = privateLinkCheckbox?.checked || false;
       const zones = this.getSelectedAvailabilityZones();
+      const createNewVpc = isCreateNewVpcActive();
       
+      // Update slider limits first
+      updateSliderLimits();
+      
+      const preview = document.getElementById('subnets-preview');
+      const container = document.getElementById('subnets-container');
+      const summaryContainer = document.getElementById('network-summary');
+      
+      // Hide if Create New VPC is not active
+      if (!createNewVpc) {
+        if (preview) preview.style.display = 'none';
+        return;
+      }
+      
+      // Always show preview when Create New VPC is active
+      if (preview) preview.style.display = 'block';
+      
+      // If missing required data, show placeholder message
       if (!vpcCidr || zones.length === 0 || !pricingTier) {
-        const preview = document.getElementById('subnets-preview');
-        if (preview) {
-          preview.style.display = 'none';
+        const missingFields = [];
+        if (!vpcCidr) missingFields.push('VPC CIDR');
+        if (zones.length === 0) missingFields.push('Availability Zones');
+        if (!pricingTier) missingFields.push('Pricing Tier');
+        
+        if (container) {
+          container.innerHTML = `
+            <div class="alert alert-secondary">
+              <i class="bi bi-info-circle me-2"></i>
+              Complete the following fields to see subnet allocation: <strong>${missingFields.join(', ')}</strong>
+            </div>
+          `;
+        }
+        if (summaryContainer) {
+          summaryContainer.innerHTML = '';
         }
         return;
       }
       
       try {
         const networkCalc = new NetworkCalculator(this.currentProvider);
-        const subnets = networkCalc.allocateSubnets(vpcCidr, zones, pricingTier, enablePrivateLink);
+        
+        // Get custom subnet size from slider if available
+        let customSubnetSize = null;
+        if (subnetSizeSlider && currentSliderLimits && currentSliderLimits.valid) {
+          customSubnetSize = parseInt(subnetSizeSlider.value, 10);
+        }
+        
+        const subnets = networkCalc.allocateSubnets(vpcCidr, zones, pricingTier, enablePrivateLink, customSubnetSize);
         const summary = networkCalc.calculateNetworkSummary(vpcCidr, subnets);
         
+        // Validate allocation fits in VPC
+        const validation = networkCalc.validateSubnetAllocation(vpcCidr, subnets);
+        
         // Display subnets
-        const container = document.getElementById('subnets-container');
-        const preview = document.getElementById('subnets-preview');
         if (container && preview) {
-          preview.style.display = 'block';
-          container.innerHTML = '<div class="row g-3">' + subnets.map(subnet => `
+          
+          // Show validation warning if subnets don't fit
+          let validationWarning = '';
+          if (!validation.valid) {
+            validationWarning = `
+              <div class="alert alert-warning mb-3">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                <strong>Warning:</strong> ${validation.message}. Consider using smaller subnets or a larger VPC CIDR.
+              </div>
+            `;
+          }
+          
+          container.innerHTML = validationWarning + '<div class="row g-3">' + subnets.map(subnet => `
             <div class="col-md-6">
               <div class="card subnet-card h-100">
                 <div class="card-body p-3">
@@ -1445,7 +1672,7 @@ class App {
                       <div class="small text-muted">Available IPs</div>
                     </div>
                     <div class="col-3">
-                      <div class="h6 text-info mb-1">${summary.utilization_percent}%</div>
+                      <div class="h6 text-info mb-1" id="network-utilization-percent">${summary.utilization_percent}%</div>
                       <div class="small text-muted">Utilization</div>
                     </div>
                   </div>
@@ -1942,7 +2169,9 @@ class App {
                 }
                 
                 // Trigger subnet recalculation
-                if (typeof calculateSubnets === 'function') {
+                if (appInstance.calculateSubnets) {
+                  appInstance.calculateSubnets();
+                } else if (typeof calculateSubnets === 'function') {
                   calculateSubnets();
                 }
               });
@@ -1970,7 +2199,10 @@ class App {
                 };
                 
                 container.addEventListener('addItem', function() {
-                  if (typeof calculateSubnets === 'function') {
+                  // Trigger subnet recalculation when AZ is added
+                  if (appInstance.calculateSubnets) {
+                    appInstance.calculateSubnets();
+                  } else if (typeof calculateSubnets === 'function') {
                     calculateSubnets();
                   }
                   // Sync visibility after item added
@@ -1978,7 +2210,10 @@ class App {
                 });
                 
                 container.addEventListener('removeItem', function() {
-                  if (typeof calculateSubnets === 'function') {
+                  // Trigger subnet recalculation when AZ is removed
+                  if (appInstance.calculateSubnets) {
+                    appInstance.calculateSubnets();
+                  } else if (typeof calculateSubnets === 'function') {
                     calculateSubnets();
                   }
                   // Sync visibility after item removed
@@ -2093,6 +2328,8 @@ class App {
         } else {
           existingVpcSection.style.display = 'block';
         }
+        // Update subnet slider and preview visibility
+        calculateSubnets();
       });
     }
     
@@ -2127,10 +2364,8 @@ class App {
     // Note: Change listeners for availability zone selects are added above in the initialization section
     // Note: Remove button handlers are added above in the addAvailabilityZoneRow function
     
-    // Trigger initial calculations
-    if (this.currentConfig.vpc_cidr && this.currentConfig.availability_zones) {
-      setTimeout(calculateSubnets, 500);
-    }
+    // Trigger initial calculations - always call to show slider/preview when Create New VPC is active
+    setTimeout(calculateSubnets, 500);
     
     // Setup form submission
     document.getElementById('config-form').addEventListener('submit', (e) => {
@@ -2464,6 +2699,14 @@ class App {
                           ).join('')}
                         </td>
                       </tr>
+                      ${config.create_new_vpc && config.calculated_subnets && config.calculated_subnets.length > 0 ? `
+                      <tr>
+                        <td class="fw-semibold">Subnets:</td>
+                        <td>
+                          <span class="badge bg-info">${config.calculated_subnets.length} subnet${config.calculated_subnets.length !== 1 ? 's' : ''}</span>
+                        </td>
+                      </tr>
+                      ` : ''}
                     </table>
                   </div>
                 </div>

@@ -1279,17 +1279,53 @@ pre code {
   width: 44px;
   height: 24px;
   border-radius: var(--radius-full);
+  background-color: var(--bg-hover);
+  border: 2px solid var(--border-default);
   background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%2394a3b8'/%3e%3c/svg%3e");
-  background-position: left center;
+  background-position: 2px center;
+  background-size: 16px 16px;
+  background-repeat: no-repeat;
   transition: all var(--transition-fast);
   margin-left: 0 !important;
   float: none !important;
   flex-shrink: 0;
+  cursor: pointer;
+  padding: 0;
 }
 
 .form-switch .form-check-input:checked {
-  background-position: right center;
+  background-color: var(--accent-primary);
+  border-color: var(--accent-primary);
+  background-position: calc(100% - 2px) center;
   background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%23ffffff'/%3e%3c/svg%3e");
+}
+
+.form-switch .form-check-input:hover:not(:disabled) {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px var(--accent-primary-subtle);
+}
+
+.form-switch .form-check-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px var(--accent-primary-subtle);
+}
+
+.form-switch .form-check-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background-color: var(--bg-hover);
+  border-color: var(--border-subtle);
+}
+
+.form-switch .form-check-input:disabled:checked {
+  background-color: var(--accent-primary);
+  border-color: var(--accent-primary);
+  opacity: 0.6;
+}
+
+.form-switch .form-check-input:disabled:hover {
+  box-shadow: none;
 }
 
 /* Fix Bootstrap's default switch positioning */
@@ -1793,6 +1829,193 @@ pre code {
   border-radius: var(--radius-sm);
   background: var(--accent-primary-subtle);
   color: var(--accent-primary);
+}
+
+/* =============================================================================
+   16.1. SUBNET SIZE SLIDER
+   ============================================================================= */
+
+#subnet-size-slider-container {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  margin-top: var(--space-3);
+}
+
+.subnet-slider-wrapper {
+  padding: var(--space-2) var(--space-1);
+}
+
+/* Custom Range Slider Styling */
+.subnet-size-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(90deg, 
+    var(--success) 0%, 
+    var(--accent-primary) 50%, 
+    var(--warning) 100%
+  );
+  outline: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.subnet-size-slider:hover {
+  box-shadow: 0 0 8px var(--accent-primary-subtle);
+}
+
+/* Slider Thumb - WebKit */
+.subnet-size-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-full);
+  background: var(--bg-card);
+  border: 3px solid var(--accent-primary);
+  cursor: grab;
+  box-shadow: var(--shadow-md);
+  transition: all var(--transition-fast);
+}
+
+.subnet-size-slider::-webkit-slider-thumb:hover {
+  background: var(--accent-primary);
+  transform: scale(1.1);
+}
+
+.subnet-size-slider::-webkit-slider-thumb:active {
+  cursor: grabbing;
+  transform: scale(0.95);
+}
+
+/* Slider Thumb - Firefox */
+.subnet-size-slider::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-full);
+  background: var(--bg-card);
+  border: 3px solid var(--accent-primary);
+  cursor: grab;
+  box-shadow: var(--shadow-md);
+  transition: all var(--transition-fast);
+}
+
+.subnet-size-slider::-moz-range-thumb:hover {
+  background: var(--accent-primary);
+  transform: scale(1.1);
+}
+
+.subnet-size-slider::-moz-range-thumb:active {
+  cursor: grabbing;
+}
+
+/* Slider Track - Firefox */
+.subnet-size-slider::-moz-range-track {
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(90deg, 
+    var(--success) 0%, 
+    var(--accent-primary) 50%, 
+    var(--warning) 100%
+  );
+}
+
+/* Slider Labels */
+.slider-labels {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.slider-labels span:first-child {
+  color: var(--success);
+}
+
+.slider-labels span:last-child {
+  color: var(--warning);
+}
+
+/* Subnet Metrics */
+.subnet-size-details {
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+}
+
+.subnet-metric {
+  padding: var(--space-2);
+}
+
+.subnet-metric .h5 {
+  font-family: var(--font-mono);
+  font-weight: var(--font-bold);
+}
+
+#subnet-size-display {
+  font-size: var(--text-2xl);
+}
+
+/* Light theme adjustments */
+[data-theme="light"] #subnet-size-slider-container {
+  background: var(--bg-surface);
+}
+
+[data-theme="light"] .subnet-size-slider::-webkit-slider-thumb {
+  background: white;
+  border-color: var(--accent-primary);
+}
+
+[data-theme="light"] .subnet-size-slider::-moz-range-thumb {
+  background: white;
+  border-color: var(--accent-primary);
+}
+
+/* Focus states for accessibility */
+.subnet-size-slider:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 4px;
+}
+
+/* Disabled state for slider */
+.subnet-size-slider:disabled,
+.subnet-size-slider.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--bg-hover);
+}
+
+.subnet-size-slider:disabled::-webkit-slider-thumb,
+.subnet-size-slider.disabled::-webkit-slider-thumb {
+  background: var(--text-disabled);
+  border-color: var(--border-default);
+  cursor: not-allowed;
+}
+
+.subnet-size-slider:disabled::-moz-range-thumb,
+.subnet-size-slider.disabled::-moz-range-thumb {
+  background: var(--text-disabled);
+  border-color: var(--border-default);
+  cursor: not-allowed;
+}
+
+/* Animation for slider container appearance */
+#subnet-size-slider-container {
+  animation: fade-in-up 0.3s ease-out;
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* =============================================================================
