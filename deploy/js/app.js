@@ -189,21 +189,54 @@ class App {
 
   /**
    * Render region select options with optgroups
+   * First region is selected by default if no selectedRegion is provided
    */
   renderRegionOptions(provider, selectedRegion) {
     const groups = this.getRegions(provider);
-    let html = '<option value="">Select region</option>';
+    let html = '';
+    let isFirst = true;
     
     groups.forEach(group => {
       html += `<optgroup label="${group.group}">`;
       group.regions.forEach(region => {
-        const selected = selectedRegion === region.code ? 'selected' : '';
+        // Select first region by default if no selectedRegion provided
+        const isSelected = selectedRegion ? selectedRegion === region.code : isFirst;
+        const selected = isSelected ? 'selected' : '';
         html += `<option value="${region.code}" ${selected}>${region.name} (${region.code})</option>`;
+        isFirst = false;
       });
       html += '</optgroup>';
     });
     
     return html;
+  }
+
+  /**
+   * Render pricing tier options for a provider
+   * @param {string} provider - Cloud provider (aws, azure, gcp)
+   * @param {string} selectedTier - Currently selected tier
+   * @returns {string} HTML options for the pricing tier select
+   */
+  renderPricingTierOptions(provider, selectedTier) {
+    const tiers = provider === 'aws' 
+      ? [
+          { value: 'STANDARD', label: 'Standard' },
+          { value: 'PREMIUM', label: 'Premium' },
+          { value: 'ENTERPRISE', label: 'Enterprise' }
+        ]
+      : [
+          { value: 'STANDARD', label: 'Standard' },
+          { value: 'PREMIUM', label: 'Premium' }
+        ];
+    
+    // Default to the last tier if no selectedTier is provided
+    const defaultTier = tiers[tiers.length - 1].value;
+    const effectiveSelection = selectedTier || defaultTier;
+    
+    return tiers.map(tier => {
+      const selected = tier.value === effectiveSelection ? 'selected' : '';
+      return `<option value="${tier.value}" ${selected}>${tier.label}</option>`;
+    }).join('');
   }
 
   /**
@@ -377,83 +410,80 @@ class App {
   renderHome() {
     const content = `
       <!-- Hero Section -->
-      <section class="hero-section bg-primary text-white">
+      <section class="hero-section">
         <div class="container">
           <div class="row align-items-center min-vh-50">
             <div class="col-lg-6">
-              <h1 class="display-4 fw-bold mb-4">
+              <h1 class="hero-title">
                 Deploy Databricks Infrastructure in Minutes
               </h1>
-              <p class="lead mb-4">
+              <p class="hero-subtitle">
                 One-Click Deployer simplifies Databricks infrastructure deployment across AWS, Azure, and GCP. 
-                Transform complex Terraform configurations into a simple, guided experience. Generate production-ready 
-                infrastructure code with intelligent automation and best practices built-in.
+                Transform complex Terraform configurations into a simple, guided experience with intelligent automation.
               </p>
-              <div class="d-flex gap-3 flex-wrap mb-4">
-                <a href="#/select-provider" class="btn btn-light btn-lg px-4" data-navigate>
+              <div class="hero-cta">
+                <a href="#/select-provider" class="btn btn-primary btn-lg" data-navigate>
                   <i class="bi bi-rocket-takeoff me-2" aria-hidden="true"></i>
                   Get Started
                 </a>
-                <button class="btn btn-outline-light btn-lg px-4" id="hero-install-btn" style="display: none;">
+                <button class="btn btn-outline-primary btn-lg" id="hero-install-btn" style="display: none;">
                   <i class="bi bi-download me-2" aria-hidden="true"></i>
                   Install App
                 </button>
               </div>
               
               <!-- Quick Stats -->
-              <div class="row mt-4">
+              <div class="row mt-5 g-3 stagger-children">
                 <div class="col-4">
-                  <div class="text-center">
-                    <div class="h3 fw-bold mb-1">3</div>
-                    <div class="small opacity-75">Cloud Providers</div>
+                  <div class="glass p-3 rounded-3 text-center">
+                    <div class="h2 fw-bold mb-1 text-gradient">3</div>
+                    <div class="text-sm text-muted">Cloud Providers</div>
                   </div>
                 </div>
                 <div class="col-4">
-                  <div class="text-center">
-                    <div class="h3 fw-bold mb-1">90%</div>
-                    <div class="small opacity-75">Time Saved</div>
+                  <div class="glass p-3 rounded-3 text-center">
+                    <div class="h2 fw-bold mb-1 text-gradient">90%</div>
+                    <div class="text-sm text-muted">Time Saved</div>
                   </div>
                 </div>
                 <div class="col-4">
-                  <div class="text-center">
-                    <div class="h3 fw-bold mb-1">100%</div>
-                    <div class="small opacity-75">Best Practices</div>
+                  <div class="glass p-3 rounded-3 text-center">
+                    <div class="h2 fw-bold mb-1 text-gradient">100%</div>
+                    <div class="text-sm text-muted">Best Practices</div>
                   </div>
                 </div>
               </div>
             </div>
             <div class="col-lg-6">
-              <div class="hero-illustration-wrapper">
-                <div class="hero-illustration" aria-hidden="true">
-                  <div class="hero-laptop">
-                    <div class="hero-laptop-screen">
-                      <div class="hero-screen-header">
-                        <span></span>
-                        <span></span>
-                        <span></span>
-                      </div>
-                      <div class="hero-screen-body">
-                        <span class="hero-code-line shell">% terraform init</span>
-                        <span class="hero-code-line keyword">% terraform apply</span>
-                        <span class="hero-code-line accent">Deploying Databricks Workspace... Done</span>
-                        <span class="hero-code-line blank"></span>
-                        <span class="hero-code-line blank"></span>
-                        <span class="hero-code-line blank"></span>
-                      </div>
-                    </div>
-                    <div class="hero-laptop-base"></div>
+              <div class="hero-illustration animate-fade-up" style="animation-delay: 0.3s;">
+                <div class="hero-terminal">
+                  <div class="hero-terminal-header">
+                    <span class="hero-terminal-dot red"></span>
+                    <span class="hero-terminal-dot yellow"></span>
+                    <span class="hero-terminal-dot green"></span>
                   </div>
-                  <div class="hero-hand">
-                    <div class="hero-hand-arm"></div>
-                    <div class="hero-hand-palm"></div>
-                    <div class="hero-hand-thumb"></div>
-                    <div class="hero-hand-finger pointer"></div>
-                    <div class="hero-hand-finger support"></div>
+                  <div class="hero-terminal-body">
+                    <div class="hero-code-line"><span class="prompt">$</span> <span class="command">terraform init</span></div>
+                    <div class="hero-code-line"><span class="output">Initializing provider plugins...</span></div>
+                    <div class="hero-code-line"><span class="success">✓ Provider configured successfully</span></div>
+                    <div class="hero-code-line mt-2"><span class="prompt">$</span> <span class="command">terraform apply</span></div>
+                    <div class="hero-code-line"><span class="output">Creating Databricks workspace...</span></div>
+                    <div class="hero-code-line"><span class="success">✓ Apply complete\! Resources: 12 added</span></div>
                   </div>
                 </div>
-                <p class="hero-illustration-caption text-white-50 small mb-0">
-                  Visualize the experience: your Terraform project appears on a virtual laptop while an animated hand highlights the generated code—everything built for you automatically.
-                </p>
+                <!-- Floating provider badges -->
+                <div class="hero-float-element aws d-none d-lg-flex align-items-center gap-2">
+                  <i class="bi bi-cloud text-warning"></i>
+                  <span class="text-sm">AWS</span>
+                </div>
+                <div class="hero-float-element azure d-none d-lg-flex align-items-center gap-2">
+                  <i class="bi bi-cloud text-info"></i>
+                  <span class="text-sm">Azure</span>
+                </div>
+                <div class="hero-float-element gcp d-none d-lg-flex align-items-center gap-2">
+                  <i class="bi bi-cloud text-primary-accent"></i>
+                  <span class="text-sm">GCP</span>
+                </div>
               </div>
             </div>
           </div>
@@ -639,15 +669,15 @@ class App {
             </div>
           </div>
           
-          <div class="row g-4">
+          <div class="row g-4 stagger-children">
             <div class="col-md-6 col-lg-4">
-              <div class="card border-0 shadow-sm h-100">
+              <div class="card h-100">
                 <div class="card-body p-4 text-center">
-                  <div class="feature-icon bg-primary bg-opacity-10 rounded-circle p-3 mb-3 d-inline-flex">
-                    <i class="bi bi-lightning-charge-fill text-primary h2 mb-0"></i>
+                  <div class="feature-icon icon-cyan">
+                    <i class="bi bi-lightning-charge-fill" aria-hidden="true"></i>
                   </div>
                   <h5 class="fw-bold">Zero Terraform Knowledge Required</h5>
-                  <p class="text-muted mb-0">
+                  <p class="mb-0">
                     Visual forms replace complex code writing. Anyone can deploy 
                     enterprise-grade infrastructure without deep technical expertise.
                   </p>
@@ -656,13 +686,13 @@ class App {
             </div>
             
             <div class="col-md-6 col-lg-4">
-              <div class="card border-0 shadow-sm h-100">
+              <div class="card h-100">
                 <div class="card-body p-4 text-center">
-                  <div class="feature-icon bg-success bg-opacity-10 rounded-circle p-3 mb-3 d-inline-flex">
-                    <i class="bi bi-shield-check text-success h2 mb-0" aria-hidden="true"></i>
+                  <div class="feature-icon icon-green">
+                    <i class="bi bi-shield-check" aria-hidden="true"></i>
                   </div>
                   <h5 class="fw-bold">Production-Ready Output</h5>
-                  <p class="text-muted mb-0">
+                  <p class="mb-0">
                     Generated code follows enterprise best practices with built-in 
                     security, networking, and compliance configurations.
                   </p>
@@ -671,13 +701,13 @@ class App {
             </div>
             
             <div class="col-md-6 col-lg-4">
-              <div class="card border-0 shadow-sm h-100">
+              <div class="card h-100">
                 <div class="card-body p-4 text-center">
-                  <div class="feature-icon bg-info bg-opacity-10 rounded-circle p-3 mb-3 d-inline-flex">
-                    <i class="bi bi-clouds-fill text-info h2 mb-0"></i>
+                  <div class="feature-icon icon-blue">
+                    <i class="bi bi-clouds-fill" aria-hidden="true"></i>
                   </div>
                   <h5 class="fw-bold">Multi-Cloud Native</h5>
-                  <p class="text-muted mb-0">
+                  <p class="mb-0">
                     Single interface for AWS, Azure, and GCP. Deploy consistently 
                     across all major cloud providers with provider-specific optimizations.
                   </p>
@@ -686,13 +716,13 @@ class App {
             </div>
             
             <div class="col-md-6 col-lg-4">
-              <div class="card border-0 shadow-sm h-100">
+              <div class="card h-100">
                 <div class="card-body p-4 text-center">
-                  <div class="feature-icon bg-warning bg-opacity-10 rounded-circle p-3 mb-3 d-inline-flex">
-                    <i class="bi bi-clock-fill text-warning h2 mb-0"></i>
+                  <div class="feature-icon icon-amber">
+                    <i class="bi bi-clock-fill" aria-hidden="true"></i>
                   </div>
                   <h5 class="fw-bold">Minutes, Not Hours</h5>
-                  <p class="text-muted mb-0">
+                  <p class="mb-0">
                     Reduce deployment preparation time from hours to minutes. 
                     Focus on your data projects, not infrastructure complexity.
                   </p>
@@ -701,13 +731,13 @@ class App {
             </div>
             
             <div class="col-md-6 col-lg-4">
-              <div class="card border-0 shadow-sm h-100">
+              <div class="card h-100">
                 <div class="card-body p-4 text-center">
-                  <div class="feature-icon bg-danger bg-opacity-10 rounded-circle p-3 mb-3 d-inline-flex">
-                    <i class="bi bi-gear-fill text-danger h2 mb-0"></i>
+                  <div class="feature-icon icon-rose">
+                    <i class="bi bi-gear-fill" aria-hidden="true"></i>
                   </div>
                   <h5 class="fw-bold">Intelligent Automation</h5>
-                  <p class="text-muted mb-0">
+                  <p class="mb-0">
                     Smart defaults, automatic network calculations, and real-time 
                     validation prevent configuration errors before they happen.
                   </p>
@@ -716,13 +746,13 @@ class App {
             </div>
             
             <div class="col-md-6 col-lg-4">
-              <div class="card border-0 shadow-sm h-100">
+              <div class="card h-100">
                 <div class="card-body p-4 text-center">
-                  <div class="feature-icon bg-secondary bg-opacity-10 rounded-circle p-3 mb-3 d-inline-flex">
-                    <i class="bi bi-arrow-repeat text-secondary h2 mb-0"></i>
+                  <div class="feature-icon icon-purple">
+                    <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
                   </div>
                   <h5 class="fw-bold">Keep Evolving</h5>
-                  <p class="text-muted mb-0">
+                  <p class="mb-0">
                     Start with our generated code and continue evolving your 
                     infrastructure by adding custom Terraform modules and resources.
                   </p>
@@ -734,7 +764,7 @@ class App {
       </section>
 
       <!-- How It Works Section -->
-      <section class="py-5 bg-light">
+      <section class="py-5 bg-surface">
         <div class="container">
           <div class="row">
             <div class="col-lg-8 mx-auto text-center mb-5">
@@ -745,14 +775,14 @@ class App {
             </div>
           </div>
           
-          <div class="row g-4">
+          <div class="row g-4 stagger-children">
             <div class="col-md-4">
               <div class="text-center">
-                <div class="step-number bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-3">
-                  <span class="h3 fw-bold mb-0">1</span>
+                <div class="d-flex align-items-center justify-content-center gap-3 mb-3">
+                  <div class="step-number">1</div>
+                  <h5 class="fw-bold mb-0">Choose Your Cloud</h5>
                 </div>
-                <h5 class="fw-bold">Choose Your Cloud</h5>
-                <p class="text-muted">
+                <p>
                   Select your preferred cloud provider from AWS, Azure, or Google Cloud Platform.
                 </p>
               </div>
@@ -760,11 +790,11 @@ class App {
             
             <div class="col-md-4">
               <div class="text-center">
-                <div class="step-number bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-3">
-                  <span class="h3 fw-bold mb-0">2</span>
+                <div class="d-flex align-items-center justify-content-center gap-3 mb-3">
+                  <div class="step-number">2</div>
+                  <h5 class="fw-bold mb-0">Configure Settings</h5>
                 </div>
-                <h5 class="fw-bold">Configure Settings</h5>
-                <p class="text-muted">
+                <p>
                   Fill out the guided form with your preferences. Network settings are calculated automatically.
                 </p>
               </div>
@@ -772,11 +802,11 @@ class App {
             
             <div class="col-md-4">
               <div class="text-center">
-                <div class="step-number bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-3">
-                  <span class="h3 fw-bold mb-0">3</span>
+                <div class="d-flex align-items-center justify-content-center gap-3 mb-3">
+                  <div class="step-number">3</div>
+                  <h5 class="fw-bold mb-0">Deploy & Go</h5>
                 </div>
-                <h5 class="fw-bold">Deploy & Go</h5>
-                <p class="text-muted">
+                <p>
                   Download your complete Terraform project and deploy with standard Terraform commands.
                 </p>
               </div>
@@ -784,9 +814,9 @@ class App {
           </div>
           
           <div class="text-center mt-5">
-            <a href="#/select-provider" class="btn btn-primary btn-lg px-5" data-navigate>
+            <a href="#/select-provider" class="btn btn-primary btn-lg" data-navigate>
               Start Building Now
-              <i class="bi bi-arrow-right ms-2"></i>
+              <i class="bi bi-arrow-right ms-2" aria-hidden="true"></i>
             </a>
           </div>
         </div>
@@ -915,210 +945,107 @@ class App {
 
   renderProviderSelection() {
     const content = `
-      <div class="container my-5">
+      <div class="container my-5 animate-fade-up">
         <div class="row">
           <div class="col-lg-10 mx-auto">
             <div class="text-center mb-5">
-              <h1 class="display-5 fw-bold text-primary mb-3">Choose Your Cloud Provider</h1>
-              <p class="lead text-muted">
+              <h1 class="text-gradient mb-3">Choose Your Cloud Provider</h1>
+              <p class="lead">
                 Select the cloud provider where you want to deploy your Databricks workspace.
                 Each provider has unique features and capabilities optimized for different use cases.
               </p>
             </div>
 
-            <div class="row g-4 mb-5">
+            <div class="row g-4 mb-5 stagger-children">
               <div class="col-lg-4">
-                <div class="provider-option card border-2 h-100 cursor-pointer" data-provider="aws">
-                  <div class="card-body p-4 text-center position-relative">
-                    <div class="selection-indicator position-absolute top-0 end-0 m-2" style="display: none;">
-                      <i class="bi bi-check-circle-fill text-success h4 mb-0"></i>
+                <div class="provider-option" data-provider="aws">
+                  <div class="provider-card aws h-100">
+                    <div class="selection-indicator">
+                      <i class="bi bi-check-lg"></i>
                     </div>
-                    <div class="provider-logo mb-3">
-                      <i class="bi bi-amazon text-warning" style="font-size: 4rem;"></i>
+                    <div class="provider-logo">
+                      <i class="bi bi-cloud-fill"></i>
                     </div>
-                    <h4 class="fw-bold text-dark mb-3">Amazon Web Services</h4>
-                    <ul class="list-unstyled text-start mb-4">
-                      <li class="mb-2">
-                        <i class="bi bi-check-circle text-success me-2"></i>
-                        <strong>VPC & Networking:</strong> Complete VPC management with subnets and security groups
+                    <h4>Amazon Web Services</h4>
+                    <p>Complete VPC management with subnets, security groups, and PrivateLink support.</p>
+                    <ul class="list-unstyled text-start mb-4 text-sm">
+                      <li class="mb-2 d-flex align-items-start">
+                        <i class="bi bi-check2 text-success me-2 mt-1"></i>
+                        <span>VPC & Networking with security groups</span>
                       </li>
-                      <li class="mb-2">
-                        <i class="bi bi-check-circle text-success me-2"></i>
-                        <strong>PrivateLink:</strong> Secure private connectivity (Enterprise tier)
+                      <li class="mb-2 d-flex align-items-start">
+                        <i class="bi bi-check2 text-success me-2 mt-1"></i>
+                        <span>PrivateLink (Enterprise tier)</span>
                       </li>
-                      <li class="mb-2">
-                        <i class="bi bi-check-circle text-success me-2"></i>
-                        <strong>Cross-Account:</strong> IAM role-based access control
-                      </li>
-                      <li class="mb-2">
-                        <i class="bi bi-check-circle text-success me-2"></i>
-                        <strong>Pricing Tiers:</strong> Standard, Premium, Enterprise
+                      <li class="mb-2 d-flex align-items-start">
+                        <i class="bi bi-check2 text-success me-2 mt-1"></i>
+                        <span>Cross-Account IAM roles</span>
                       </li>
                     </ul>
-                    <div class="prerequisites bg-light rounded p-3 text-start">
-                      <h6 class="fw-bold mb-2">Prerequisites:</h6>
-                      <ul class="small text-muted mb-0">
-                        <li>AWS account with appropriate permissions</li>
-                        <li>AWS CLI configured or IAM credentials</li>
-                        <li>Terraform installed (v1.0+)</li>
-                      </ul>
-                    </div>
                   </div>
                 </div>
               </div>
 
               <div class="col-lg-4">
-                <div class="provider-option card border-2 h-100 cursor-pointer" data-provider="azure">
-                  <div class="card-body p-4 text-center position-relative">
-                    <div class="selection-indicator position-absolute top-0 end-0 m-2" style="display: none;">
-                      <i class="bi bi-check-circle-fill text-success h4 mb-0"></i>
+                <div class="provider-option" data-provider="azure">
+                  <div class="provider-card azure h-100">
+                    <div class="selection-indicator">
+                      <i class="bi bi-check-lg"></i>
                     </div>
-                    <div class="provider-logo mb-3">
-                      <i class="bi bi-microsoft text-info" style="font-size: 4rem;"></i>
+                    <div class="provider-logo">
+                      <i class="bi bi-microsoft"></i>
                     </div>
-                    <h4 class="fw-bold text-dark mb-3">Microsoft Azure</h4>
-                    <ul class="list-unstyled text-start mb-4">
-                      <li class="mb-2">
-                        <i class="bi bi-check-circle text-success me-2"></i>
-                        <strong>VNet & Resources:</strong> Virtual networks and resource group management
+                    <h4>Microsoft Azure</h4>
+                    <p>Virtual networks, resource groups, and Private Link with Azure AD integration.</p>
+                    <ul class="list-unstyled text-start mb-4 text-sm">
+                      <li class="mb-2 d-flex align-items-start">
+                        <i class="bi bi-check2 text-success me-2 mt-1"></i>
+                        <span>VNet & Resource Groups</span>
                       </li>
-                      <li class="mb-2">
-                        <i class="bi bi-check-circle text-success me-2"></i>
-                        <strong>Private Link:</strong> Secure private endpoints (Premium tier)
+                      <li class="mb-2 d-flex align-items-start">
+                        <i class="bi bi-check2 text-success me-2 mt-1"></i>
+                        <span>Private Link (Premium tier)</span>
                       </li>
-                      <li class="mb-2">
-                        <i class="bi bi-check-circle text-success me-2"></i>
-                        <strong>Managed Identity:</strong> Azure AD integration and access control
-                      </li>
-                      <li class="mb-2">
-                        <i class="bi bi-check-circle text-success me-2"></i>
-                        <strong>Pricing Tiers:</strong> Standard, Premium
+                      <li class="mb-2 d-flex align-items-start">
+                        <i class="bi bi-check2 text-success me-2 mt-1"></i>
+                        <span>Managed Identity & Azure AD</span>
                       </li>
                     </ul>
-                    <div class="prerequisites bg-light rounded p-3 text-start">
-                      <h6 class="fw-bold mb-2">Prerequisites:</h6>
-                      <ul class="small text-muted mb-0">
-                        <li>Azure subscription with contributor access</li>
-                        <li>Azure CLI configured or service principal</li>
-                        <li>Terraform installed (v1.0+)</li>
-                      </ul>
-                    </div>
                   </div>
                 </div>
               </div>
 
               <div class="col-lg-4">
-                <div class="provider-option card border-2 h-100 cursor-pointer" data-provider="gcp">
-                  <div class="card-body p-4 text-center position-relative">
-                    <div class="selection-indicator position-absolute top-0 end-0 m-2" style="display: none;">
-                      <i class="bi bi-check-circle-fill text-success h4 mb-0"></i>
+                <div class="provider-option" data-provider="gcp">
+                  <div class="provider-card gcp h-100">
+                    <div class="selection-indicator">
+                      <i class="bi bi-check-lg"></i>
                     </div>
-                    <div class="provider-logo mb-3">
-                      <i class="bi bi-google text-success" style="font-size: 4rem;"></i>
+                    <div class="provider-logo">
+                      <i class="bi bi-google"></i>
                     </div>
-                    <h4 class="fw-bold text-dark mb-3">Google Cloud Platform</h4>
-                    <ul class="list-unstyled text-start mb-4">
-                      <li class="mb-2">
-                        <i class="bi bi-check-circle text-success me-2"></i>
-                        <strong>VPC & Subnets:</strong> Host and pods subnet management for GKE
+                    <h4>Google Cloud Platform</h4>
+                    <p>VPC with host/pods subnets for GKE and Private Service Connect support.</p>
+                    <ul class="list-unstyled text-start mb-4 text-sm">
+                      <li class="mb-2 d-flex align-items-start">
+                        <i class="bi bi-check2 text-success me-2 mt-1"></i>
+                        <span>VPC & GKE Subnet management</span>
                       </li>
-                      <li class="mb-2">
-                        <i class="bi bi-check-circle text-success me-2"></i>
-                        <strong>Private Service Connect:</strong> Secure private connectivity (Premium tier)
+                      <li class="mb-2 d-flex align-items-start">
+                        <i class="bi bi-check2 text-success me-2 mt-1"></i>
+                        <span>Private Service Connect (Premium)</span>
                       </li>
-                      <li class="mb-2">
-                        <i class="bi bi-check-circle text-success me-2"></i>
-                        <strong>Service Accounts:</strong> IAM and service account integration
-                      </li>
-                      <li class="mb-2">
-                        <i class="bi bi-check-circle text-success me-2"></i>
-                        <strong>Pricing Tiers:</strong> Standard, Premium
+                      <li class="mb-2 d-flex align-items-start">
+                        <i class="bi bi-check2 text-success me-2 mt-1"></i>
+                        <span>Service Accounts & IAM</span>
                       </li>
                     </ul>
-                    <div class="prerequisites bg-light rounded p-3 text-start">
-                      <h6 class="fw-bold mb-2">Prerequisites:</h6>
-                      <ul class="small text-muted mb-0">
-                        <li>GCP project with billing enabled</li>
-                        <li>gcloud CLI configured or service account key</li>
-                        <li>Terraform installed (v1.0+)</li>
-                      </ul>
-                    </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div class="card mb-5">
-              <div class="card-header bg-light">
-                <h5 class="card-title mb-0">
-                  <i class="bi bi-table me-2"></i>
-                  Feature Comparison
-                </h5>
-              </div>
-              <div class="card-body p-0">
-                <div class="table-responsive">
-                  <table class="table table-hover mb-0">
-                    <thead class="table-light">
-                      <tr>
-                        <th>Feature</th>
-                        <th class="text-center">
-                          <i class="bi bi-amazon text-warning me-1"></i>
-                          AWS
-                        </th>
-                        <th class="text-center">
-                          <i class="bi bi-microsoft text-info me-1"></i>
-                          Azure
-                        </th>
-                        <th class="text-center">
-                          <i class="bi bi-google text-success me-1"></i>
-                          GCP
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td><strong>Network Configuration</strong></td>
-                        <td class="text-center"><i class="bi bi-check-circle-fill text-success"></i></td>
-                        <td class="text-center"><i class="bi bi-check-circle-fill text-success"></i></td>
-                        <td class="text-center"><i class="bi bi-check-circle-fill text-success"></i></td>
-                      </tr>
-                      <tr>
-                        <td><strong>Private Connectivity</strong></td>
-                        <td class="text-center">
-                          <span class="badge bg-warning text-dark">Enterprise</span>
-                        </td>
-                        <td class="text-center">
-                          <span class="badge bg-info">Premium</span>
-                        </td>
-                        <td class="text-center">
-                          <span class="badge bg-success">Premium</span>
-                        </td>
-                      </tr>
-                      <tr>
-                        <td><strong>Multi-AZ Support</strong></td>
-                        <td class="text-center"><i class="bi bi-check-circle-fill text-success"></i></td>
-                        <td class="text-center"><i class="bi bi-check-circle-fill text-success"></i></td>
-                        <td class="text-center"><i class="bi bi-check-circle-fill text-success"></i></td>
-                      </tr>
-                      <tr>
-                        <td><strong>Cross-Account/Subscription</strong></td>
-                        <td class="text-center"><i class="bi bi-check-circle-fill text-success"></i></td>
-                        <td class="text-center"><i class="bi bi-check-circle-fill text-success"></i></td>
-                        <td class="text-center"><i class="bi bi-check-circle-fill text-success"></i></td>
-                      </tr>
-                      <tr>
-                        <td><strong>Managed Identity</strong></td>
-                        <td class="text-center">IAM Roles</td>
-                        <td class="text-center"><i class="bi bi-check-circle-fill text-success"></i></td>
-                        <td class="text-center">Service Accounts</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-
-            <div class="d-flex justify-content-between align-items-center">
+            <div class="d-flex justify-content-between align-items-center mt-4">
               <a href="#/" class="btn btn-outline-secondary" data-navigate>
                 <i class="bi bi-arrow-left me-2"></i>
                 Back to Home
@@ -1142,10 +1069,8 @@ class App {
       option.addEventListener('click', () => {
         document.querySelectorAll('.provider-option').forEach(opt => {
           opt.classList.remove('selected');
-          opt.querySelector('.selection-indicator').style.display = 'none';
         });
         option.classList.add('selected');
-        option.querySelector('.selection-indicator').style.display = 'block';
         selectedProvider = option.dataset.provider;
         document.getElementById('continue-btn').disabled = false;
       });
@@ -1304,11 +1229,7 @@ class App {
                         <span class="text-danger">*</span>
                       </label>
                       <select class="form-select" name="pricing_tier" required>
-                        <option value="">Select pricing tier</option>
-                        ${this.currentProvider === 'aws' ? 
-                          '<option value="STANDARD">Standard</option><option value="PREMIUM">Premium</option><option value="ENTERPRISE">Enterprise</option>' :
-                          '<option value="STANDARD">Standard</option><option value="PREMIUM">Premium</option>'
-                        }
+                        ${this.renderPricingTierOptions(this.currentProvider, this.currentConfig.pricing_tier)}
                       </select>
                       <div class="form-text">Databricks workspace pricing tier (affects available features)</div>
                     </div>
@@ -1544,130 +1465,84 @@ class App {
     // Initialize availability zones - using Choices.js
     const azSelect = document.getElementById('availability-zones-select');
     const regionSelect = document.querySelector('select[name="region"]');
-    let currentRegion = this.currentConfig.region || '';
+    // Get current region from config, or from select if not in config (since select now defaults to first item)
+    let currentRegion = this.currentConfig.region || (regionSelect ? regionSelect.value : '');
     let choicesInstance = null;
+    let pendingInitTimeout = null; // Track pending initialization timeout
     
     // Function to update availability zone options
-    const updateAvailabilityZoneOptions = () => {
+    // forceRecreate = true when region changes to ensure dropdown is fully refreshed
+    const updateAvailabilityZoneOptions = (forceRecreate = false) => {
       if (!azSelect) return;
+      
+      // ALWAYS destroy existing Choices.js instance first - this is critical for region changes
+      // Destroy all possible references to Choices.js
+      const destroyChoicesCompletely = () => {
+        // Destroy the local instance
+        if (choicesInstance) {
+          try {
+            choicesInstance.clearStore();
+            choicesInstance.setValue([]);
+            choicesInstance.destroy();
+          } catch (e) {
+            console.warn('Error destroying local choicesInstance:', e);
+          }
+          choicesInstance = null;
+        }
+        
+        // Destroy the instance stored on the select element
+        if (azSelect.choicesInstance) {
+          try {
+            azSelect.choicesInstance.clearStore();
+            azSelect.choicesInstance.setValue([]);
+            azSelect.choicesInstance.destroy();
+          } catch (e) {
+            console.warn('Error destroying azSelect.choicesInstance:', e);
+          }
+          azSelect.choicesInstance = null;
+        }
+        
+        // Remove Choices.js wrapper from DOM if it exists
+        const wrapper = azSelect.closest('.choices');
+        if (wrapper && wrapper !== azSelect) {
+          const parent = wrapper.parentElement;
+          if (parent) {
+            // Move select out of wrapper before removing
+            parent.insertBefore(azSelect, wrapper);
+            wrapper.remove();
+          }
+        }
+        
+        // Also check for any orphaned Choices wrappers
+        const allWrappers = document.querySelectorAll('.choices:has(#availability-zones-select)');
+        allWrappers.forEach(w => {
+          if (w !== azSelect && w.contains(azSelect)) {
+            const p = w.parentElement;
+            if (p) {
+              p.insertBefore(azSelect, w);
+              w.remove();
+            }
+          }
+        });
+      };
+      
+      // Always destroy first when forceRecreate is true (region change)
+      if (forceRecreate) {
+        destroyChoicesCompletely();
+      }
       
       const zones = this.getAvailabilityZoneOptions(this.currentProvider, currentRegion);
       
       // Safety check: ensure zones is an array
       if (!zones || !Array.isArray(zones) || zones.length === 0) {
         console.warn(`No availability zones found for provider ${this.currentProvider} and region ${currentRegion}`);
-        // Clear the select
+        destroyChoicesCompletely();
         azSelect.innerHTML = '<option value="" disabled>No availability zones available</option>';
-        // Destroy Choices.js if it exists
-        if (choicesInstance) {
-          try {
-            choicesInstance.destroy();
-          } catch (e) {
-            console.warn('Error destroying Choices.js:', e);
-          }
-          choicesInstance = null;
-        }
         return;
       }
       
-      // Convert zones to Choices.js format
-      const choicesData = zones.map(zone => ({
-        value: zone.value,
-        label: zone.label,
-        selected: false,
-        disabled: false
-      }));
-      
-      // If Choices.js is already initialized, use setChoices to update options
-      if (choicesInstance && typeof choicesInstance.setChoices === 'function') {
-        try {
-          // Clear current selections first - IMPORTANT: do this before setChoices
-          choicesInstance.setValue([]);
-          choicesInstance.clearStore();
-          
-          // Update choices using setChoices (4th param true = clear existing choices)
-          // This will replace all choices with the new ones
-          choicesInstance.setChoices(choicesData, 'value', 'label', true);
-          
-          // Force clear selections again after updating choices
-          choicesInstance.setValue([]);
-          
-          
-          // Verify the update worked - check that only valid zones are in choices
-          const updatedChoices = choicesInstance.choices || [];
-          const validZoneValues = zones.map(z => z.value);
-          const invalidChoices = updatedChoices.filter(c => c && c.value && !validZoneValues.includes(c.value));
-          
-          if (invalidChoices.length > 0) {
-            console.error(`Choices.js still has invalid choices: ${invalidChoices.map(c => c.value).join(', ')}. Re-initializing...`);
-            // Fall back to destroy and recreate
-            choicesInstance.destroy();
-            choicesInstance = null;
-            // Continue to initialization code below
-          } else if (updatedChoices.length !== zones.length) {
-            console.error(`Choices.js update failed: expected ${zones.length}, got ${updatedChoices.length}. Re-initializing...`);
-            // Fall back to destroy and recreate
-            choicesInstance.destroy();
-            choicesInstance = null;
-            // Continue to initialization code below
-          } else {
-            // Update successful, verify no values are selected
-            try {
-              const currentValues = choicesInstance.getValue(true) || [];
-              if (currentValues.length > 0) {
-                console.warn(`Found ${currentValues.length} selected values after update, clearing...`);
-                choicesInstance.setValue([]);
-              }
-            } catch (e) {
-              console.warn('Error checking selected values:', e);
-            }
-            // We're done
-            return;
-          }
-        } catch (e) {
-          console.error('Error updating Choices.js with setChoices:', e);
-          // Fall back to destroy and recreate
-          try {
-            choicesInstance.destroy();
-          } catch (destroyError) {
-            console.warn('Error destroying Choices.js:', destroyError);
-          }
-          choicesInstance = null;
-        }
-      }
-      
-      // If we get here, we need to initialize Choices.js from scratch
-      // FIRST: Destroy Choices.js BEFORE updating options to ensure clean state
-      if (choicesInstance) {
-        try {
-          choicesInstance.clearStore();
-          choicesInstance.setValue([]);
-          choicesInstance.destroy();
-        } catch (e) {
-          console.warn('Error destroying Choices.js:', e);
-        }
-        choicesInstance = null;
-      }
-      
-      // Also clear the reference stored on the select element
-      if (azSelect && azSelect.choicesInstance) {
-        try {
-          azSelect.choicesInstance.destroy();
-        } catch (e) {
-          // Ignore errors if already destroyed
-        }
-        azSelect.choicesInstance = null;
-      }
-      
-      // Remove Choices.js wrapper from DOM if it exists
-      const choicesWrapper = azSelect.closest('.choices');
-      if (choicesWrapper && choicesWrapper !== azSelect) {
-        const parent = choicesWrapper.parentElement;
-        if (parent) {
-          parent.insertBefore(azSelect, choicesWrapper);
-          choicesWrapper.remove();
-        }
-      }
+      // Always destroy existing Choices.js before recreating
+      destroyChoicesCompletely();
       
       // NOW: Clear existing options and add new ones
       azSelect.innerHTML = '<option value="" disabled>Select availability zones</option>';
@@ -1694,11 +1569,36 @@ class App {
         });
       }
       
+      // Cancel any pending initialization timeout
+      if (pendingInitTimeout) {
+        clearTimeout(pendingInitTimeout);
+        pendingInitTimeout = null;
+      }
+      
+      // Store the region for this initialization to detect stale callbacks
+      const initRegion = currentRegion;
+      const initZones = [...zones]; // Copy zones array to avoid closure issues
+      
       // Wait for DOM to be updated before initializing Choices.js
       // Use a small timeout to ensure DOM is fully updated
-      setTimeout(() => {
+      pendingInitTimeout = setTimeout(() => {
+        pendingInitTimeout = null;
+        
+        // CRITICAL: Check if region has changed since we started
+        // If so, abort this initialization - a newer one will be triggered
+        if (currentRegion !== initRegion) {
+          console.log(`Region changed from ${initRegion} to ${currentRegion}, aborting stale initialization`);
+          return;
+        }
+        
         // Initialize Choices.js (wait for it to be available)
         const initChoices = () => {
+          // Re-check region hasn't changed
+          if (currentRegion !== initRegion) {
+            console.log(`Region changed during init, aborting`);
+            return;
+          }
+          
           if (typeof Choices === 'undefined') {
             // Wait a bit and try again
             setTimeout(initChoices, 100);
@@ -1714,16 +1614,16 @@ class App {
           // Double-check that all options are still in the select before initializing Choices.js
           const currentOptions = Array.from(azSelect.options).filter(opt => opt.value && opt.value !== '');
           const currentOptionValues = currentOptions.map(opt => opt.value);
-          const expectedZoneValues = zones.map(z => z.value);
+          const expectedZoneValues = initZones.map(z => z.value);
           
           // Check if all expected options are present
           const missingOptions = expectedZoneValues.filter(val => !currentOptionValues.includes(val));
           
-          if (currentOptions.length !== zones.length || missingOptions.length > 0) {
+          if (currentOptions.length !== initZones.length || missingOptions.length > 0) {
             
             // Clear and re-add all options
             azSelect.innerHTML = '<option value="" disabled>Select availability zones</option>';
-            zones.forEach(zone => {
+            initZones.forEach(zone => {
               const option = document.createElement('option');
               option.value = zone.value;
               option.textContent = zone.label;
@@ -1732,8 +1632,8 @@ class App {
             
             // Verify again after re-adding
             const verifyOptions = Array.from(azSelect.options).filter(opt => opt.value && opt.value !== '');
-            if (verifyOptions.length !== zones.length) {
-              console.error(`Failed to add all options after retry. Expected ${zones.length}, got ${verifyOptions.length}`);
+            if (verifyOptions.length !== initZones.length) {
+              console.error(`Failed to add all options after retry. Expected ${initZones.length}, got ${verifyOptions.length}`);
               return;
             }
             
@@ -1753,7 +1653,7 @@ class App {
         let initialValues = [];
         
         // First, filter defaultZones to only include zones that exist in current region's options
-        const validDefaultZones = defaultZones.filter(z => zones.some(az => az.value === z));
+        const validDefaultZones = defaultZones.filter(z => initZones.some(az => az.value === z));
         
         // Only use stored zones if they're valid for current region AND region hasn't changed
         // If region changed, defaultZones will be empty (cleared in region change handler)
@@ -1784,7 +1684,7 @@ class App {
           }
           
           // Filter to only include zones that exist in available options
-          initialValues = defaultZoneValues.filter(z => zones.some(az => az.value === z));
+          initialValues = defaultZoneValues.filter(z => initZones.some(az => az.value === z));
         }
         
         // CRITICAL: Final verification before initializing Choices.js
@@ -1797,37 +1697,34 @@ class App {
         // Verify all options are present before initializing
         const finalOptions = Array.from(azSelect.options).filter(opt => opt.value && opt.value !== '');
         const finalOptionValues = finalOptions.map(opt => opt.value);
-        const expectedValues = zones.map(z => z.value);
+        const expectedValues = initZones.map(z => z.value);
         
         // Check if we have the correct number of options
-        if (finalOptions.length !== zones.length) {
-          console.error(`Cannot initialize Choices.js: Expected ${zones.length} options, but found ${finalOptions.length} in select`);
-          console.error(`Expected: ${expectedValues.join(', ')}`);
-          console.error(`Found: ${finalOptionValues.join(', ')}`);
+        if (finalOptions.length !== initZones.length) {
+          console.error(`Cannot initialize Choices.js: Expected ${initZones.length} options, but found ${finalOptions.length} in select`);
           
           // Try one more time to fix it
           azSelect.innerHTML = '<option value="" disabled>Select availability zones</option>';
-          zones.forEach(zone => {
+          initZones.forEach(zone => {
             const option = document.createElement('option');
             option.value = zone.value;
             option.textContent = zone.label;
             azSelect.appendChild(option);
           });
           
-          // Wait a bit and verify again
+          // Wait a bit and retry
           setTimeout(() => {
+            if (currentRegion !== initRegion) return; // Abort if region changed
             const retryOptions = Array.from(azSelect.options).filter(opt => opt.value && opt.value !== '');
-            if (retryOptions.length === zones.length) {
+            if (retryOptions.length === initZones.length) {
               initChoices();
-            } else {
-              console.error(`Failed to fix options. Still have ${retryOptions.length} instead of ${zones.length}`);
             }
           }, 100);
           return;
         }
         
         // Double-check: ensure no old zone values are present
-        const validZoneValues = zones.map(z => z.value);
+        const validZoneValues = initZones.map(z => z.value);
         const invalidOptions = finalOptionValues.filter(val => !validZoneValues.includes(val));
         if (invalidOptions.length > 0) {
           console.warn(`Found invalid options in select: ${invalidOptions.join(', ')}. Removing...`);
@@ -1837,13 +1734,12 @@ class App {
               invalidOption.remove();
             }
           });
-          // Re-check after removal - if we removed invalid options, we need to re-add missing ones
+          // Re-check after removal
           const updatedOptions = Array.from(azSelect.options).filter(opt => opt.value && opt.value !== '');
           const missingValues = expectedValues.filter(val => !updatedOptions.some(opt => opt.value === val));
           if (missingValues.length > 0) {
-            console.warn(`After removing invalid options, missing: ${missingValues.join(', ')}. Re-adding...`);
             missingValues.forEach(val => {
-              const zone = zones.find(z => z.value === val);
+              const zone = initZones.find(z => z.value === val);
               if (zone) {
                 const option = document.createElement('option');
                 option.value = zone.value;
@@ -1856,19 +1752,10 @@ class App {
         
         // Final check before initializing
         const preInitOptions = Array.from(azSelect.options).filter(opt => opt.value && opt.value !== '');
-        if (preInitOptions.length !== zones.length) {
-          console.error(`Final check failed: Expected ${zones.length} options, but have ${preInitOptions.length}. Aborting Choices.js initialization.`);
-          return;
-        }
-        
-        
-        // CRITICAL: Verify select still has options right before initialization
-        const lastCheckOptions = Array.from(azSelect.options).filter(opt => opt.value && opt.value !== '');
-        if (lastCheckOptions.length !== zones.length) {
-          console.error(`Options disappeared before Choices init! Had ${preInitOptions.length}, now have ${lastCheckOptions.length}`);
+        if (preInitOptions.length !== initZones.length) {
           // Re-add options immediately
           azSelect.innerHTML = '<option value="" disabled>Select availability zones</option>';
-          zones.forEach(zone => {
+          initZones.forEach(zone => {
             const option = document.createElement('option');
             option.value = zone.value;
             option.textContent = zone.label;
@@ -1876,41 +1763,16 @@ class App {
           });
           // Wait a bit and retry
           setTimeout(() => {
+            if (currentRegion !== initRegion) return;
             initChoices();
           }, 100);
           return;
         }
         
         try {
-          // CRITICAL: Ensure options are in the select before initializing Choices.js
-          // Choices.js reads from the select HTML, so we need the options there
-          // Double-check one more time right before initialization
-          const finalCheck = Array.from(azSelect.options).filter(opt => opt.value && opt.value !== '');
-          if (finalCheck.length !== zones.length) {
-            azSelect.innerHTML = '<option value="" disabled>Select availability zones</option>';
-            zones.forEach(zone => {
-              const option = document.createElement('option');
-              option.value = zone.value;
-              option.textContent = zone.label;
-              azSelect.appendChild(option);
-            });
-          }
-          
-          // CRITICAL: Ensure select has all options BEFORE initializing Choices.js
-          // Choices.js reads from the select HTML, so we need options there
-          // Double-check one final time right before initialization
-          const finalOptionsCheck = Array.from(azSelect.options).filter(opt => opt.value && opt.value !== '');
-          if (finalOptionsCheck.length !== zones.length) {
-            azSelect.innerHTML = '<option value="" disabled>Select availability zones</option>';
-            zones.forEach(zone => {
-              const option = document.createElement('option');
-              option.value = zone.value;
-              option.textContent = zone.label;
-              azSelect.appendChild(option);
-            });
-          }
           
           // Store options data before Choices.js potentially modifies the select
+          // All options start as unselected - we'll use setValue() after initialization
           const optionsData = Array.from(azSelect.options)
             .filter(opt => opt.value && opt.value !== '')
             .map(opt => ({
@@ -1920,8 +1782,7 @@ class App {
               disabled: false
             }));
           
-          // Create Choices.js - let it read from the select HTML
-          // Don't pass choices in constructor - let Choices.js read from select
+          // Create Choices.js with proper configuration
           try {
             choicesInstance = new Choices(azSelect, {
               removeItemButton: true,
@@ -1941,6 +1802,8 @@ class App {
               duplicateItemsAllowed: false,
               shouldSort: false,
               allowHTML: true,
+              // CRITICAL: This ensures selected items are NOT shown in dropdown
+              renderSelectedChoices: 'auto',
               classNames: {
                 containerOuter: 'choices form-select',
                 containerInner: 'choices__inner',
@@ -1973,27 +1836,10 @@ class App {
             
             // Always use setChoices to ensure options are set correctly
             if (optionsData.length > 0) {
-              // CRITICAL: Clear any selected values BEFORE setting new choices
-              // This prevents selected items from being counted as choices
               try {
-                choicesInstance.setValue([]);
-                choicesInstance.clearStore();
-              } catch (e) {
-                // Ignore errors
-              }
-              
-              try {
-                // Use setChoices to set options
+                // Use setChoices to set options with correct selected state
+                // The 4th param (true) replaces existing choices
                 choicesInstance.setChoices(optionsData, 'value', 'label', true);
-                
-                // Clear values again after setChoices to ensure clean state
-                setTimeout(() => {
-                  try {
-                    choicesInstance.setValue([]);
-                  } catch (e) {
-                    // Ignore errors
-                  }
-                }, 10);
                 
                 // Wait a bit and verify choices were loaded
                 setTimeout(() => {
@@ -2003,7 +1849,7 @@ class App {
                   const uniqueChoices = new Set(checkChoices2.map(c => c.value || c.id));
                   const finalChoicesCount = uniqueChoices.size;
                   
-                  if (finalChoicesCount === zones.length) {
+                  if (finalChoicesCount === initZones.length) {
                     setupChoicesComplete();
                   } else {
                     // Last resort: Try to manually add choices to the store
@@ -2018,7 +1864,7 @@ class App {
                           disabled: opt.disabled || false,
                           highlighted: false,
                           placeholder: false,
-                          selected: false
+                          selected: opt.selected || false // Preserve selected state
                         }));
                         
                         // Trigger a render
@@ -2051,17 +1897,27 @@ class App {
           const setupChoicesComplete = () => {
             if (!choicesInstance) return;
             
-            // Set initial values - but only if they're valid for current region
-            const finalOptionValues = zones.map(z => z.value);
-              const validInitialValues = initialValues.filter(val => {
-                return finalOptionValues.includes(val);
-              });
+            // Check if region changed during initialization - abort if so
+            if (currentRegion !== initRegion) {
+              console.log('Region changed during setup, aborting setupChoicesComplete');
+              return;
+            }
             
+            // Set initial values - filter to only include valid zones for current region
+            const finalOptionValues = initZones.map(z => z.value);
+            const validInitialValues = initialValues.filter(val => finalOptionValues.includes(val));
+            
+            // Always set the initial values using setValue with proper format
             if (validInitialValues.length > 0) {
-              choicesInstance.setValue(validInitialValues);
-            } else {
-              // Ensure no values are selected
-              choicesInstance.setValue([]);
+              // Convert to Choices.js item format
+              const itemsToSet = validInitialValues.map(val => {
+                const zone = initZones.find(z => z.value === val);
+                return {
+                  value: val,
+                  label: zone ? zone.label : val
+                };
+              });
+              choicesInstance.setValue(itemsToSet);
             }
             
             // Store choices instance for later use
@@ -2094,17 +1950,43 @@ class App {
               // Use Choices.js event system
               const container = azSelect.closest('.choices') || document.querySelector('.choices');
               if (container) {
+                // Helper function to sync dropdown visibility with selected items
+                const syncDropdownVisibility = () => {
+                  if (!choicesInstance) return;
+                  const selectedValues = choicesInstance.getValue(true) || [];
+                  const dropdown = container.querySelector('.choices__list--dropdown');
+                  if (dropdown) {
+                    // Hide selected items from dropdown
+                    const dropdownItems = dropdown.querySelectorAll('.choices__item--choice');
+                    dropdownItems.forEach(item => {
+                      const itemValue = item.getAttribute('data-value');
+                      if (selectedValues.includes(itemValue)) {
+                        item.style.display = 'none';
+                      } else {
+                        item.style.display = '';
+                      }
+                    });
+                  }
+                };
+                
                 container.addEventListener('addItem', function() {
                   if (typeof calculateSubnets === 'function') {
                     calculateSubnets();
                   }
+                  // Sync visibility after item added
+                  setTimeout(syncDropdownVisibility, 10);
                 });
                 
                 container.addEventListener('removeItem', function() {
                   if (typeof calculateSubnets === 'function') {
                     calculateSubnets();
                   }
+                  // Sync visibility after item removed
+                  setTimeout(syncDropdownVisibility, 10);
                 });
+                
+                // Also sync when dropdown is shown
+                container.addEventListener('showDropdown', syncDropdownVisibility);
                 
                 // Ensure dropdown appears above all sections when opened
                 // Use MutationObserver to detect when dropdown opens
@@ -2186,20 +2068,9 @@ class App {
               Utils.setStorage('config', appInstance.currentConfig); // Persist the change
             }
             
-            // Clear Choices.js selections properly
-            // Note: We don't destroy here - updateAvailabilityZoneOptions() will use setChoices() if instance exists
-            if (choicesInstance) {
-              try {
-                // Clear all selected values
-                choicesInstance.setValue([]);
-                choicesInstance.clearStore();
-              } catch (e) {
-                console.warn('Error clearing Choices.js:', e);
-              }
-            }
-            
-            // Update availability zone options (will use setChoices() if instance exists, or recreate if not)
-            updateAvailabilityZoneOptions();
+            // Update availability zone options with forceRecreate = true
+            // This ensures the dropdown is completely refreshed with new region's AZs
+            updateAvailabilityZoneOptions(true);
             
             // Trigger subnet recalculation if available
             setTimeout(() => {

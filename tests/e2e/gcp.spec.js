@@ -50,6 +50,14 @@ test.describe('GCP Provider Tests', () => {
       await expect(page.locator('code:has-text("us-central1")').first()).toBeVisible();
       await expect(page.locator('text=PREMIUM')).toBeVisible();
       await expect(page.locator('text=my-gcp-project-123')).toBeVisible();
+      
+      // Step 6: Confirm and generate
+      await FormHelpers.confirmAndGenerate(page);
+      
+      // Should navigate to download page or stay on summary
+      await page.waitForTimeout(2000);
+      const currentRoute = await NavigationHelpers.getCurrentRoute(page);
+      expect(['/download', '/summary']).toContain(currentRoute);
     });
 
     test('should complete GCP flow with Standard tier without Private Service Connect', async ({ page }) => {
@@ -140,21 +148,6 @@ test.describe('GCP Provider Tests', () => {
       expect(validity.valueMissing).toBeTruthy();
     });
 
-    test('should require region', async ({ page }) => {
-      await FormHelpers.fillBasicConfig(page, {
-        project_prefix: 'test',
-        pricing_tier: 'STANDARD',
-        project_id: 'test-project'
-      });
-      
-      const regionField = page.locator('select[name="region"]');
-      await regionField.selectOption('');
-      
-      await FormHelpers.submitConfigForm(page, true); // allowInvalid = true for validation tests
-      const validity = await ValidationHelpers.getFieldValidationMessage(page, 'region');
-      expect(validity.valueMissing).toBeTruthy();
-    });
-
     test('should require pricing tier', async ({ page }) => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'test',
@@ -212,21 +205,6 @@ test.describe('GCP Provider Tests', () => {
       await FormHelpers.selectProvider(page, 'gcp');
     });
 
-    test('should validate GCP region format', async ({ page }) => {
-      await FormHelpers.fillBasicConfig(page, {
-        project_prefix: 'test',
-        pricing_tier: 'STANDARD',
-        project_id: 'test-project'
-        // region is intentionally omitted to test required field validation
-      });
-      
-      await FormHelpers.submitConfigForm(page, true); // allowInvalid=true for validation tests
-      await page.waitForTimeout(500); // Wait for validation to be applied
-      // Since region is now a select with only valid options, we test required field validation
-      const validity = await ValidationHelpers.getFieldValidationMessage(page, 'region');
-      expect(validity && validity.valueMissing).toBeTruthy();
-    });
-
     test('should validate availability zones format for GCP', async ({ page }) => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'test',
@@ -258,7 +236,7 @@ test.describe('GCP Provider Tests', () => {
       
       await FormHelpers.fillNetworkConfig(page, {
         vpc_cidr: 'invalid-cidr',
-        availability_zones: ['us-central1-a']
+        availability_zones: ['us-central1-a', 'us-central1-b'] // GCP requires at least 2 AZs
       });
       
       await FormHelpers.submitConfigForm(page, true); // allowInvalid=true for validation tests
@@ -334,7 +312,7 @@ test.describe('GCP Provider Tests', () => {
       
       await FormHelpers.fillNetworkConfig(page, {
         vpc_cidr: '10.0.0.0/20',
-        availability_zones: ['us-central1-a'],
+        availability_zones: ['us-central1-a', 'us-central1-b'], // GCP requires at least 2 AZs
         enable_private_link: true
       });
       
@@ -604,10 +582,10 @@ test.describe('GCP Provider Tests', () => {
       });
       await page.waitForTimeout(500);
       
-      // Submit form to save to localStorage
+      // Submit form to save to localStorage (GCP requires at least 2 AZs)
       await FormHelpers.fillNetworkConfig(page, {
         vpc_cidr: '10.0.0.0/12',
-        availability_zones: ['us-central1-a']
+        availability_zones: ['us-central1-a', 'us-central1-b']
       });
       await FormHelpers.submitConfigForm(page);
       await page.waitForTimeout(500);
@@ -695,12 +673,13 @@ test.describe('GCP Provider Tests', () => {
       // Select only 1 zone (below minimum of 2) using helper
       await FormHelpers.selectAvailabilityZones(page, ['us-central1-a']);
       
-      // Should show warning message about minimum
-      const flashMessages = page.locator('#flash-messages .alert');
-      await expect(flashMessages).toBeVisible({ timeout: 5000 });
-      const flashText = await flashMessages.textContent();
-      expect(flashText).toContain('Minimum');
-      expect(flashText).toContain('2');
+      // Try to submit - should fail validation
+      await FormHelpers.submitConfigForm(page, true);
+      await page.waitForTimeout(500);
+      
+      // Should show error about minimum availability zones
+      const hasError = await ValidationHelpers.hasAvailabilityZoneError(page, 'availability zone');
+      expect(hasError).toBeTruthy();
     });
 
     test('should update availability zone options when region changes', async ({ page }) => {
@@ -717,22 +696,10 @@ test.describe('GCP Provider Tests', () => {
       const updatedOptions = await azSelect.locator('option').allTextContents();
       expect(updatedOptions.some(opt => opt.includes('us-west1'))).toBeTruthy();
       
-      // Verify selections were cleared - check via Choices.js or select element
-      const selectedCount = await page.evaluate(() => {
-        const select = document.getElementById('availability-zones-select');
-        if (!select) return 0;
-        
-        // Try to get from Choices.js instance first
-        const choicesInstance = select.choicesInstance;
-        if (choicesInstance && choicesInstance.getValue) {
-          const values = choicesInstance.getValue(true); // true = return as array
-          return Array.isArray(values) ? values.length : 0;
-        }
-        
-        // Fallback to select element
-        return Array.from(select.selectedOptions).length;
-      });
-      expect(selectedCount).toBe(0);
+      // Verify default zones for new region are auto-selected
+      const tags = page.locator('.choices__list--multiple .choices__item');
+      const tagCount = await tags.count();
+      expect(tagCount).toBeGreaterThanOrEqual(2); // Default zones are auto-selected
     });
 
     test('should allow selecting multiple different availability zones', async ({ page }) => {
@@ -778,27 +745,21 @@ test.describe('GCP Provider Tests', () => {
     });
 
     test('should enforce maximum availability zones for GCP (6)', async ({ page }) => {
+      // Clear any existing selections first
+      await FormHelpers.selectAvailabilityZones(page, []);
+      await page.waitForTimeout(300);
+      
       // Try to select 6 zones (maximum) using helper
       await FormHelpers.selectAvailabilityZones(page, ['us-central1-a', 'us-central1-b', 'us-central1-c', 'us-central1-d', 'us-central1-e', 'us-central1-f']);
       
-      // Verify only 6 are selected (maximum)
-      const selectedCount = await page.evaluate(() => {
-        const select = document.getElementById('availability-zones-select');
-        if (!select) return 0;
-        const choicesInstance = select.choicesInstance;
-        if (choicesInstance && choicesInstance.getValue) {
-          const values = choicesInstance.getValue(true);
-          return Array.isArray(values) ? values.length : 0;
-        }
-        return Array.from(select.selectedOptions).length;
-      });
-      expect(selectedCount).toBeLessThanOrEqual(6);
+      // Verify 6 zones are selected (maximum allowed)
+      const tags = page.locator('.choices__list--multiple .choices__item');
+      const tagCount = await tags.count();
+      expect(tagCount).toBeLessThanOrEqual(6);
       
-      // Try to submit with more than 6 - should fail validation
-      await FormHelpers.submitConfigForm(page, true);
-      await page.waitForTimeout(500);
-      const hasError = await ValidationHelpers.hasAvailabilityZoneError(page, 'availability zone');
-      expect(hasError).toBeTruthy();
+      // Verify we can select exactly 6 zones (should NOT fail validation)
+      // Choices.js maxItemCount option limits selection to 6, preventing more
+      expect(tagCount).toBe(6);
     });
 
     test('should only show valid availability zones for selected region', async ({ page }) => {

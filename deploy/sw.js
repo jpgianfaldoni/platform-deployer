@@ -1,5 +1,5 @@
 // Service Worker for Databricks Deployer PWA
-const CACHE_NAME = 'databricks-deployer-v2';
+const CACHE_NAME = 'databricks-deployer-v3';
 const BASE_PATH = self.location.pathname.replace('/sw.js', '') || './';
 
 // Template files to cache
@@ -59,6 +59,14 @@ const urlsToCache = [
   BASE_PATH + 'libs/bootstrap-icons/font/fonts/bootstrap-icons.woff',
   BASE_PATH + 'libs/bootstrap-icons/font/fonts/bootstrap-icons.woff2',
   BASE_PATH + 'libs/jszip/jszip.min.js',
+  BASE_PATH + 'libs/choices.js/css/choices.min.css',
+  BASE_PATH + 'libs/choices.js/js/choices.min.js',
+  // Local fonts
+  BASE_PATH + 'fonts/manrope/manrope-latin-wght-normal.woff2',
+  BASE_PATH + 'fonts/space-grotesk/space-grotesk-latin-wght-normal.woff2',
+  BASE_PATH + 'fonts/jetbrains-mono/jetbrains-mono-latin-400-normal.woff2',
+  BASE_PATH + 'fonts/jetbrains-mono/jetbrains-mono-latin-500-normal.woff2',
+  BASE_PATH + 'fonts/jetbrains-mono/jetbrains-mono-latin-700-normal.woff2',
   // Template files
   ...templateFiles.map(file => BASE_PATH + file)
 ];

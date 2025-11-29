@@ -48,7 +48,7 @@ test.describe('Basic Application Tests', () => {
   });
 
   test('should display footer with content', async ({ page }) => {
-    const footer = page.locator('footer.bg-light');
+    const footer = page.locator('footer');
     await expect(footer).toBeVisible();
     
     // Check footer content

@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 const libsDir = path.join(__dirname, '..', 'deploy', 'libs');
+const fontsDir = path.join(__dirname, '..', 'deploy', 'fonts');
 
 // Criar estrutura de diretórios
 const dirs = [
@@ -10,7 +11,10 @@ const dirs = [
   path.join(libsDir, 'bootstrap-icons', 'font'),
   path.join(libsDir, 'jszip'),
   path.join(libsDir, 'choices.js', 'css'),
-  path.join(libsDir, 'choices.js', 'js')
+  path.join(libsDir, 'choices.js', 'js'),
+  path.join(fontsDir, 'manrope'),
+  path.join(fontsDir, 'space-grotesk'),
+  path.join(fontsDir, 'jetbrains-mono')
 ];
 
 dirs.forEach(dir => {
@@ -49,6 +53,21 @@ const filesToCopy = [
   {
     from: path.join(__dirname, '..', 'node_modules', 'choices.js', 'public', 'assets', 'scripts', 'choices.min.js'),
     to: path.join(libsDir, 'choices.js', 'js', 'choices.min.js')
+  },
+  // Fontes - Manrope (variable)
+  {
+    from: path.join(__dirname, '..', 'node_modules', '@fontsource-variable', 'manrope', 'files'),
+    to: path.join(fontsDir, 'manrope')
+  },
+  // Fontes - Space Grotesk (variable) - Display font
+  {
+    from: path.join(__dirname, '..', 'node_modules', '@fontsource-variable', 'space-grotesk', 'files'),
+    to: path.join(fontsDir, 'space-grotesk')
+  },
+  // Fontes - JetBrains Mono - Monospace
+  {
+    from: path.join(__dirname, '..', 'node_modules', '@fontsource', 'jetbrains-mono', 'files'),
+    to: path.join(fontsDir, 'jetbrains-mono')
   }
 ];
 

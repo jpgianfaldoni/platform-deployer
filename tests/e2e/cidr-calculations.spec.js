@@ -281,5 +281,254 @@ test.describe('CIDR Calculations', () => {
       expect(utilizationCheck).toBe(true);
     });
   });
+
+  test.describe('CIDR Edge Cases', () => {
+    test('should handle large CIDR block (/8)', async ({ page }) => {
+      await FormHelpers.selectProvider(page, 'aws');
+      await FormHelpers.fillBasicConfig(page, {
+        project_prefix: 'large-cidr',
+        region: 'us-east-1',
+        pricing_tier: 'STANDARD'
+      });
+      
+      await FormHelpers.fillNetworkConfig(page, {
+        vpc_cidr: '10.0.0.0/8',
+        availability_zones: ['us-east-1a', 'us-east-1b']
+      });
+      
+      await page.waitForTimeout(3000);
+      
+      const subnets = await FormHelpers.getSubnetPreview(page);
+      expect(subnets).not.toBeNull();
+      expect(subnets.length).toBeGreaterThanOrEqual(2);
+      
+      // Verify subnets are valid
+      const validation = await page.evaluate((subnetData) => {
+        const { NetworkCalculator } = window;
+        if (!NetworkCalculator) return { valid: false };
+        
+        const vpcCIDR = '10.0.0.0/8';
+        const subnetAllocations = subnetData.map((s, idx) => ({
+          name: s.name || `subnet-${idx}`,
+          cidr: s.cidr,
+          size: parseInt(s.cidr.split('/')[1], 10) || 26
+        }));
+        
+        const calc = new NetworkCalculator('aws');
+        return calc.validateSubnetAllocation(vpcCIDR, subnetAllocations);
+      }, subnets);
+      
+      expect(validation.valid).toBe(true);
+    });
+
+    test('should handle minimum CIDR block (/24)', async ({ page }) => {
+      await FormHelpers.selectProvider(page, 'aws');
+      await FormHelpers.fillBasicConfig(page, {
+        project_prefix: 'min-cidr',
+        region: 'us-east-1',
+        pricing_tier: 'STANDARD'
+      });
+      
+      await FormHelpers.fillNetworkConfig(page, {
+        vpc_cidr: '10.0.0.0/24',
+        availability_zones: ['us-east-1a', 'us-east-1b']
+      });
+      
+      await page.waitForTimeout(3000);
+      
+      const subnets = await FormHelpers.getSubnetPreview(page);
+      // With /24, subnets might be very small or calculation might warn
+      if (subnets && subnets.length > 0) {
+        // Verify subnets fit in the VPC
+        const validation = await page.evaluate((subnetData) => {
+          const { NetworkCalculator } = window;
+          if (!NetworkCalculator) return { valid: false };
+          
+          const vpcCIDR = '10.0.0.0/24';
+          const subnetAllocations = subnetData.map((s, idx) => ({
+            name: s.name || `subnet-${idx}`,
+            cidr: s.cidr,
+            size: parseInt(s.cidr.split('/')[1], 10) || 26
+          }));
+          
+          const calc = new NetworkCalculator('aws');
+          return calc.validateSubnetAllocation(vpcCIDR, subnetAllocations);
+        }, subnets);
+        
+        expect(validation.valid).toBe(true);
+      }
+    });
+
+    test('should handle /16 CIDR block correctly', async ({ page }) => {
+      await FormHelpers.selectProvider(page, 'aws');
+      await FormHelpers.fillBasicConfig(page, {
+        project_prefix: 'medium-cidr',
+        region: 'us-east-1',
+        pricing_tier: 'ENTERPRISE'
+      });
+      
+      await FormHelpers.fillNetworkConfig(page, {
+        vpc_cidr: '172.16.0.0/16',
+        availability_zones: ['us-east-1a', 'us-east-1b', 'us-east-1c'],
+        enable_private_link: true
+      });
+      
+      await page.waitForTimeout(3000);
+      
+      const subnets = await FormHelpers.getSubnetPreview(page);
+      expect(subnets).not.toBeNull();
+      expect(subnets.length).toBeGreaterThan(0);
+      
+      // Should have multiple subnet types
+      const subnetTypes = subnets.map(s => s.type);
+      expect(subnetTypes.length).toBeGreaterThanOrEqual(2);
+    });
+
+    test('should handle /12 CIDR block correctly', async ({ page }) => {
+      await FormHelpers.selectProvider(page, 'azure');
+      await FormHelpers.fillBasicConfig(page, {
+        project_prefix: 'azure-12',
+        region: 'eastus',
+        pricing_tier: 'STANDARD',
+        resource_group_name: 'rg-cidr-12'
+      });
+      
+      await FormHelpers.fillNetworkConfig(page, {
+        vpc_cidr: '10.0.0.0/12',
+        availability_zones: ['1', '2', '3']
+      });
+      
+      await page.waitForTimeout(3000);
+      
+      const subnets = await FormHelpers.getSubnetPreview(page);
+      expect(subnets).not.toBeNull();
+      expect(subnets.length).toBeGreaterThanOrEqual(2);
+    });
+
+    test('should show warning for CIDR too small for configuration', async ({ page }) => {
+      await FormHelpers.selectProvider(page, 'aws');
+      await FormHelpers.fillBasicConfig(page, {
+        project_prefix: 'small-cidr',
+        region: 'us-east-1',
+        pricing_tier: 'ENTERPRISE'
+      });
+      
+      await FormHelpers.fillNetworkConfig(page, {
+        vpc_cidr: '10.0.0.0/28', // Very small CIDR
+        availability_zones: ['us-east-1a', 'us-east-1b', 'us-east-1c', 'us-east-1d', 'us-east-1e', 'us-east-1f'],
+        enable_private_link: true
+      });
+      
+      await page.waitForTimeout(2000);
+      
+      // Should show warning or error about insufficient space
+      const hasWarning = await page.evaluate(() => {
+        const alerts = document.querySelectorAll('.alert-warning, .alert-danger, .is-invalid');
+        return alerts.length > 0;
+      });
+      
+      // Either show warning or prevent form submission
+      const flashMessages = page.locator('#flash-messages .alert');
+      const flashCount = await flashMessages.count();
+      const hasMessage = flashCount > 0 || hasWarning;
+      
+      expect(hasMessage).toBeTruthy();
+    });
+
+    test('should calculate utilization correctly for different CIDR sizes', async ({ page }) => {
+      await FormHelpers.selectProvider(page, 'aws');
+      await FormHelpers.fillBasicConfig(page, {
+        project_prefix: 'util-test',
+        region: 'us-east-1',
+        pricing_tier: 'STANDARD'
+      });
+      
+      // First with /20
+      await FormHelpers.fillNetworkConfig(page, {
+        vpc_cidr: '10.0.0.0/20',
+        availability_zones: ['us-east-1a', 'us-east-1b']
+      });
+      
+      await page.waitForTimeout(2000);
+      const summary20 = await FormHelpers.getNetworkSummary(page);
+      
+      // Then with /16
+      await page.fill('input[name="vpc_cidr"]', '10.0.0.0/16');
+      await page.waitForTimeout(2000);
+      const summary16 = await FormHelpers.getNetworkSummary(page);
+      
+      // Utilization should be lower with larger CIDR
+      if (summary20 && summary16) {
+        const util20 = parseFloat(summary20.utilization_percent);
+        const util16 = parseFloat(summary16.utilization_percent);
+        expect(util16).toBeLessThan(util20);
+      }
+    });
+  });
+
+  test.describe('Multi-AZ CIDR Calculations', () => {
+    test('should calculate subnets correctly with maximum AZs for AWS (6)', async ({ page }) => {
+      await FormHelpers.selectProvider(page, 'aws');
+      await FormHelpers.fillBasicConfig(page, {
+        project_prefix: 'max-az',
+        region: 'us-east-1',
+        pricing_tier: 'STANDARD'
+      });
+      
+      await FormHelpers.fillNetworkConfig(page, {
+        vpc_cidr: '10.0.0.0/16',
+        availability_zones: ['us-east-1a', 'us-east-1b', 'us-east-1c', 'us-east-1d', 'us-east-1e', 'us-east-1f']
+      });
+      
+      await page.waitForTimeout(3000);
+      
+      const subnets = await FormHelpers.getSubnetPreview(page);
+      expect(subnets).not.toBeNull();
+      // Should have 6 private + 6 public = 12 subnets minimum
+      expect(subnets.length).toBeGreaterThanOrEqual(6);
+    });
+
+    test('should calculate subnets correctly with maximum AZs for Azure (3)', async ({ page }) => {
+      await FormHelpers.selectProvider(page, 'azure');
+      await FormHelpers.fillBasicConfig(page, {
+        project_prefix: 'azure-max-az',
+        region: 'eastus',
+        pricing_tier: 'STANDARD',
+        resource_group_name: 'rg-max-az'
+      });
+      
+      await FormHelpers.fillNetworkConfig(page, {
+        vpc_cidr: '10.0.0.0/16',
+        availability_zones: ['1', '2', '3']
+      });
+      
+      await page.waitForTimeout(3000);
+      
+      const subnets = await FormHelpers.getSubnetPreview(page);
+      expect(subnets).not.toBeNull();
+      expect(subnets.length).toBeGreaterThanOrEqual(3);
+    });
+
+    test('should calculate subnets correctly with maximum AZs for GCP (6)', async ({ page }) => {
+      await FormHelpers.selectProvider(page, 'gcp');
+      await FormHelpers.fillBasicConfig(page, {
+        project_prefix: 'gcp-max-az',
+        region: 'us-central1',
+        pricing_tier: 'STANDARD',
+        project_id: 'gcp-max-az-proj'
+      });
+      
+      await FormHelpers.fillNetworkConfig(page, {
+        vpc_cidr: '10.0.0.0/16',
+        availability_zones: ['us-central1-a', 'us-central1-b', 'us-central1-c', 'us-central1-d', 'us-central1-e', 'us-central1-f']
+      });
+      
+      await page.waitForTimeout(3000);
+      
+      const subnets = await FormHelpers.getSubnetPreview(page);
+      expect(subnets).not.toBeNull();
+      expect(subnets.length).toBeGreaterThanOrEqual(2); // GCP has host + pods
+    });
+  });
 });
 

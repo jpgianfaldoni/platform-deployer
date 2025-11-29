@@ -50,6 +50,14 @@ test.describe('Azure Provider Tests', () => {
       await expect(page.locator('code:has-text("eastus")').first()).toBeVisible();
       await expect(page.locator('text=PREMIUM')).toBeVisible();
       await expect(page.locator('text=rg-databricks-test')).toBeVisible();
+      
+      // Step 6: Confirm and generate
+      await FormHelpers.confirmAndGenerate(page);
+      
+      // Should navigate to download page or stay on summary
+      await page.waitForTimeout(2000);
+      const currentRoute = await NavigationHelpers.getCurrentRoute(page);
+      expect(['/download', '/summary']).toContain(currentRoute);
     });
 
     test('should complete Azure flow with Standard tier without Private Link', async ({ page }) => {
@@ -140,21 +148,6 @@ test.describe('Azure Provider Tests', () => {
       expect(validity.valueMissing).toBeTruthy();
     });
 
-    test('should require region', async ({ page }) => {
-      await FormHelpers.fillBasicConfig(page, {
-        project_prefix: 'test',
-        pricing_tier: 'STANDARD',
-        resource_group_name: 'rg-test'
-      });
-      
-      const regionField = page.locator('select[name="region"]');
-      await regionField.selectOption('');
-      
-      await FormHelpers.submitConfigForm(page, true); // allowInvalid = true for validation tests
-      const validity = await ValidationHelpers.getFieldValidationMessage(page, 'region');
-      expect(validity.valueMissing).toBeTruthy();
-    });
-
     test('should require pricing tier', async ({ page }) => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'test',
@@ -239,21 +232,6 @@ test.describe('Azure Provider Tests', () => {
   test.describe('Format Validations', () => {
     test.beforeEach(async ({ page }) => {
       await FormHelpers.selectProvider(page, 'azure');
-    });
-
-    test('should validate Azure region format', async ({ page }) => {
-      await FormHelpers.fillBasicConfig(page, {
-        project_prefix: 'test',
-        pricing_tier: 'STANDARD',
-        resource_group_name: 'rg-test'
-        // region is intentionally omitted to test required field validation
-      });
-      
-      await FormHelpers.submitConfigForm(page, true); // allowInvalid=true for validation tests
-      await page.waitForTimeout(500); // Wait for validation to be applied
-      // Since region is now a select with only valid options, we test required field validation
-      const validity = await ValidationHelpers.getFieldValidationMessage(page, 'region');
-      expect(validity && validity.valueMissing).toBeTruthy();
     });
 
     test('should validate availability zones as numeric', async ({ page }) => {
@@ -680,28 +658,16 @@ test.describe('Azure Provider Tests', () => {
     });
 
     test('should enforce minimum availability zones for Azure (1)', async ({ page }) => {
-      // Deselect all zones using Choices.js API
-      await page.evaluate(() => {
-        const select = document.getElementById('availability-zones-select');
-        if (!select) return;
-        const choicesInstance = select.choicesInstance;
-        if (choicesInstance && choicesInstance.setValue) {
-          choicesInstance.setValue([]);
-        } else {
-          Array.from(select.options).forEach(option => {
-            option.selected = false;
-          });
-          select.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-      });
+      // Deselect all zones using helper
+      await FormHelpers.selectAvailabilityZones(page, []);
+      
+      // Try to submit with no zones selected
+      await FormHelpers.submitConfigForm(page, true);
       await page.waitForTimeout(500);
       
-      // Should show warning message about minimum
-      const flashMessages = page.locator('#flash-messages .alert');
-      await expect(flashMessages).toBeVisible({ timeout: 5000 });
-      const flashText = await flashMessages.textContent();
-      expect(flashText).toContain('Minimum');
-      expect(flashText).toContain('1');
+      // Should show error about minimum availability zones
+      const hasError = await ValidationHelpers.hasAvailabilityZoneError(page, 'availability zone');
+      expect(hasError).toBeTruthy();
     });
 
     test('should allow selecting multiple different availability zones', async ({ page }) => {
