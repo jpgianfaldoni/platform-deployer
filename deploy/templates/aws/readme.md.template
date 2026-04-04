@@ -2,45 +2,181 @@
 
 This Terraform project deploys a Databricks workspace on Amazon Web Services.
 
-## Configuration
+## Configuration Summary
 
-- **Provider**: AWS
-- **Region**: {{region}}
-- **Project Prefix**: {{project_prefix}}
-- **Pricing Tier**: {{pricing_tier}}
-- **VPC CIDR**: {{vpc_cidr}}
-- **Private Link**: {{private_link_status}}
+| Setting | Value |
+|---------|-------|
+| **Provider** | AWS |
+| **Region** | {{region}} |
+| **Project Prefix** | {{project_prefix}} |
+| **Pricing Tier** | {{pricing_tier}} |
+| **VPC CIDR** | {{vpc_cidr}} |
+| **Private Link** | {{private_link_status}} |
 
 ## Prerequisites
 
-1. AWS account with appropriate permissions
-2. Databricks account ID
-3. Terraform >= 1.0 installed
-4. AWS CLI configured
+- AWS account with appropriate permissions (Administrator or specific Databricks permissions)
+- Databricks account with Account Console access
+- Terraform >= 1.0 installed
+- AWS CLI installed and configured
 
 ## Deployment Steps
 
-1. **Set your Databricks account ID** in `terraform.tfvars`
+Follow these steps in order to deploy your Databricks workspace.
 
-2. **Configure AWS credentials**:
+### Step 1: Extract and Review
+
+Extract the ZIP file and review the generated configuration files:
+
+```bash
+unzip {{project_prefix}}-aws-terraform.zip -d {{project_prefix}}-aws-terraform
+```
+
+Review the files, especially `terraform.tfvars` to ensure all values are correct for your environment.
+
+### Step 2: Navigate to Directory
+
+Change to the extracted Terraform project directory:
+
+```bash
+cd {{project_prefix}}-aws-terraform
+```
+
+### Step 3: Configure AWS Credentials
+
+Set up your AWS credentials. You can use AWS CLI:
+
+```bash
+aws configure
+```
+
+Or set environment variables:
+
+```bash
+export AWS_ACCESS_KEY_ID="your-access-key"
+export AWS_SECRET_ACCESS_KEY="your-secret-key"
+export AWS_DEFAULT_REGION="{{region}}"
+```
+
+### Step 4: Initialize Terraform
+
+Initialize Terraform to download required providers and modules:
+
+```bash
+terraform init
+```
+
+### Step 5: Create Service Principal and Export Credentials
+
+> **⚠️ IMPORTANT: Always use a Service Principal instead of personal access tokens (PAT).**
+> Service Principals provide better security, auditability, and can be scoped to specific permissions.
+> Personal PATs are tied to individual users and should be avoided for automated deployments.
+
+#### Creating a Databricks Service Principal
+
+1. Go to [Databricks Account Console](https://accounts.cloud.databricks.com)
+2. Navigate to **User Management** → **Service Principals**
+3. Click **Add Service Principal**
+4. Enter a name (e.g., `terraform-deployer`) and click **Add**
+5. Select the newly created Service Principal
+6. Go to the **Secrets** tab and click **Generate secret**
+7. **Copy the Client ID and Secret immediately** (the secret is shown only once!)
+8. Go to the **Roles** tab and assign the **Account Admin** role
+
+> **Finding your Account ID:** Account Console → Settings → Account ID (copy the UUID)
+
+#### Export Environment Variables
+
+Export the Service Principal credentials as environment variables:
+
+```bash
+export TF_VAR_databricks_account_id="<your-account-id>"
+export DATABRICKS_CLIENT_ID="<your-client-id>"
+export DATABRICKS_CLIENT_SECRET="<your-client-secret>"
+```
+
+**Never commit these values to version control!**
+
+### Step 6: Deploy Infrastructure
+
+Review the planned changes:
+
+```bash
+terraform plan
+```
+
+Apply the Terraform configuration to create your Databricks infrastructure:
+
+```bash
+terraform apply
+```
+
+Type `yes` when prompted to confirm the deployment.
+
+## Outputs
+
+After successful deployment, you will have access to:
+
+| Output | Description |
+|--------|-------------|
+| `workspace_url` | The URL to access your Databricks workspace |
+| `workspace_id` | The unique workspace identifier |
+| `databricks_role_arn` | The ARN of the cross-account IAM role |
+
+## Troubleshooting
+
+### Availability Zone Error
+
+If you see an error like:
+```
+Value (us-west-1a) for parameter availabilityZone is invalid
+```
+
+Some availability zones may not be available in your AWS account. Edit the `availability_zones` variable in `terraform.tfvars` to use only available zones for your region.
+
+### Databricks Authentication Error
+
+If you see:
+```
+cannot configure default credentials
+```
+
+1. Verify all environment variables are set:
    ```bash
-   aws configure
+   echo $TF_VAR_databricks_account_id
+   echo $DATABRICKS_CLIENT_ID
+   echo $DATABRICKS_CLIENT_SECRET
    ```
 
-3. **Initialize Terraform**:
-   ```bash
-   terraform init
-   ```
+2. Verify that your Service Principal has the **Account Admin** role assigned
 
-4. **Review the plan**:
-   ```bash
-   terraform plan
-   ```
+3. Ensure the Service Principal secret hasn't expired
 
-5. **Apply the configuration**:
-   ```bash
-   terraform apply
-   ```
+### AWS Permission Errors
 
-## Generated: {{generated_date}}
+Ensure your AWS credentials have permissions to create:
+- VPCs, Subnets, Route Tables, Internet Gateways
+- S3 Buckets
+- IAM Roles and Policies
+- Security Groups
 
+## Important Notes
+
+- The IAM cross-account role is automatically configured with self-assume capability
+- This is required for Databricks cross-account functionality
+- The S3 bucket is created with encryption enabled (versioning disabled by default)
+- All resources are tagged with the project prefix for easy identification
+
+## Cleanup
+
+To destroy all resources created by this project:
+
+```bash
+terraform destroy
+```
+
+Type `yes` when prompted. **Warning:** This will permanently delete all resources including data stored in the workspace.
+
+---
+
+**Generated:** {{generated_date}}

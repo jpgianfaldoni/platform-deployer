@@ -2,36 +2,206 @@
 
 This Terraform project deploys a Databricks workspace on Google Cloud Platform.
 
-## Configuration
+## Configuration Summary
 
-- **Provider**: GCP
-- **Project ID**: {{project_id}}
-- **Region**: {{region}}
-- **Project Prefix**: {{project_prefix}}
+| Setting | Value |
+|---------|-------|
+| **Provider** | GCP |
+| **Region** | {{region}} |
+| **Project Prefix** | {{project_prefix}} |
+| **Pricing Tier** | {{pricing_tier}} |
+| **VPC CIDR** | {{vpc_cidr}} |
+| **Private Service Connect** | {{private_link_status}} |
 
 ## Prerequisites
 
-1. GCP project with billing enabled
-2. Terraform >= 1.0
-3. gcloud CLI configured
+- GCP project with appropriate permissions (Editor or Owner role)
+- Databricks account with Account Console access
+- Terraform >= 1.0 installed
+- Google Cloud CLI (gcloud) installed
 
 ## Deployment Steps
 
-1. **Login to GCP**:
+Follow these steps in order to deploy your Databricks workspace.
+
+### Step 1: Extract and Review
+
+Extract the ZIP file and review the generated configuration files:
+
+```bash
+unzip {{project_prefix}}-gcp-terraform.zip -d {{project_prefix}}-gcp-terraform
+```
+
+Review the files, especially `terraform.tfvars` to ensure all values are correct for your environment.
+
+### Step 2: Navigate to Directory
+
+Change to the extracted Terraform project directory:
+
+```bash
+cd {{project_prefix}}-gcp-terraform
+```
+
+### Step 3: Configure GCP Credentials
+
+Authenticate with Google Cloud and set your project:
+
+```bash
+gcloud auth login
+gcloud auth application-default login
+gcloud config set project {{project_id}}
+```
+
+Verify you're using the correct project:
+
+```bash
+gcloud config list
+```
+
+### Step 4: Initialize Terraform
+
+Initialize Terraform to download required providers and modules:
+
+```bash
+terraform init
+```
+
+### Step 5: Create Service Principal and Export Credentials
+
+> **⚠️ IMPORTANT: Always use a Service Principal instead of personal access tokens (PAT).**
+> Service Principals provide better security, auditability, and can be scoped to specific permissions.
+> Personal PATs are tied to individual users and should be avoided for automated deployments.
+
+#### Creating a Databricks Service Principal
+
+1. Go to [Databricks Account Console](https://accounts.cloud.databricks.com)
+2. Navigate to **User Management** → **Service Principals**
+3. Click **Add Service Principal**
+4. Enter a name (e.g., `terraform-deployer`) and click **Add**
+5. Select the newly created Service Principal
+6. Go to the **Secrets** tab and click **Generate secret**
+7. **Copy the Client ID and Secret immediately** (the secret is shown only once!)
+8. Go to the **Roles** tab and assign the **Account Admin** role
+
+> **Finding your Account ID:** Account Console → Settings → Account ID (copy the UUID)
+
+#### Export Environment Variables
+
+Export the Service Principal credentials as environment variables:
+
+```bash
+export TF_VAR_databricks_account_id="<your-account-id>"
+export DATABRICKS_CLIENT_ID="<your-client-id>"
+export DATABRICKS_CLIENT_SECRET="<your-client-secret>"
+```
+
+**Never commit these values to version control!**
+
+### Step 6: Deploy Infrastructure
+
+Review the planned changes:
+
+```bash
+terraform plan
+```
+
+Apply the Terraform configuration to create your Databricks infrastructure:
+
+```bash
+terraform apply
+```
+
+Type `yes` when prompted to confirm the deployment.
+
+## Outputs
+
+After successful deployment, you will have access to:
+
+| Output | Description |
+|--------|-------------|
+| `workspace_url` | The URL to access your Databricks workspace |
+| `workspace_id` | The unique workspace identifier |
+| `vpc_name` | The VPC network name |
+
+## Troubleshooting
+
+### GCP Authentication Error
+
+If you see authentication errors:
+
+```bash
+gcloud auth login
+gcloud auth application-default login
+gcloud config list
+```
+
+Ensure both user and application-default credentials are configured.
+
+### Databricks Authentication Error
+
+If you see:
+```
+cannot configure default credentials
+```
+
+1. Verify all environment variables are set:
    ```bash
-   gcloud auth login
-   gcloud auth application-default login
+   echo $TF_VAR_databricks_account_id
+   echo $DATABRICKS_CLIENT_ID
+   echo $DATABRICKS_CLIENT_SECRET
    ```
 
-2. **Initialize Terraform**:
-   ```bash
-   terraform init
-   ```
+2. Verify that your Service Principal has the **Account Admin** role assigned in Databricks Account Console
 
-3. **Apply**:
-   ```bash
-   terraform apply
-   ```
+3. Ensure the Service Principal secret hasn't expired
 
-## Generated: {{generated_date}}
+### GCP API Not Enabled
 
+If you see API-related errors, enable the required APIs:
+
+```bash
+gcloud services enable compute.googleapis.com
+gcloud services enable container.googleapis.com
+gcloud services enable iam.googleapis.com
+gcloud services enable cloudresourcemanager.googleapis.com
+```
+
+Wait a few minutes for the APIs to be fully enabled.
+
+### Quota Exceeded
+
+If you see quota errors, you may need to request an increase for:
+- vCPU quota in your region
+- IP addresses
+- VPC networks
+
+Use the GCP Console IAM & Admin → Quotas page to request increases.
+
+### Organization Policy Errors
+
+If you see organization policy constraint errors, you may need to adjust policies for:
+- `constraints/compute.vmExternalIpAccess`
+- `constraints/compute.restrictSharedVpcSubnetworks`
+
+Contact your GCP organization administrator.
+
+## Important Notes
+
+- A GCS bucket is created for Databricks workspace storage (DBFS root)
+- The VPC is configured with separate subnets for GKE nodes and pods
+- Firewall rules are automatically configured for Databricks requirements
+- All resources are labeled with the project prefix for easy identification
+
+## Cleanup
+
+To destroy all resources created by this project:
+
+```bash
+terraform destroy
+```
+
+Type `yes` when prompted. **Warning:** This will permanently delete all resources including data stored in the workspace.
+
+---
+
+**Generated:** {{generated_date}}

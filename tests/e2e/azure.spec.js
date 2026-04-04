@@ -87,7 +87,7 @@ test.describe('Azure Provider Tests', () => {
 
     test('should complete Azure flow using existing VNet', async ({ page }) => {
       await FormHelpers.selectProvider(page, 'azure');
-      
+
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'azure-existing',
         region: 'centralus',
@@ -95,16 +95,29 @@ test.describe('Azure Provider Tests', () => {
         resource_group_name: 'rg-existing'
       });
 
-      await FormHelpers.fillNetworkConfig(page, {
-        create_new_vpc: false,
-        existing_vpc_name: 'my-existing-vnet',
-        vpc_cidr: '10.32.0.0/12',
-        availability_zones: ['1', '2'],
-        enable_private_link: false
-      });
+      // Uncheck Create New VNet
+      const createNewVpc = page.locator('#create_new_vpc');
+      if (await createNewVpc.isChecked()) {
+        await createNewVpc.click();
+        await page.waitForTimeout(500);
+      }
 
+      // Fill existing VNet Resource ID
+      const existingVnetId = page.locator('#existing_vpc_id');
+      await existingVnetId.waitFor({ state: 'visible', timeout: 5000 });
+      await existingVnetId.fill('/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-existing/providers/Microsoft.Network/virtualNetworks/my-existing-vnet');
+
+      // Fill existing subnet names
+      const publicSubnet = page.locator('#existing_public_subnet_name');
+      await publicSubnet.waitFor({ state: 'visible', timeout: 5000 });
+      await publicSubnet.fill('databricks-public-subnet');
+
+      const privateSubnet = page.locator('#existing_private_subnet_name');
+      await privateSubnet.fill('databricks-private-subnet');
+
+      await page.waitForTimeout(500);
       await FormHelpers.submitConfigForm(page);
-      await expect(page).toHaveURL(/.*#\/summary/);
+      await expect(page).toHaveURL(/.*#\/summary/, { timeout: 10000 });
     });
   });
 

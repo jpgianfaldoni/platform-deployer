@@ -66,7 +66,8 @@ class TerraformGenerator {
   async renderTemplate(provider, templateName, variables) {
     try {
       const template = await this.loader.loadTemplate(provider, templateName);
-      return this.engine.render(template, variables);
+      const templatePath = `${provider}/${templateName}`;
+      return this.engine.render(template, variables, templatePath);
     } catch (error) {
       throw new Error(`Failed to render template ${provider}/${templateName}: ${error.message}`);
     }
@@ -82,7 +83,8 @@ class TerraformGenerator {
   async renderModuleTemplate(moduleName, templateName, variables) {
     try {
       const template = await this.loader.loadModuleTemplate(moduleName, templateName);
-      return this.engine.render(template, variables);
+      const templatePath = `modules/${moduleName}/${templateName}`;
+      return this.engine.render(template, variables, templatePath);
     } catch (error) {
       throw new Error(`Failed to render module template ${moduleName}/${templateName}: ${error.message}`);
     }

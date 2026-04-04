@@ -7,6 +7,8 @@ class App {
     this.currentConfig = Utils.getStorage('config') || {};
     this.currentProvider = Utils.getStorage('provider') || null;
     this.currentStep = Utils.getStorage('step') || 0;
+    this.downloadBlob = null;
+    this.downloadFilename = null;
     
     this.routes = {
       '/': this.renderHome.bind(this),
@@ -354,16 +356,651 @@ class App {
     
     // Check and show install prompt on navigation
     this.checkInstallPrompt();
+    
+    // Setup credential modal event listeners
+    this.setupCredentialModal();
+    
+    // Setup master password modal event listeners
+    this.setupMasterPasswordModals();
   }
 
   updateNavbar() {
-    const changeProviderNav = document.getElementById('change-provider-nav');
-    if (changeProviderNav) {
-      if (this.currentProvider) {
-        changeProviderNav.style.display = 'block';
-      } else {
-        changeProviderNav.style.display = 'none';
+    // Configure Provider menu is always visible
+    // Update credential status indicators
+    this.updateCredentialStatusIndicators();
+  }
+
+  /**
+   * Setup credential modal event listeners
+   */
+  setupCredentialModal() {
+    const modal = document.getElementById('configureProviderModal');
+    if (modal) {
+      // When trying to open the credentials modal, check vault state first
+      modal.addEventListener('show.bs.modal', (e) => {
+        // Check if vault exists and needs to be unlocked
+        if (Utils.hasCredentialsVault() && !Utils.isVaultUnlocked()) {
+          e.preventDefault();
+          this.showUnlockVaultModal();
+          return;
+        }
+        
+        // If no vault exists, show setup modal first
+        if (!Utils.hasCredentialsVault()) {
+          e.preventDefault();
+          this.showSetupVaultModal();
+          return;
+        }
+        
+        // Vault is unlocked, update UI
+        this.updateCredentialStatusIndicators();
+        this.updateVaultStatusBanner();
+        
+        // Populate fields with masked values for all providers
+        this.populateCredentialFields();
+      });
+    }
+  }
+
+  /**
+   * Populate credential fields with masked values if credentials exist
+   * Fields are locked when credentials are present
+   */
+  async populateCredentialFields() {
+    for (const provider of ['aws', 'azure', 'gcp']) {
+      await this.updateProviderCredentialFields(provider);
+    }
+  }
+
+  /**
+   * Update credential fields for a specific provider
+   * @param {string} provider - Cloud provider (aws, azure, gcp)
+   */
+  async updateProviderCredentialFields(provider) {
+    const accountIdInput = document.getElementById(`${provider}-account-id`);
+    const clientIdInput = document.getElementById(`${provider}-client-id`);
+    const clientSecretInput = document.getElementById(`${provider}-client-secret`);
+    const saveBtn = document.getElementById(`${provider}-save-btn`);
+    const clearBtn = document.getElementById(`${provider}-clear-btn`);
+
+    // Get stored credentials
+    let credentials = null;
+    if (Utils.isVaultUnlocked()) {
+      credentials = await Utils.getProviderCredentials(provider);
+    }
+
+    const hasCredentials = credentials && 
+      (credentials.accountId || credentials.clientId || credentials.clientSecret);
+
+    if (hasCredentials) {
+      // Show masked values and lock fields
+      if (accountIdInput) {
+        accountIdInput.value = credentials.accountId ? Utils.maskSensitiveValue(credentials.accountId) : '';
+        accountIdInput.readOnly = true;
+        accountIdInput.classList.add('credential-locked');
       }
+      if (clientIdInput) {
+        clientIdInput.value = credentials.clientId ? Utils.maskSensitiveValue(credentials.clientId) : '';
+        clientIdInput.readOnly = true;
+        clientIdInput.classList.add('credential-locked');
+      }
+      if (clientSecretInput) {
+        clientSecretInput.value = credentials.clientSecret ? Utils.maskSensitiveValue(credentials.clientSecret) : '';
+        clientSecretInput.readOnly = true;
+        clientSecretInput.classList.add('credential-locked');
+      }
+
+      // Disable save button, enable clear button
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i class="bi bi-lock-fill me-1"></i>Credentials Saved';
+      }
+      if (clearBtn) {
+        clearBtn.classList.remove('btn-outline-danger');
+        clearBtn.classList.add('btn-danger');
+      }
+    } else {
+      // Clear fields and unlock
+      this.unlockProviderCredentialFields(provider);
+    }
+  }
+
+  /**
+   * Unlock credential fields for a specific provider (make them editable)
+   * @param {string} provider - Cloud provider (aws, azure, gcp)
+   */
+  unlockProviderCredentialFields(provider) {
+    const accountIdInput = document.getElementById(`${provider}-account-id`);
+    const clientIdInput = document.getElementById(`${provider}-client-id`);
+    const clientSecretInput = document.getElementById(`${provider}-client-secret`);
+    const saveBtn = document.getElementById(`${provider}-save-btn`);
+    const clearBtn = document.getElementById(`${provider}-clear-btn`);
+
+    // Clear and unlock all fields
+    if (accountIdInput) {
+      accountIdInput.value = '';
+      accountIdInput.readOnly = false;
+      accountIdInput.classList.remove('credential-locked');
+      accountIdInput.placeholder = 'Enter your Databricks Account ID';
+    }
+    if (clientIdInput) {
+      clientIdInput.value = '';
+      clientIdInput.readOnly = false;
+      clientIdInput.classList.remove('credential-locked');
+      clientIdInput.placeholder = 'Enter Client ID';
+    }
+    if (clientSecretInput) {
+      clientSecretInput.value = '';
+      clientSecretInput.readOnly = false;
+      clientSecretInput.classList.remove('credential-locked');
+      clientSecretInput.placeholder = 'Enter Client Secret';
+    }
+
+    // Enable save button, reset clear button style
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.innerHTML = '<i class="bi bi-save me-1"></i>Save Credentials';
+    }
+    if (clearBtn) {
+      clearBtn.classList.remove('btn-danger');
+      clearBtn.classList.add('btn-outline-danger');
+    }
+  }
+
+  /**
+   * Setup master password modal event listeners
+   */
+  setupMasterPasswordModals() {
+    // Setup modal
+    this.setupMasterPasswordSetupModal();
+    
+    // Unlock modal
+    this.setupMasterPasswordUnlockModal();
+    
+    // Change password modal
+    this.setupChangePasswordModal();
+    
+    // Vault control buttons in credentials modal
+    this.setupVaultControlButtons();
+  }
+
+  /**
+   * Setup the master password setup modal handlers
+   */
+  setupMasterPasswordSetupModal() {
+    const newPasswordInput = document.getElementById('master-password-new');
+    const confirmPasswordInput = document.getElementById('master-password-confirm');
+    const setupButton = document.getElementById('btn-setup-master-password');
+    const toggleNewBtn = document.getElementById('toggle-master-password-new');
+    const toggleConfirmBtn = document.getElementById('toggle-master-password-confirm');
+
+    // Password visibility toggles
+    if (toggleNewBtn && newPasswordInput) {
+      toggleNewBtn.addEventListener('click', () => this.togglePasswordVisibility(newPasswordInput, toggleNewBtn));
+    }
+    if (toggleConfirmBtn && confirmPasswordInput) {
+      toggleConfirmBtn.addEventListener('click', () => this.togglePasswordVisibility(confirmPasswordInput, toggleConfirmBtn));
+    }
+
+    // Password validation
+    const validateSetupForm = () => {
+      const newPass = newPasswordInput?.value || '';
+      const confirmPass = confirmPasswordInput?.value || '';
+      
+      this.updatePasswordStrength(newPass);
+      
+      const isValid = newPass.length >= 8 && newPass === confirmPass;
+      if (setupButton) setupButton.disabled = !isValid;
+      
+      // Show mismatch warning
+      if (confirmPass && newPass !== confirmPass) {
+        confirmPasswordInput.classList.add('is-invalid');
+      } else {
+        confirmPasswordInput.classList.remove('is-invalid');
+      }
+    };
+
+    if (newPasswordInput) newPasswordInput.addEventListener('input', validateSetupForm);
+    if (confirmPasswordInput) confirmPasswordInput.addEventListener('input', validateSetupForm);
+
+    // Setup button click
+    if (setupButton) {
+      setupButton.addEventListener('click', async () => {
+        const password = newPasswordInput?.value;
+        
+        if (!password || password.length < 8) {
+          Utils.showFlashMessage('Password must be at least 8 characters.', 'error');
+          return;
+        }
+
+        setupButton.disabled = true;
+        setupButton.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Creating...';
+
+        try {
+          await Utils.setupCredentialsVault(password);
+          await Utils.refreshCredentialsCache();
+          
+          // Remove focus and clear form before closing modal (fixes aria-hidden warning)
+          if (newPasswordInput) {
+            newPasswordInput.blur();
+            newPasswordInput.value = '';
+          }
+          if (confirmPasswordInput) {
+            confirmPasswordInput.blur();
+            confirmPasswordInput.value = '';
+          }
+          
+          // Close setup modal
+          const setupModal = bootstrap.Modal.getInstance(document.getElementById('masterPasswordSetupModal'));
+          if (setupModal) setupModal.hide();
+          
+          Utils.showFlashMessage('Credentials vault created successfully\!', 'success');
+          
+          // Now open the credentials modal
+          setTimeout(() => {
+            const credentialsModal = new bootstrap.Modal(document.getElementById('configureProviderModal'));
+            credentialsModal.show();
+          }, 300);
+        } catch (error) {
+          Utils.showFlashMessage(`Failed to create vault: ${error.message}`, 'error');
+        } finally {
+          setupButton.disabled = false;
+          setupButton.innerHTML = '<i class="bi bi-shield-check me-1"></i>Create Vault';
+        }
+      });
+    }
+  }
+
+  /**
+   * Setup the master password unlock modal handlers
+   */
+  setupMasterPasswordUnlockModal() {
+    const passwordInput = document.getElementById('master-password-unlock');
+    const unlockButton = document.getElementById('btn-unlock-vault');
+    const deleteButton = document.getElementById('btn-delete-vault');
+    const toggleBtn = document.getElementById('toggle-master-password-unlock');
+    const errorMessage = document.getElementById('unlock-error-message');
+
+    // Password visibility toggle
+    if (toggleBtn && passwordInput) {
+      toggleBtn.addEventListener('click', () => this.togglePasswordVisibility(passwordInput, toggleBtn));
+    }
+
+    // Unlock button click
+    if (unlockButton) {
+      unlockButton.addEventListener('click', async () => {
+        const password = passwordInput?.value;
+        
+        if (!password) {
+          Utils.showFlashMessage('Please enter your master password.', 'warning');
+          return;
+        }
+
+        unlockButton.disabled = true;
+        unlockButton.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Unlocking...';
+        passwordInput.classList.remove('is-invalid');
+
+        try {
+          await Utils.unlockVault(password);
+          await Utils.refreshCredentialsCache();
+          
+          // Remove focus from input before closing modal (fixes aria-hidden warning)
+          if (passwordInput) {
+            passwordInput.blur();
+            passwordInput.value = '';
+          }
+          
+          // Close unlock modal
+          const unlockModal = bootstrap.Modal.getInstance(document.getElementById('masterPasswordUnlockModal'));
+          if (unlockModal) unlockModal.hide();
+          
+          Utils.showFlashMessage('Vault unlocked successfully\!', 'success');
+          
+          // Update indicators
+          this.updateCredentialStatusIndicators();
+          
+          // Only open credentials modal if NOT unlocking from download page
+          if (!this._unlockFromDownloadPage) {
+            setTimeout(() => {
+              const credentialsModal = new bootstrap.Modal(document.getElementById('configureProviderModal'));
+              credentialsModal.show();
+            }, 300);
+          }
+          
+          // Reset the flag
+          this._unlockFromDownloadPage = false;
+        } catch (error) {
+          passwordInput.classList.add('is-invalid');
+          if (errorMessage) errorMessage.textContent = error.message;
+        } finally {
+          unlockButton.disabled = false;
+          unlockButton.innerHTML = '<i class="bi bi-unlock me-1"></i>Unlock';
+        }
+      });
+    }
+
+    // Allow Enter key to submit
+    if (passwordInput) {
+      passwordInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          unlockButton?.click();
+        }
+      });
+    }
+
+    // Delete vault button
+    if (deleteButton) {
+      deleteButton.addEventListener('click', () => {
+        if (confirm('Are you sure you want to delete the credentials vault? This will permanently delete all stored credentials and cannot be undone.')) {
+          Utils.deleteCredentialsVault();
+          
+          // Remove focus before closing modal (fixes aria-hidden warning)
+          if (passwordInput) {
+            passwordInput.blur();
+            passwordInput.value = '';
+          }
+          
+          // Close unlock modal
+          const unlockModal = bootstrap.Modal.getInstance(document.getElementById('masterPasswordUnlockModal'));
+          if (unlockModal) unlockModal.hide();
+          
+          Utils.showFlashMessage('Credentials vault deleted.', 'info');
+          this.updateCredentialStatusIndicators();
+        }
+      });
+    }
+  }
+
+  /**
+   * Setup change password modal handlers
+   */
+  setupChangePasswordModal() {
+    const currentPasswordInput = document.getElementById('current-master-password');
+    const newPasswordInput = document.getElementById('new-master-password');
+    const confirmPasswordInput = document.getElementById('confirm-new-master-password');
+    const changeButton = document.getElementById('btn-change-master-password');
+
+    if (changeButton) {
+      changeButton.addEventListener('click', async () => {
+        const currentPass = currentPasswordInput?.value;
+        const newPass = newPasswordInput?.value;
+        const confirmPass = confirmPasswordInput?.value;
+
+        if (!currentPass || !newPass || !confirmPass) {
+          Utils.showFlashMessage('Please fill in all fields.', 'warning');
+          return;
+        }
+
+        if (newPass.length < 8) {
+          Utils.showFlashMessage('New password must be at least 8 characters.', 'error');
+          return;
+        }
+
+        if (newPass !== confirmPass) {
+          Utils.showFlashMessage('New passwords do not match.', 'error');
+          return;
+        }
+
+        changeButton.disabled = true;
+        changeButton.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Changing...';
+
+        try {
+          await Utils.changeMasterPassword(currentPass, newPass);
+          
+          // Remove focus and clear form before closing modal (fixes aria-hidden warning)
+          if (currentPasswordInput) {
+            currentPasswordInput.blur();
+            currentPasswordInput.value = '';
+          }
+          if (newPasswordInput) {
+            newPasswordInput.blur();
+            newPasswordInput.value = '';
+          }
+          if (confirmPasswordInput) {
+            confirmPasswordInput.blur();
+            confirmPasswordInput.value = '';
+          }
+          
+          // Close modal
+          const changeModal = bootstrap.Modal.getInstance(document.getElementById('changeMasterPasswordModal'));
+          if (changeModal) changeModal.hide();
+          
+          Utils.showFlashMessage('Master password changed successfully\!', 'success');
+        } catch (error) {
+          Utils.showFlashMessage(`Failed to change password: ${error.message}`, 'error');
+        } finally {
+          changeButton.disabled = false;
+          changeButton.innerHTML = '<i class="bi bi-check-lg me-1"></i>Change Password';
+        }
+      });
+    }
+  }
+
+  /**
+   * Setup vault control buttons in credentials modal
+   */
+  setupVaultControlButtons() {
+    const lockButton = document.getElementById('btn-lock-vault');
+    const changePasswordLink = document.getElementById('btn-change-password-link');
+
+    if (lockButton) {
+      lockButton.addEventListener('click', () => {
+        Utils.lockVault();
+        
+        // Close credentials modal
+        const credentialsModal = bootstrap.Modal.getInstance(document.getElementById('configureProviderModal'));
+        if (credentialsModal) credentialsModal.hide();
+        
+        Utils.showFlashMessage('Vault locked.', 'info');
+        this.updateCredentialStatusIndicators();
+      });
+    }
+
+    if (changePasswordLink) {
+      changePasswordLink.addEventListener('click', () => {
+        // Close credentials modal and open change password modal
+        const credentialsModal = bootstrap.Modal.getInstance(document.getElementById('configureProviderModal'));
+        if (credentialsModal) credentialsModal.hide();
+        
+        setTimeout(() => {
+          const changeModal = new bootstrap.Modal(document.getElementById('changeMasterPasswordModal'));
+          changeModal.show();
+        }, 300);
+      });
+    }
+  }
+
+  /**
+   * Toggle password input visibility
+   */
+  togglePasswordVisibility(input, button) {
+    if (input.type === 'password') {
+      input.type = 'text';
+      button.innerHTML = '<i class="bi bi-eye-slash"></i>';
+    } else {
+      input.type = 'password';
+      button.innerHTML = '<i class="bi bi-eye"></i>';
+    }
+  }
+
+  /**
+   * Update password strength indicator
+   */
+  updatePasswordStrength(password) {
+    const strengthBar = document.querySelector('#password-strength .progress-bar');
+    const strengthText = document.getElementById('strength-text');
+    
+    if (!strengthBar || !strengthText) return;
+
+    let strength = 0;
+    let text = 'Weak';
+    let colorClass = 'bg-danger';
+
+    if (password.length >= 8) strength += 25;
+    if (password.length >= 12) strength += 25;
+    if (/[A-Z]/.test(password)) strength += 15;
+    if (/[a-z]/.test(password)) strength += 10;
+    if (/[0-9]/.test(password)) strength += 15;
+    if (/[^A-Za-z0-9]/.test(password)) strength += 10;
+
+    if (strength >= 80) {
+      text = 'Strong';
+      colorClass = 'bg-success';
+    } else if (strength >= 50) {
+      text = 'Medium';
+      colorClass = 'bg-warning';
+    } else if (strength >= 25) {
+      text = 'Weak';
+      colorClass = 'bg-danger';
+    } else {
+      text = 'Very weak';
+      colorClass = 'bg-danger';
+    }
+
+    strengthBar.style.width = `${strength}%`;
+    strengthBar.className = `progress-bar ${colorClass}`;
+    strengthText.textContent = text;
+  }
+
+  /**
+   * Show the setup vault modal
+   */
+  showSetupVaultModal() {
+    const modal = new bootstrap.Modal(document.getElementById('masterPasswordSetupModal'));
+    modal.show();
+  }
+
+  /**
+   * Show the unlock vault modal
+   */
+  showUnlockVaultModal() {
+    const modal = new bootstrap.Modal(document.getElementById('masterPasswordUnlockModal'));
+    modal.show();
+  }
+
+  /**
+   * Update the vault status banner in credentials modal
+   */
+  updateVaultStatusBanner() {
+    const banner = document.getElementById('vault-status-banner');
+    const statusIcon = document.getElementById('vault-status-icon');
+    const statusText = document.getElementById('vault-status-text');
+    
+    if (!banner) return;
+
+    if (Utils.isVaultUnlocked()) {
+      banner.style.display = 'block';
+      if (statusIcon) {
+        statusIcon.className = 'bi bi-shield-fill-check text-success me-2';
+      }
+      if (statusText) {
+        statusText.textContent = 'Vault unlocked - credentials are encrypted';
+      }
+    } else {
+      banner.style.display = 'none';
+    }
+  }
+
+  /**
+   * Update credential status indicators in the modal tabs
+   */
+  async updateCredentialStatusIndicators() {
+    for (const provider of ['aws', 'azure', 'gcp']) {
+      const indicator = document.getElementById(`${provider}-creds-status`);
+      if (indicator) {
+        let hasCredentials = false;
+        
+        if (Utils.isVaultUnlocked()) {
+          hasCredentials = await Utils.hasProviderCredentials(provider);
+        }
+        
+        if (hasCredentials) {
+          indicator.innerHTML = '<i class="bi bi-check-circle-fill text-success ms-1"></i>';
+          indicator.title = 'Credentials configured';
+        } else {
+          indicator.innerHTML = '';
+          indicator.title = '';
+        }
+      }
+    }
+  }
+
+  /**
+   * Save provider credentials from the modal form
+   * @param {string} provider - Cloud provider (aws, azure, gcp)
+   */
+  async saveProviderCredentials(provider) {
+    // Check if vault is unlocked
+    if (!Utils.isVaultUnlocked()) {
+      Utils.showFlashMessage('Please unlock the credentials vault first.', 'warning');
+      return;
+    }
+
+    const accountIdInput = document.getElementById(`${provider}-account-id`);
+    const clientIdInput = document.getElementById(`${provider}-client-id`);
+    const clientSecretInput = document.getElementById(`${provider}-client-secret`);
+
+    // Check if fields are locked (already have credentials)
+    if (accountIdInput?.readOnly || clientIdInput?.readOnly || clientSecretInput?.readOnly) {
+      Utils.showFlashMessage('Credentials are locked. Click Clear to edit.', 'warning');
+      return;
+    }
+
+    const credentials = {
+      accountId: accountIdInput ? accountIdInput.value.trim() : '',
+      clientId: clientIdInput ? clientIdInput.value.trim() : '',
+      clientSecret: clientSecretInput ? clientSecretInput.value.trim() : ''
+    };
+
+    // Check if at least one credential is provided
+    if (!credentials.accountId && !credentials.clientId && !credentials.clientSecret) {
+      Utils.showFlashMessage('Please enter at least one credential value.', 'warning');
+      return;
+    }
+
+    try {
+      // Save to encrypted storage
+      const success = await Utils.setProviderCredentials(provider, credentials);
+
+      if (success) {
+        // Update fields to show masked values and lock them
+        await this.updateProviderCredentialFields(provider);
+
+        // Update status indicators
+        await this.updateCredentialStatusIndicators();
+
+        Utils.showFlashMessage(`${provider.toUpperCase()} credentials saved securely.`, 'success');
+      } else {
+        Utils.showFlashMessage('Failed to save credentials. Please try again.', 'error');
+      }
+    } catch (error) {
+      Utils.showFlashMessage(`Error: ${error.message}`, 'error');
+    }
+  }
+
+  /**
+   * Clear provider credentials
+   * @param {string} provider - Cloud provider (aws, azure, gcp)
+   */
+  async clearProviderCredentials(provider) {
+    if (!Utils.isVaultUnlocked()) {
+      Utils.showFlashMessage('Please unlock the credentials vault first.', 'warning');
+      return;
+    }
+
+    try {
+      await Utils.clearProviderCredentials(provider);
+      
+      // Unlock fields and clear values
+      this.unlockProviderCredentialFields(provider);
+
+      // Update status indicators
+      await this.updateCredentialStatusIndicators();
+
+      Utils.showFlashMessage(`${provider.toUpperCase()} credentials cleared. You can now enter new credentials.`, 'info');
+    } catch (error) {
+      Utils.showFlashMessage(`Error: ${error.message}`, 'error');
     }
   }
 
@@ -393,13 +1030,13 @@ class App {
     });
   }
 
-  handleRoute() {
+  async handleRoute() {
     const hash = window.location.hash.slice(1) || '/';
     const route = hash.split('?')[0];
     const handler = this.routes[route] || this.routes['/'];
     
     if (handler) {
-      handler();
+      await handler();
     }
     
     // Check install prompt after route change
@@ -1281,18 +1918,154 @@ class App {
                       'Create a new VPC or use an existing one'}</div>
                   </div>
                   <div class="collapse mb-3" id="existing-vpc-section" style="display: none;">
-                    <div class="row">
-                      <div class="col-md-6">
-                        <label class="form-label fw-semibold">
-                          ${this.currentProvider === 'azure' ? 'Existing VNet Name' : 'Existing VPC Name'}
-                          <span class="text-danger">*</span>
-                        </label>
-                        <input type="text" class="form-control" name="existing_vpc_name" 
-                               value="${this.currentConfig.existing_vpc_name || ''}"
-                               placeholder="${this.currentProvider === 'azure' ? 'e.g., my-existing-vnet' : 'e.g., vpc-0123456789abcdef0'}">
-                        <div class="form-text">${this.currentProvider === 'azure' ? 
-                          'Name of existing VNet to use' : 
-                          'Name of existing VPC to use'}</div>
+                    <div class="card border-secondary mb-3">
+                      <div class="card-body">
+                        <div class="row mb-3">
+                          <div class="col-md-6">
+                            <label class="form-label fw-semibold">
+                              ${this.currentProvider === 'azure' ? 'Existing VNet Resource ID' : this.currentProvider === 'gcp' ? 'Existing VPC Name' : 'Existing VPC ID'}
+                              <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" class="form-control" name="existing_vpc_id" id="existing_vpc_id"
+                                   value="${this.currentConfig.existing_vpc_id || ''}"
+                                   placeholder="${this.currentProvider === 'azure' ? 'e.g., /subscriptions/.../resourceGroups/.../providers/Microsoft.Network/virtualNetworks/my-vnet' : this.currentProvider === 'gcp' ? 'e.g., my-databricks-vpc' : 'e.g., vpc-0123456789abcdef0'}">
+                            <div class="form-text">${this.currentProvider === 'azure' ?
+                              'Resource ID of the existing VNet' :
+                              this.currentProvider === 'gcp' ? 'Name of the existing VPC network in your GCP project' :
+                              'ID of the existing VPC'}</div>
+                          </div>
+                        </div>
+                        
+                        ${this.currentProvider === 'aws' ? `
+                        <div class="mb-3">
+                          <label class="form-label fw-semibold">Subnet Configuration</label>
+                          <div class="form-check">
+                            <input class="form-check-input" type="radio" name="subnet_mode" id="subnet_mode_create" value="create" checked>
+                            <label class="form-check-label" for="subnet_mode_create">
+                              <strong>Create New Subnets</strong>
+                              <span class="text-muted d-block small">Terraform will create new subnets in the existing VPC</span>
+                            </label>
+                          </div>
+                          <div class="form-check mt-2">
+                            <input class="form-check-input" type="radio" name="subnet_mode" id="subnet_mode_existing" value="existing">
+                            <label class="form-check-label" for="subnet_mode_existing">
+                              <strong>Use Existing Subnets</strong>
+                              <span class="text-muted d-block small">Provide IDs of existing subnets (minimum 2, in different AZs)</span>
+                            </label>
+                          </div>
+                        </div>
+                        
+                        <div id="existing-subnets-section" class="mt-3" style="display: none;">
+                          <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <strong>Requirements:</strong> At least 2 private subnets in different Availability Zones are required for Databricks.
+                          </div>
+                          <div id="existing-subnets-container">
+                            <div class="row mb-2 existing-subnet-row">
+                              <div class="col-md-10">
+                                <label class="form-label">Subnet ID 1 <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control existing-subnet-input" name="existing_subnet_ids[]" 
+                                       placeholder="e.g., subnet-0a1b2c3d4e5f67890">
+                              </div>
+                            </div>
+                            <div class="row mb-2 existing-subnet-row">
+                              <div class="col-md-10">
+                                <label class="form-label">Subnet ID 2 <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control existing-subnet-input" name="existing_subnet_ids[]" 
+                                       placeholder="e.g., subnet-1a2b3c4d5e6f78901">
+                              </div>
+                              <div class="col-md-2 d-flex align-items-end">
+                                <button type="button" class="btn btn-outline-success btn-sm w-100" id="add-subnet-btn">
+                                  <i class="bi bi-plus-lg"></i> Add
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div class="row mt-3">
+                            <div class="col-md-6">
+                              <label class="form-label fw-semibold">
+                                Security Group ID
+                                <span class="text-danger">*</span>
+                              </label>
+                              <input type="text" class="form-control" name="existing_security_group_id" id="existing_security_group_id"
+                                     placeholder="e.g., sg-0123456789abcdef0">
+                              <div class="form-text">Security group for Databricks workspace nodes</div>
+                            </div>
+                          </div>
+                        </div>
+                        ` : ''}
+
+                        ${this.currentProvider === 'azure' ? `
+                        <div class="mb-3">
+                          <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <strong>Requirements:</strong> The existing VNet must have two subnets with
+                            <code>Microsoft.Databricks/workspaces</code> delegation and an associated NSG.
+                          </div>
+                        </div>
+                        <div class="row mb-3">
+                          <div class="col-md-6">
+                            <label class="form-label fw-semibold">
+                              Public (Host) Subnet Name <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" class="form-control" name="existing_public_subnet_name" id="existing_public_subnet_name"
+                                   placeholder="e.g., databricks-public-subnet"
+                                   value="${this.currentConfig.existing_public_subnet_name || ''}">
+                            <div class="form-text">Name of the subnet delegated for Databricks host nodes</div>
+                          </div>
+                          <div class="col-md-6">
+                            <label class="form-label fw-semibold">
+                              Private (Container) Subnet Name <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" class="form-control" name="existing_private_subnet_name" id="existing_private_subnet_name"
+                                   placeholder="e.g., databricks-private-subnet"
+                                   value="${this.currentConfig.existing_private_subnet_name || ''}">
+                            <div class="form-text">Name of the subnet delegated for Databricks container nodes</div>
+                          </div>
+                        </div>
+                        ` : ''}
+
+                        ${this.currentProvider === 'gcp' ? `
+                        <div class="mb-3">
+                          <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <strong>Requirements:</strong> The existing VPC must have a subnet with
+                            secondary IP ranges for GKE pods and services.
+                          </div>
+                        </div>
+                        <div class="row mb-3">
+                          <div class="col-md-6">
+                            <label class="form-label fw-semibold">
+                              Existing Subnet Name <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" class="form-control" name="existing_subnet_name" id="existing_subnet_name"
+                                   placeholder="e.g., databricks-primary-subnet"
+                                   value="${this.currentConfig.existing_subnet_name || ''}">
+                            <div class="form-text">Name of the existing subnet in the VPC</div>
+                          </div>
+                        </div>
+                        <div class="row mb-3">
+                          <div class="col-md-6">
+                            <label class="form-label fw-semibold">
+                              Pod IP Range Name <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" class="form-control" name="existing_pod_range_name" id="existing_pod_range_name"
+                                   placeholder="e.g., pods"
+                                   value="${this.currentConfig.existing_pod_range_name || ''}">
+                            <div class="form-text">Name of the secondary IP range for GKE pods</div>
+                          </div>
+                          <div class="col-md-6">
+                            <label class="form-label fw-semibold">
+                              Service IP Range Name <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" class="form-control" name="existing_service_range_name" id="existing_service_range_name"
+                                   placeholder="e.g., services"
+                                   value="${this.currentConfig.existing_service_range_name || ''}">
+                            <div class="form-text">Name of the secondary IP range for GKE services</div>
+                          </div>
+                        </div>
+                        ` : ''}
                       </div>
                     </div>
                   </div>
@@ -1394,6 +2167,43 @@ class App {
                     ${this.currentProvider === 'aws' ? 'Enterprise' : 'Premium'} 
                     pricing tier.
                   </div>
+                  
+                  ${this.currentProvider === 'aws' ? `
+                  <!-- PrivateLink Subnet Mode Options (AWS only) -->
+                  <div id="privatelink-subnet-options" class="mt-3" style="display: none;">
+                    <label class="form-label fw-semibold">PrivateLink Subnet Configuration</label>
+                    <div class="form-text mb-2">Choose how to configure the subnet for PrivateLink VPC Endpoints.</div>
+                    
+                    <div class="form-check">
+                      <input class="form-check-input" type="radio" name="privatelink_subnet_mode" 
+                             id="privatelink_subnet_terraform" value="terraform_managed" checked>
+                      <label class="form-check-label" for="privatelink_subnet_terraform">
+                        <strong>New Subnet</strong>
+                        <span class="text-muted d-block small">Terraform will create and manage a new subnet for PrivateLink endpoints</span>
+                      </label>
+                    </div>
+                    <div class="form-check mt-2">
+                      <input class="form-check-input" type="radio" name="privatelink_subnet_mode" 
+                             id="privatelink_subnet_user" value="user_managed">
+                      <label class="form-check-label" for="privatelink_subnet_user">
+                        <strong>Existing Subnet</strong>
+                        <span class="text-muted d-block small">Provide an existing subnet ID for PrivateLink endpoints</span>
+                      </label>
+                    </div>
+                    
+                    <div id="existing-privatelink-subnet-section" class="mt-3" style="display: none;">
+                      <label class="form-label" for="existing_privatelink_subnet_id">
+                        Existing Subnet ID <span class="text-danger">*</span>
+                      </label>
+                      <input type="text" class="form-control" id="existing_privatelink_subnet_id" 
+                             name="existing_privatelink_subnet_id" 
+                             placeholder="e.g., subnet-0abc123def456789a">
+                      <div class="form-text">
+                        The subnet must be in the same VPC and have connectivity to AWS PrivateLink services.
+                      </div>
+                    </div>
+                  </div>
+                  ` : ''}
                 </div>
               </div>
               
@@ -1433,6 +2243,7 @@ class App {
     
     // Store current slider limits
     let currentSliderLimits = null;
+    let userHasAdjustedSubnetSize = false;
     
     // Function to update slider display values
     const updateSliderDisplay = (prefixSize) => {
@@ -1454,15 +2265,35 @@ class App {
       return createNewVpcCheckbox?.checked !== false;
     };
     
+    // Function to check if we should show subnet configuration (VPC CIDR, AZs, slider)
+    const shouldShowSubnetConfig = () => {
+      const createNewVpc = isCreateNewVpcActive();
+      if (createNewVpc) return true;
+      
+      // For AWS with existing VPC, check subnet mode
+      if (this.currentProvider === 'aws') {
+        const subnetModeCreate = document.getElementById('subnet_mode_create');
+        return subnetModeCreate?.checked === true;
+      }
+      
+      // Azure/GCP with existing VNet use pre-configured subnets — no subnet config needed
+      return false;
+    };
+    
     // Function to update slider limits based on current configuration
     const updateSliderLimits = () => {
       const vpcCidr = vpcCidrInput?.value;
       const enablePrivateLink = privateLinkCheckbox?.checked || false;
       const zones = this.getSelectedAvailabilityZones();
-      const createNewVpc = isCreateNewVpcActive();
+      const showSubnetConfig = shouldShowSubnetConfig();
       
-      // Always show slider container when Create New VPC is active
-      if (!createNewVpc) {
+      // Determine if we should create service subnet
+      // Only create if PrivateLink is enabled AND user chose "New Subnet" (terraform_managed)
+      const privatelinkTerraformManaged = document.getElementById('privatelink_subnet_terraform')?.checked ?? true;
+      const createServiceSubnet = enablePrivateLink && privatelinkTerraformManaged;
+      
+      // Always show slider container when subnet configuration is needed
+      if (!showSubnetConfig) {
         if (subnetSizeSliderContainer) {
           subnetSizeSliderContainer.style.display = 'none';
         }
@@ -1470,7 +2301,7 @@ class App {
         return;
       }
       
-      // Show slider container when Create New VPC is active
+      // Show slider container when subnet configuration is needed
       if (subnetSizeSliderContainer) {
         subnetSizeSliderContainer.style.display = 'block';
       }
@@ -1497,7 +2328,7 @@ class App {
       
       try {
         const networkCalc = new NetworkCalculator(this.currentProvider);
-        const limits = networkCalc.calculateSubnetSizeLimits(vpcCidr, zones.length, enablePrivateLink);
+        const limits = networkCalc.calculateSubnetSizeLimits(vpcCidr, zones.length, enablePrivateLink, createServiceSubnet);
         
         if (limits.error || !limits.valid) {
           if (subnetSizeSlider) {
@@ -1508,20 +2339,37 @@ class App {
           return;
         }
         
+        // Check if limits have changed
+        const limitsChanged = !currentSliderLimits || 
+                              currentSliderLimits.min !== limits.min || 
+                              currentSliderLimits.max !== limits.max;
+        
+        // If limits changed, reset the user adjustment flag
+        if (limitsChanged) {
+          userHasAdjustedSubnetSize = false;
+        }
+        
         currentSliderLimits = limits;
         
         // Enable slider
         if (subnetSizeSlider) {
           subnetSizeSlider.disabled = false;
           subnetSizeSlider.classList.remove('disabled');
+          
+          const previousValue = parseInt(subnetSizeSlider.value, 10);
           subnetSizeSlider.min = limits.min;
           subnetSizeSlider.max = limits.max;
           
-          // Set default value if current value is out of range
-          const currentValue = parseInt(subnetSizeSlider.value, 10);
-          if (currentValue < limits.min || currentValue > limits.max) {
-            subnetSizeSlider.value = limits.default;
+          // Determine new value based on user interaction
+          let newValue;
+          if (userHasAdjustedSubnetSize && !limitsChanged) {
+            // Preserve user choice, clamping to new limits if necessary
+            newValue = Math.max(limits.min, Math.min(limits.max, previousValue));
+          } else {
+            // Use default: largest subnet possible (limits.min = smallest prefix = most IPs)
+            newValue = limits.min;
           }
+          subnetSizeSlider.value = newValue;
           
           // Update labels
           if (sliderLabelMin) {
@@ -1554,6 +2402,7 @@ class App {
       });
       
       subnetSizeSlider.addEventListener('change', () => {
+        userHasAdjustedSubnetSize = true;
         if (typeof calculateSubnets === 'function') {
           calculateSubnets();
         }
@@ -1565,7 +2414,12 @@ class App {
       const pricingTier = pricingTierSelect?.value;
       const enablePrivateLink = privateLinkCheckbox?.checked || false;
       const zones = this.getSelectedAvailabilityZones();
-      const createNewVpc = isCreateNewVpcActive();
+      const showSubnetConfig = shouldShowSubnetConfig();
+      
+      // Determine if we should create service subnet
+      // Only create if PrivateLink is enabled AND user chose "New Subnet" (terraform_managed)
+      const privatelinkTerraformManaged = document.getElementById('privatelink_subnet_terraform')?.checked ?? true;
+      const createServiceSubnet = enablePrivateLink && privatelinkTerraformManaged;
       
       // Update slider limits first
       updateSliderLimits();
@@ -1574,13 +2428,13 @@ class App {
       const container = document.getElementById('subnets-container');
       const summaryContainer = document.getElementById('network-summary');
       
-      // Hide if Create New VPC is not active
-      if (!createNewVpc) {
+      // Hide if subnet configuration is not needed (e.g., using existing subnets)
+      if (!showSubnetConfig) {
         if (preview) preview.style.display = 'none';
         return;
       }
       
-      // Always show preview when Create New VPC is active
+      // Always show preview when subnet configuration is needed
       if (preview) preview.style.display = 'block';
       
       // If missing required data, show placeholder message
@@ -1613,7 +2467,7 @@ class App {
           customSubnetSize = parseInt(subnetSizeSlider.value, 10);
         }
         
-        const subnets = networkCalc.allocateSubnets(vpcCidr, zones, pricingTier, enablePrivateLink, customSubnetSize);
+        const subnets = networkCalc.allocateSubnets(vpcCidr, zones, pricingTier, enablePrivateLink, customSubnetSize, createServiceSubnet);
         const summary = networkCalc.calculateNetworkSummary(vpcCidr, subnets);
         
         // Validate allocation fits in VPC
@@ -2321,15 +3175,125 @@ class App {
     // Setup create_new_vpc toggle
     const createNewVpcCheckbox = document.getElementById('create_new_vpc');
     const existingVpcSection = document.getElementById('existing-vpc-section');
-    if (createNewVpcCheckbox && existingVpcSection) {
-      createNewVpcCheckbox.addEventListener('change', function() {
-        if (this.checked) {
-          existingVpcSection.style.display = 'none';
+    const existingSubnetsSection = document.getElementById('existing-subnets-section');
+    const subnetModeCreate = document.getElementById('subnet_mode_create');
+    const subnetModeExisting = document.getElementById('subnet_mode_existing');
+    const vpcCidrContainer = document.querySelector('input[name="vpc_cidr"]')?.closest('.mb-3');
+    const azContainer = document.querySelector('#availability-zones-select')?.closest('.mb-3');
+    
+    // Helper function to update UI based on VPC and subnet mode
+    const updateNetworkConfigUI = () => {
+      const isCreateNewVpc = createNewVpcCheckbox?.checked !== false;
+      const isUseExistingSubnets = subnetModeExisting?.checked === true;
+      
+      if (isCreateNewVpc) {
+        // Creating new VPC - show VPC CIDR, AZs, subnet slider
+        if (existingVpcSection) existingVpcSection.style.display = 'none';
+        if (vpcCidrContainer) vpcCidrContainer.style.display = 'block';
+        if (azContainer) azContainer.style.display = 'block';
+      } else {
+        // Using existing VPC
+        if (existingVpcSection) existingVpcSection.style.display = 'block';
+        
+        if (this.currentProvider === 'aws') {
+          if (isUseExistingSubnets) {
+            // Using existing subnets - hide VPC CIDR, AZs, subnet slider
+            if (vpcCidrContainer) vpcCidrContainer.style.display = 'none';
+            if (azContainer) azContainer.style.display = 'none';
+            if (existingSubnetsSection) existingSubnetsSection.style.display = 'block';
+          } else {
+            // Creating new subnets in existing VPC - show VPC CIDR, AZs
+            if (vpcCidrContainer) vpcCidrContainer.style.display = 'block';
+            if (azContainer) azContainer.style.display = 'block';
+            if (existingSubnetsSection) existingSubnetsSection.style.display = 'none';
+          }
         } else {
-          existingVpcSection.style.display = 'block';
+          // Azure/GCP - hide VPC CIDR, AZs, subnet slider (existing VNet uses pre-configured subnets)
+          if (vpcCidrContainer) vpcCidrContainer.style.display = 'none';
+          if (azContainer) azContainer.style.display = 'none';
         }
-        // Update subnet slider and preview visibility
-        calculateSubnets();
+      }
+      
+      // Toggle required attributes based on what's visible
+      const vpcCidrInput = document.querySelector('input[name="vpc_cidr"]');
+      const existingVpcIdInput = document.getElementById('existing_vpc_id');
+
+      if (isCreateNewVpc) {
+        // Creating new VPC — VPC CIDR required, existing fields not required
+        if (vpcCidrInput) vpcCidrInput.setAttribute('required', '');
+        if (existingVpcIdInput) existingVpcIdInput.removeAttribute('required');
+        document.querySelectorAll('#existing-vpc-section input').forEach(el => el.removeAttribute('required'));
+      } else {
+        // Using existing VPC/VNet — existing ID required, VPC CIDR depends on provider
+        if (existingVpcIdInput) existingVpcIdInput.setAttribute('required', '');
+
+        if (this.currentProvider === 'aws') {
+          const isExistingSubnets = subnetModeExisting?.checked === true;
+          if (isExistingSubnets) {
+            if (vpcCidrInput) vpcCidrInput.removeAttribute('required');
+          } else {
+            if (vpcCidrInput) vpcCidrInput.setAttribute('required', '');
+          }
+        } else {
+          // Azure/GCP with existing VNet — no VPC CIDR needed
+          if (vpcCidrInput) vpcCidrInput.removeAttribute('required');
+        }
+      }
+
+      // Update subnet slider and preview visibility
+      calculateSubnets();
+    };
+
+    if (createNewVpcCheckbox) {
+      createNewVpcCheckbox.addEventListener('change', updateNetworkConfigUI);
+    }
+    
+    // Setup subnet mode radio buttons (AWS only)
+    if (subnetModeCreate) {
+      subnetModeCreate.addEventListener('change', updateNetworkConfigUI);
+    }
+    if (subnetModeExisting) {
+      subnetModeExisting.addEventListener('change', updateNetworkConfigUI);
+    }
+    
+    // Setup add subnet button
+    const addSubnetBtn = document.getElementById('add-subnet-btn');
+    if (addSubnetBtn) {
+      addSubnetBtn.addEventListener('click', () => {
+        const container = document.getElementById('existing-subnets-container');
+        if (!container) return;
+        
+        const existingRows = container.querySelectorAll('.existing-subnet-row');
+        const newIndex = existingRows.length + 1;
+        
+        const newRow = document.createElement('div');
+        newRow.className = 'row mb-2 existing-subnet-row';
+        newRow.innerHTML = `
+          <div class="col-md-10">
+            <label class="form-label">Subnet ID ${newIndex}</label>
+            <input type="text" class="form-control existing-subnet-input" name="existing_subnet_ids[]" 
+                   placeholder="e.g., subnet-0a1b2c3d4e5f67890">
+          </div>
+          <div class="col-md-2 d-flex align-items-end">
+            <button type="button" class="btn btn-outline-danger btn-sm w-100 remove-subnet-btn">
+              <i class="bi bi-trash"></i>
+            </button>
+          </div>
+        `;
+        container.appendChild(newRow);
+        
+        // Add remove handler
+        newRow.querySelector('.remove-subnet-btn')?.addEventListener('click', () => {
+          newRow.remove();
+          // Re-number remaining subnet labels
+          const remainingRows = container.querySelectorAll('.existing-subnet-row');
+          remainingRows.forEach((row, idx) => {
+            const label = row.querySelector('label');
+            if (label && idx >= 2) {
+              label.textContent = `Subnet ID ${idx + 1}`;
+            }
+          });
+        });
       });
     }
     
@@ -2346,6 +3310,37 @@ class App {
       }
     };
     
+    // Setup PrivateLink subnet mode options (AWS only)
+    const privatelinkSubnetOptions = document.getElementById('privatelink-subnet-options');
+    const privatelinkSubnetTerraform = document.getElementById('privatelink_subnet_terraform');
+    const privatelinkSubnetUser = document.getElementById('privatelink_subnet_user');
+    const existingPrivatelinkSubnetSection = document.getElementById('existing-privatelink-subnet-section');
+    
+    const updatePrivatelinkSubnetUI = () => {
+      const privateLinkEnabled = privateLinkCheckbox?.checked || false;
+      
+      // Show/hide the subnet mode options based on PrivateLink checkbox
+      if (privatelinkSubnetOptions) {
+        privatelinkSubnetOptions.style.display = privateLinkEnabled ? 'block' : 'none';
+      }
+      
+      // Show/hide the existing subnet ID input based on radio selection
+      if (existingPrivatelinkSubnetSection) {
+        const userManaged = privatelinkSubnetUser?.checked || false;
+        existingPrivatelinkSubnetSection.style.display = userManaged ? 'block' : 'none';
+      }
+    };
+    
+    // Add event listeners for PrivateLink subnet mode
+    privatelinkSubnetTerraform?.addEventListener('change', () => {
+      updatePrivatelinkSubnetUI();
+      calculateSubnets(); // Recalculate subnets when subnet mode changes
+    });
+    privatelinkSubnetUser?.addEventListener('change', () => {
+      updatePrivatelinkSubnetUI();
+      calculateSubnets(); // Recalculate subnets when subnet mode changes
+    });
+    
     privateLinkCheckbox?.addEventListener('change', checkPrivateLinkRequirements);
     pricingTierSelect?.addEventListener('change', checkPrivateLinkRequirements);
     
@@ -2358,6 +3353,7 @@ class App {
     });
     privateLinkCheckbox?.addEventListener('change', () => {
       checkPrivateLinkRequirements();
+      updatePrivatelinkSubnetUI();
       calculateSubnets();
     });
     
@@ -2376,117 +3372,181 @@ class App {
       config.create_new_vpc = document.getElementById('create_new_vpc')?.checked !== false;
       config.enable_private_link = document.getElementById('enable_private_link')?.checked || false;
       
+      // AWS-specific: Handle PrivateLink subnet mode
+      if (this.currentProvider === 'aws' && config.enable_private_link) {
+        config.privatelink_subnet_mode = document.querySelector('input[name="privatelink_subnet_mode"]:checked')?.value || 'terraform_managed';
+        if (config.privatelink_subnet_mode === 'user_managed') {
+          config.existing_privatelink_subnet_id = document.getElementById('existing_privatelink_subnet_id')?.value?.trim() || '';
+        } else {
+          config.existing_privatelink_subnet_id = '';
+        }
+      }
+      
+      // AWS-specific: Handle subnet mode
+      if (this.currentProvider === 'aws' && !config.create_new_vpc) {
+        config.subnet_mode = document.querySelector('input[name="subnet_mode"]:checked')?.value || 'create';
+        config.create_new_subnets = config.subnet_mode === 'create';
+        
+        // If using existing subnets, collect the IDs
+        if (config.subnet_mode === 'existing') {
+          const subnetInputs = document.querySelectorAll('.existing-subnet-input');
+          config.existing_subnet_ids = Array.from(subnetInputs)
+            .map(input => input.value.trim())
+            .filter(val => val !== '');
+          config.existing_security_group_id = document.getElementById('existing_security_group_id')?.value?.trim() || '';
+        }
+        
+        // Get existing VPC ID
+        config.existing_vpc_id = document.getElementById('existing_vpc_id')?.value?.trim() || '';
+      }
+
+      // Azure-specific: Handle existing VNet
+      if (this.currentProvider === 'azure' && !config.create_new_vpc) {
+        config.existing_vpc_id = document.getElementById('existing_vpc_id')?.value?.trim() || '';
+        config.existing_public_subnet_name = document.getElementById('existing_public_subnet_name')?.value?.trim() || '';
+        config.existing_private_subnet_name = document.getElementById('existing_private_subnet_name')?.value?.trim() || '';
+      }
+
+      // GCP-specific: Handle existing VPC
+      if (this.currentProvider === 'gcp' && !config.create_new_vpc) {
+        config.existing_vpc_id = document.getElementById('existing_vpc_id')?.value?.trim() || '';
+        config.existing_subnet_name = document.getElementById('existing_subnet_name')?.value?.trim() || '';
+        config.existing_pod_range_name = document.getElementById('existing_pod_range_name')?.value?.trim() || '';
+        config.existing_service_range_name = document.getElementById('existing_service_range_name')?.value?.trim() || '';
+      }
+
       // Clear all previous field validations
       this.clearAllFieldValidations();
+      
+      // Determine if we need subnet configuration (VPC CIDR, AZs, etc.)
+      // Azure/GCP with existing VNet use pre-configured subnets — no CIDR/AZ needed
+      const needsSubnetConfig = config.create_new_vpc ||
+        (this.currentProvider === 'aws' && config.create_new_subnets);
       
       // Get availability zones from multiple select
       const zones = this.getSelectedAvailabilityZones();
       
-      // Validate availability zones
-      const limits = this.getAvailabilityZoneLimits(this.currentProvider);
-      
-      if (zones.length === 0) {
-        const azSelect = document.getElementById('availability-zones-select');
-        if (azSelect) {
-          azSelect.setAttribute('data-invalid', 'true');
-          azSelect.setAttribute('data-error', `At least ${limits.min} availability zone(s) required for ${this.currentProvider.toUpperCase()}.`);
-          const choicesContainer = azSelect.closest('.choices');
-          if (choicesContainer) {
-            choicesContainer.classList.add('is-invalid');
+      // Only validate availability zones if we need subnet configuration
+      if (needsSubnetConfig) {
+        // Validate availability zones
+        const limits = this.getAvailabilityZoneLimits(this.currentProvider);
+        
+        if (zones.length === 0) {
+          const azSelect = document.getElementById('availability-zones-select');
+          if (azSelect) {
+            azSelect.setAttribute('data-invalid', 'true');
+            azSelect.setAttribute('data-error', `At least ${limits.min} availability zone(s) required for ${this.currentProvider.toUpperCase()}.`);
+            const choicesContainer = azSelect.closest('.choices');
+            if (choicesContainer) {
+              choicesContainer.classList.add('is-invalid');
+            }
           }
+          Utils.showFlashMessage(`At least ${limits.min} availability zone(s) required for ${this.currentProvider.toUpperCase()}.`, 'error');
+          return;
         }
-        Utils.showFlashMessage(`At least ${limits.min} availability zone(s) required for ${this.currentProvider.toUpperCase()}.`, 'error');
-        return;
+        
+        // Check minimum
+        if (zones.length < limits.min) {
+          const azSelect = document.getElementById('availability-zones-select');
+          if (azSelect) {
+            azSelect.setAttribute('data-invalid', 'true');
+            azSelect.setAttribute('data-error', `At least ${limits.min} availability zone(s) required for ${this.currentProvider.toUpperCase()}.`);
+            const choicesContainer = azSelect.closest('.choices');
+            if (choicesContainer) {
+              choicesContainer.classList.add('is-invalid');
+            }
+          }
+          Utils.showFlashMessage(`At least ${limits.min} availability zone(s) required for ${this.currentProvider.toUpperCase()}.`, 'error');
+          return;
+        }
+        
+        // Check maximum
+        if (zones.length > limits.max) {
+          const azSelect = document.getElementById('availability-zones-select');
+          if (azSelect) {
+            azSelect.setAttribute('data-invalid', 'true');
+            azSelect.setAttribute('data-error', `Maximum ${limits.max} availability zone(s) allowed for ${this.currentProvider.toUpperCase()}.`);
+            const choicesContainer = azSelect.closest('.choices');
+            if (choicesContainer) {
+              choicesContainer.classList.add('is-invalid');
+            }
+          }
+          Utils.showFlashMessage(`Maximum ${limits.max} availability zone(s) allowed for ${this.currentProvider.toUpperCase()}.`, 'error');
+          return;
+        }
       }
       
-      // Check minimum
-      if (zones.length < limits.min) {
-        const azSelect = document.getElementById('availability-zones-select');
-        if (azSelect) {
-          azSelect.setAttribute('data-invalid', 'true');
-          azSelect.setAttribute('data-error', `At least ${limits.min} availability zone(s) required for ${this.currentProvider.toUpperCase()}.`);
-          const choicesContainer = azSelect.closest('.choices');
-          if (choicesContainer) {
-            choicesContainer.classList.add('is-invalid');
+      // Only perform zone validation and subnet calculation if we need subnet config
+      if (needsSubnetConfig) {
+        // Check for duplicates (shouldn't happen with multiple select, but check anyway)
+        const uniqueZones = [...new Set(zones)];
+        if (uniqueZones.length !== zones.length) {
+          const azSelect = document.getElementById('availability-zones-select');
+          if (azSelect) {
+            azSelect.setAttribute('data-invalid', 'true');
+            azSelect.setAttribute('data-error', 'Duplicate availability zones are not allowed.');
           }
+          Utils.showFlashMessage('Duplicate availability zones are not allowed.', 'error');
+          return;
         }
-        Utils.showFlashMessage(`At least ${limits.min} availability zone(s) required for ${this.currentProvider.toUpperCase()}.`, 'error');
-        return;
-      }
-      
-      // Check maximum
-      if (zones.length > limits.max) {
-        const azSelect = document.getElementById('availability-zones-select');
-        if (azSelect) {
-          azSelect.setAttribute('data-invalid', 'true');
-          azSelect.setAttribute('data-error', `Maximum ${limits.max} availability zone(s) allowed for ${this.currentProvider.toUpperCase()}.`);
-          const choicesContainer = azSelect.closest('.choices');
-          if (choicesContainer) {
-            choicesContainer.classList.add('is-invalid');
+        
+        // Validate zone values are valid for provider and region
+        const validZones = this.getAvailabilityZoneOptions(this.currentProvider, config.region).map(z => z.value);
+        const invalidZones = zones.filter(z => !validZones.includes(z));
+        if (invalidZones.length > 0) {
+          const azSelect = document.getElementById('availability-zones-select');
+          if (azSelect) {
+            azSelect.setAttribute('data-invalid', 'true');
+            azSelect.setAttribute('data-error', `Invalid availability zones: ${invalidZones.join(', ')}`);
+            const choicesContainer = azSelect.closest('.choices');
+            if (choicesContainer) {
+              choicesContainer.classList.add('is-invalid');
+            }
           }
+          Utils.showFlashMessage(`Invalid availability zones: ${invalidZones.join(', ')}`, 'error');
+          return;
         }
-        Utils.showFlashMessage(`Maximum ${limits.max} availability zone(s) allowed for ${this.currentProvider.toUpperCase()}.`, 'error');
-        return;
-      }
-      
-      // Check for duplicates (shouldn't happen with multiple select, but check anyway)
-      const uniqueZones = [...new Set(zones)];
-      if (uniqueZones.length !== zones.length) {
-        const azSelect = document.getElementById('availability-zones-select');
-        if (azSelect) {
-          azSelect.setAttribute('data-invalid', 'true');
-          azSelect.setAttribute('data-error', 'Duplicate availability zones are not allowed.');
-        }
-        Utils.showFlashMessage('Duplicate availability zones are not allowed.', 'error');
-        return;
-      }
-      
-      // Validate zone values are valid for provider and region
-      const validZones = this.getAvailabilityZoneOptions(this.currentProvider, config.region).map(z => z.value);
-      const invalidZones = zones.filter(z => !validZones.includes(z));
-      if (invalidZones.length > 0) {
-        const azSelect = document.getElementById('availability-zones-select');
-        if (azSelect) {
-          azSelect.setAttribute('data-invalid', 'true');
-          azSelect.setAttribute('data-error', `Invalid availability zones: ${invalidZones.join(', ')}`);
-          const choicesContainer = azSelect.closest('.choices');
-          if (choicesContainer) {
-            choicesContainer.classList.add('is-invalid');
+        
+        config.availability_zones = zones;
+        
+        // Calculate subnets
+        const networkCalc = new NetworkCalculator(this.currentProvider);
+        try {
+          if (config.vpc_cidr && zones.length > 0) {
+            // Determine if we should create service subnet
+            // Only create if PrivateLink is enabled AND user chose "New Subnet" (terraform_managed)
+            const createServiceSubnet = config.enable_private_link && 
+              (config.privatelink_subnet_mode === 'terraform_managed' || !config.privatelink_subnet_mode);
+            
+            const subnets = networkCalc.allocateSubnets(
+              config.vpc_cidr,
+              zones,
+              config.pricing_tier,
+              config.enable_private_link,
+              null, // customSubnetSize
+              createServiceSubnet
+            );
+            
+            // Validate subnet allocation
+            const validation = networkCalc.validateSubnetAllocation(config.vpc_cidr, subnets);
+            if (!validation.valid) {
+              // Mark VPC CIDR field as invalid
+              this.markFieldAsInvalid('vpc_cidr', 'Network configuration error: ' + validation.message);
+              Utils.showFlashMessage('Network configuration error: ' + validation.message, 'error');
+              return;
+            }
+            
+            config.calculated_subnets = subnets;
           }
+        } catch (err) {
+          // Mark VPC CIDR field as invalid
+          this.markFieldAsInvalid('vpc_cidr', 'Error calculating subnets: ' + err.message);
+          Utils.showFlashMessage('Error calculating subnets: ' + err.message, 'error');
+          return;
         }
-        Utils.showFlashMessage(`Invalid availability zones: ${invalidZones.join(', ')}`, 'error');
-        return;
-      }
-      
-      config.availability_zones = zones;
-      
-      // Calculate subnets
-      const networkCalc = new NetworkCalculator(this.currentProvider);
-      try {
-        if (config.vpc_cidr && zones.length > 0) {
-          const subnets = networkCalc.allocateSubnets(
-            config.vpc_cidr,
-            zones,
-            config.pricing_tier,
-            config.enable_private_link
-          );
-          
-          // Validate subnet allocation
-          const validation = networkCalc.validateSubnetAllocation(config.vpc_cidr, subnets);
-          if (!validation.valid) {
-            // Mark VPC CIDR field as invalid
-            this.markFieldAsInvalid('vpc_cidr', 'Network configuration error: ' + validation.message);
-            Utils.showFlashMessage('Network configuration error: ' + validation.message, 'error');
-            return;
-          }
-          
-          config.calculated_subnets = subnets;
-        }
-      } catch (err) {
-        // Mark VPC CIDR field as invalid
-        this.markFieldAsInvalid('vpc_cidr', 'Error calculating subnets: ' + err.message);
-        Utils.showFlashMessage('Error calculating subnets: ' + err.message, 'error');
-        return;
+      } else {
+        // Using existing subnets - set empty zones array since we don't need it
+        config.availability_zones = [];
       }
       
       // Check HTML5 validation first for required fields
@@ -2626,7 +3686,7 @@ class App {
             <div class="row g-4 mb-5">
               <div class="col-lg-6">
                 <div class="card h-100">
-                  <div class="card-header bg-primary text-white">
+                  <div class="card-header bg-primary">
                     <h5 class="card-title mb-0">
                       <i class="bi bi-gear-fill me-2"></i>
                       Basic Configuration
@@ -2671,7 +3731,7 @@ class App {
               
               <div class="col-lg-6">
                 <div class="card h-100">
-                  <div class="card-header bg-success text-white">
+                  <div class="card-header bg-success">
                     <h5 class="card-title mb-0">
                       <i class="bi bi-diagram-3-fill me-2"></i>
                       Network Configuration
@@ -2687,19 +3747,79 @@ class App {
                           </span>
                         </td>
                       </tr>
+                      ${!config.create_new_vpc && config.existing_vpc_id ? `
+                      <tr>
+                        <td class="fw-semibold">${config.provider === 'azure' ? 'VNet Resource ID:' : config.provider === 'gcp' ? 'VPC Name:' : 'VPC ID:'}</td>
+                        <td><code class="text-break">${config.existing_vpc_id}</code></td>
+                      </tr>
+                      ` : ''}
+                      ${config.provider === 'aws' && !config.create_new_vpc ? `
+                      <tr>
+                        <td class="fw-semibold">Subnet Mode:</td>
+                        <td>
+                          <span class="badge bg-${config.create_new_subnets ? 'primary' : 'secondary'}">
+                            ${config.create_new_subnets ? 'Create New Subnets' : 'Use Existing Subnets'}
+                          </span>
+                        </td>
+                      </tr>
+                      ` : ''}
+                      ${config.provider === 'azure' && !config.create_new_vpc ? `
+                      <tr>
+                        <td class="fw-semibold">Public Subnet:</td>
+                        <td><code>${config.existing_public_subnet_name || 'N/A'}</code></td>
+                      </tr>
+                      <tr>
+                        <td class="fw-semibold">Private Subnet:</td>
+                        <td><code>${config.existing_private_subnet_name || 'N/A'}</code></td>
+                      </tr>
+                      ` : ''}
+                      ${config.provider === 'gcp' && !config.create_new_vpc ? `
+                      <tr>
+                        <td class="fw-semibold">Subnet Name:</td>
+                        <td><code>${config.existing_subnet_name || 'N/A'}</code></td>
+                      </tr>
+                      <tr>
+                        <td class="fw-semibold">Pod IP Range:</td>
+                        <td><code>${config.existing_pod_range_name || 'N/A'}</code></td>
+                      </tr>
+                      <tr>
+                        <td class="fw-semibold">Service IP Range:</td>
+                        <td><code>${config.existing_service_range_name || 'N/A'}</code></td>
+                      </tr>
+                      ` : ''}
+                      ${config.vpc_cidr && (config.create_new_vpc || config.create_new_subnets) ? `
                       <tr>
                         <td class="fw-semibold">${config.provider === 'azure' ? 'VNet CIDR:' : 'VPC CIDR:'}</td>
                         <td><code>${config.vpc_cidr}</code></td>
                       </tr>
+                      ` : ''}
+                      ${(config.availability_zones && config.availability_zones.length > 0) ? `
                       <tr>
                         <td class="fw-semibold">Availability Zones:</td>
                         <td>
-                          ${(config.availability_zones || []).map(az => 
-                            `<span class="badge bg-light text-dark me-1">${az}</span>`
+                          ${config.availability_zones.map(az => 
+                            `<span class="badge bg-light me-1">${az}</span>`
                           ).join('')}
                         </td>
                       </tr>
-                      ${config.create_new_vpc && config.calculated_subnets && config.calculated_subnets.length > 0 ? `
+                      ` : ''}
+                      ${config.existing_subnet_ids && config.existing_subnet_ids.length > 0 ? `
+                      <tr>
+                        <td class="fw-semibold">Existing Subnet IDs:</td>
+                        <td>
+                          ${config.existing_subnet_ids.map(id => 
+                            `<code class="d-block text-break mb-1">${id}</code>`
+                          ).join('')}
+                        </td>
+                      </tr>
+                      ` : ''}
+                      ${config.existing_security_group_id ? `
+                      <tr>
+                        <td class="fw-semibold">Security Group ID:</td>
+                        <td><code class="text-break">${config.existing_security_group_id}</code></td>
+                      </tr>
+                      ` : ''}
+                      ${(config.create_new_vpc || config.create_new_subnets) && config.calculated_subnets && config.calculated_subnets.length > 0 ? `
                       <tr>
                         <td class="fw-semibold">Subnets:</td>
                         <td>
@@ -2715,7 +3835,7 @@ class App {
               ${networkSummary && !networkSummary.error ? `
                 <div class="col-lg-6">
                   <div class="card h-100">
-                    <div class="card-header bg-info text-white">
+                    <div class="card-header bg-info">
                       <h5 class="card-title mb-0">
                         <i class="bi bi-calculator me-2"></i>
                         Network Utilization
@@ -2850,6 +3970,10 @@ class App {
         const zipBlob = await generator.generateProject(this.currentConfig);
         const filename = `${this.currentConfig.project_prefix}-${this.currentProvider}-terraform.zip`;
         
+        // Store blob and filename for manual download
+        this.downloadBlob = zipBlob;
+        this.downloadFilename = filename;
+        
         Utils.downloadFile(zipBlob, filename);
         Utils.setStorage('step', 3);
         Utils.hideLoading();
@@ -2861,13 +3985,80 @@ class App {
     });
   }
 
-  renderDownload() {
+  async renderDownload() {
     const config = this.currentConfig;
     const providerIcon = config.provider === 'aws' ? 
       '<i class="bi bi-amazon text-warning me-1"></i> AWS' :
       config.provider === 'azure' ?
       '<i class="bi bi-microsoft text-info me-1"></i> Azure' :
       '<i class="bi bi-google text-success me-1"></i> Google Cloud';
+    
+    // Check vault status
+    const vaultExists = Utils.hasCredentialsVault();
+    const vaultUnlocked = Utils.isVaultUnlocked();
+    const vaultLockedWithCredentials = vaultExists && !vaultUnlocked;
+    
+    // Get stored credentials for the current provider (async)
+    let credentials = {};
+    if (vaultUnlocked) {
+      credentials = await Utils.getProviderCredentials(config.provider) || {};
+    }
+    
+    // Check if credentials are available
+    const hasCredentials = credentials.accountId || credentials.clientId || credentials.clientSecret;
+    
+    // Build export command with actual or placeholder values
+    // For clipboard (original values)
+    const accountIdValue = credentials.accountId || '<account-id>';
+    const clientIdValue = credentials.clientId || '<client-id>';
+    const clientSecretValue = credentials.clientSecret || '<client-secret>';
+    
+    // For display (masked values)
+    const accountIdDisplay = credentials.accountId ? Utils.maskSensitiveValue(credentials.accountId) : '&lt;account-id&gt;';
+    const clientIdDisplay = credentials.clientId ? Utils.maskSensitiveValue(credentials.clientId) : '&lt;client-id&gt;';
+    const clientSecretDisplay = credentials.clientSecret ? Utils.maskSensitiveValue(credentials.clientSecret) : '&lt;client-secret&gt;';
+    
+    // Build the actual export command for clipboard
+    const exportCmd = config.provider === 'azure'
+      ? `export DATABRICKS_CLIENT_ID="${clientIdValue}"
+export DATABRICKS_CLIENT_SECRET="${clientSecretValue}"`
+      : `export TF_VAR_databricks_account_id="${accountIdValue}"
+export DATABRICKS_CLIENT_ID="${clientIdValue}"
+export DATABRICKS_CLIENT_SECRET="${clientSecretValue}"`;
+    
+    // Build the masked display version
+    const exportCmdDisplay = config.provider === 'azure'
+      ? `export DATABRICKS_CLIENT_ID="${clientIdDisplay}"
+export DATABRICKS_CLIENT_SECRET="${clientSecretDisplay}"`
+      : `export TF_VAR_databricks_account_id="${accountIdDisplay}"
+export DATABRICKS_CLIENT_ID="${clientIdDisplay}"
+export DATABRICKS_CLIENT_SECRET="${clientSecretDisplay}"`;
+    
+    // Obfuscate the real command for data attribute (security measure)
+    const exportCmdObfuscated = Utils.obfuscateHtmlContent(exportCmd);
+    
+    // Vault unlock banner (shown when vault is locked but exists)
+    const vaultUnlockBanner = vaultLockedWithCredentials ? `
+      <div class="alert alert-warning mb-4" id="vault-unlock-banner">
+        <div class="d-flex align-items-center justify-content-between">
+          <div>
+            <i class="bi bi-lock-fill me-2"></i>
+            <strong>Credentials Vault Locked</strong>
+            <span class="ms-2 text-muted">Unlock to use your saved credentials in the commands below.</span>
+          </div>
+          <button type="button" class="btn btn-warning btn-sm" id="btn-unlock-vault-download">
+            <i class="bi bi-unlock me-1"></i>Unlock Vault
+          </button>
+        </div>
+      </div>
+    ` : '';
+    
+    // Credentials status indicator
+    const credentialsStatus = hasCredentials 
+      ? '<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Using saved credentials</span>'
+      : vaultLockedWithCredentials
+        ? '<span class="badge bg-warning text-dark"><i class="bi bi-lock me-1"></i>Vault locked - unlock to use credentials</span>'
+        : '<span class="badge bg-secondary"><i class="bi bi-info-circle me-1"></i>Replace placeholders with your credentials</span>';
     
     const content = `
       <div class="container my-5">
@@ -2939,19 +4130,17 @@ class App {
                 </h5>
               </div>
               <div class="card-body text-center">
-                <div class="mb-4">
-                  <i class="bi bi-file-earmark-zip text-primary" style="font-size: 3rem;"></i>
-                </div>
-                <h6 class="fw-bold mb-3">
-                  ${config.project_prefix || 'databricks'}-${config.provider}-terraform.zip
-                </h6>
+                <button type="button" class="btn btn-download btn-lg mb-3" id="download-project-btn">
+                  <i class="bi bi-download me-2"></i>
+                  <span class="download-filename">${config.project_prefix || 'databricks'}-${config.provider}-terraform.zip</span>
+                </button>
                 <p class="text-muted mb-4">
                   Complete Terraform project with all configuration files, 
                   modules, documentation, and deployment instructions.
                 </p>
                 <div class="text-muted small">
                   <i class="bi bi-info-circle me-1"></i>
-                  The download should have started automatically. If not, refresh the page and try again.
+                  The download should have started automatically. If not, click above to download.
                 </div>
               </div>
             </div>
@@ -3043,7 +4232,12 @@ class App {
                     <div class="step-content">
                       <h6 class="fw-bold mb-2">Extract and Review</h6>
                       <p class="mb-2">Extract the ZIP file and review the generated configuration files. Check the <code>README.md</code> for detailed instructions.</p>
-                      <code class="d-block bg-light p-2 rounded">unzip ${config.project_prefix || 'databricks'}-${config.provider}-terraform.zip</code>
+                      <div class="command-block" data-command="unzip ${config.project_prefix || 'databricks'}-${config.provider}-terraform.zip -d ${config.project_prefix || 'databricks'}-${config.provider}-terraform">
+                        <code>unzip ${config.project_prefix || 'databricks'}-${config.provider}-terraform.zip -d ${config.project_prefix || 'databricks'}-${config.provider}-terraform</code>
+                        <button class="command-copy-btn" type="button" aria-label="Copy command" title="Copy to clipboard">
+                          <i class="bi bi-clipboard"></i>
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -3052,9 +4246,14 @@ class App {
                       2
                     </div>
                     <div class="step-content">
-                      <h6 class="fw-bold mb-2">Configure Credentials</h6>
-                      <p class="mb-2">Set up your cloud provider credentials according to the provider-specific instructions in the README.</p>
-                      <code class="d-block bg-light p-2 rounded">${config.provider === 'aws' ? 'aws configure' : config.provider === 'azure' ? 'az login' : 'gcloud auth login'}</code>
+                      <h6 class="fw-bold mb-2">Navigate to Directory</h6>
+                      <p class="mb-2">Change to the extracted Terraform project directory.</p>
+                      <div class="command-block" data-command="cd ${config.project_prefix || 'databricks'}-${config.provider}-terraform">
+                        <code>cd ${config.project_prefix || 'databricks'}-${config.provider}-terraform</code>
+                        <button class="command-copy-btn" type="button" aria-label="Copy command" title="Copy to clipboard">
+                          <i class="bi bi-clipboard"></i>
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -3063,9 +4262,14 @@ class App {
                       3
                     </div>
                     <div class="step-content">
-                      <h6 class="fw-bold mb-2">Initialize Terraform</h6>
-                      <p class="mb-2">Navigate to the project directory and initialize Terraform to download required providers and modules.</p>
-                      <code class="d-block bg-light p-2 rounded">terraform init</code>
+                      <h6 class="fw-bold mb-2">Configure Credentials</h6>
+                      <p class="mb-2">Set up your cloud provider credentials according to the provider-specific instructions in the README.</p>
+                      <div class="command-block" data-command="${config.provider === 'aws' ? 'aws configure' : config.provider === 'azure' ? 'az login' : 'gcloud auth login'}">
+                        <code>${config.provider === 'aws' ? 'aws configure' : config.provider === 'azure' ? 'az login' : 'gcloud auth login'}</code>
+                        <button class="command-copy-btn" type="button" aria-label="Copy command" title="Copy to clipboard">
+                          <i class="bi bi-clipboard"></i>
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -3074,20 +4278,47 @@ class App {
                       4
                     </div>
                     <div class="step-content">
-                      <h6 class="fw-bold mb-2">Plan Deployment</h6>
-                      <p class="mb-2">Review the execution plan to see what resources will be created before applying changes.</p>
-                      <code class="d-block bg-light p-2 rounded">terraform plan</code>
+                      <h6 class="fw-bold mb-2">Initialize Terraform</h6>
+                      <p class="mb-2">Initialize Terraform to download required providers and modules.</p>
+                      <div class="command-block" data-command="terraform init">
+                        <code>terraform init</code>
+                        <button class="command-copy-btn" type="button" aria-label="Copy command" title="Copy to clipboard">
+                          <i class="bi bi-clipboard"></i>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="step-item d-flex mb-4">
+                    <div class="step-number bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-3">
+                      5
+                    </div>
+                    <div class="step-content">
+                      <h6 class="fw-bold mb-2">Prepare Deployment ${credentialsStatus}</h6>
+                      ${vaultUnlockBanner}
+                      <p class="mb-2">Export sensitive variables as environment variables to avoid storing them in <code>terraform.tfvars</code>. See the README for instructions on creating a Service Principal.</p>
+                      <div class="command-block sensitive-command ${hasCredentials ? 'has-credentials' : ''}" data-sensitive-cmd="${exportCmdObfuscated}">
+                        <code class="sensitive-display">${exportCmdDisplay}</code>
+                        <button class="command-copy-btn" type="button" aria-label="Copy command" title="Copy to clipboard">
+                          <i class="bi bi-clipboard"></i>
+                        </button>
+                      </div>
                     </div>
                   </div>
 
                   <div class="step-item d-flex mb-4">
                     <div class="step-number bg-success text-white rounded-circle d-flex align-items-center justify-content-center me-3">
-                      5
+                      6
                     </div>
                     <div class="step-content">
                       <h6 class="fw-bold mb-2">Deploy Infrastructure</h6>
                       <p class="mb-2">Apply the Terraform configuration to create your Databricks infrastructure in the cloud.</p>
-                      <code class="d-block bg-light p-2 rounded">terraform apply</code>
+                      <div class="command-block" data-command="terraform apply">
+                        <code>terraform apply</code>
+                        <button class="command-copy-btn" type="button" aria-label="Copy command" title="Copy to clipboard">
+                          <i class="bi bi-clipboard"></i>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -3107,10 +4338,10 @@ class App {
                   <i class="bi bi-plus-circle me-2"></i>
                   Create Another Project
                 </a>
-                <a href="#/" class="btn btn-outline-secondary btn-lg" data-navigate>
-                  <i class="bi bi-house me-2"></i>
-                  Back to Home
-                </a>
+                <button type="button" class="btn btn-outline-secondary btn-lg" onclick="window.history.back()">
+                  <i class="bi bi-arrow-left me-2"></i>
+                  Back
+                </button>
               </div>
             </div>
           </div>
@@ -3120,6 +4351,113 @@ class App {
     
     this.render(content);
     Utils.updateProgress(3);
+    
+    // Helper function to handle download
+    const handleDownload = async (e) => {
+      e.preventDefault();
+      
+      // If blob is available, use it; otherwise regenerate the project
+      if (this.downloadBlob && this.downloadFilename) {
+        Utils.downloadFile(this.downloadBlob, this.downloadFilename);
+        Utils.showFlashMessage('Download started!', 'success');
+      } else {
+        // Regenerate the project if blob is not available (e.g., after page reload)
+        Utils.showLoading('Regenerating your Terraform project...');
+        try {
+          await Utils.waitForJSZip();
+          const generator = new TerraformGenerator();
+          const zipBlob = await generator.generateProject(this.currentConfig);
+          const filename = `${this.currentConfig.project_prefix}-${this.currentProvider}-terraform.zip`;
+          
+          // Store blob and filename for future clicks
+          this.downloadBlob = zipBlob;
+          this.downloadFilename = filename;
+          
+          Utils.downloadFile(zipBlob, filename);
+          Utils.hideLoading();
+          Utils.showFlashMessage('Download started!', 'success');
+        } catch (err) {
+          Utils.hideLoading();
+          Utils.showFlashMessage('Error regenerating project: ' + err.message, 'error');
+        }
+      }
+    };
+    
+    // Setup download button click handler
+    const downloadBtn = document.getElementById('download-project-btn');
+    if (downloadBtn) {
+      downloadBtn.addEventListener('click', handleDownload);
+    }
+    
+    // Setup unlock vault button on download page
+    const unlockVaultDownloadBtn = document.getElementById('btn-unlock-vault-download');
+    if (unlockVaultDownloadBtn) {
+      unlockVaultDownloadBtn.addEventListener('click', async () => {
+        // Set flag to prevent opening credentials modal after unlock
+        this._unlockFromDownloadPage = true;
+        
+        // Show unlock modal
+        const unlockModal = new bootstrap.Modal(document.getElementById('masterPasswordUnlockModal'));
+        
+        // Handle unlock success - refresh download page
+        const modalEl = document.getElementById('masterPasswordUnlockModal');
+        const onModalHidden = async () => {
+          if (Utils.isVaultUnlocked()) {
+            // Re-render the download page with credentials
+            await this.renderDownload();
+          }
+          modalEl.removeEventListener('hidden.bs.modal', onModalHidden);
+        };
+        modalEl.addEventListener('hidden.bs.modal', onModalHidden);
+        
+        unlockModal.show();
+      });
+    }
+    
+    // Setup copy functionality for command blocks
+    document.querySelectorAll('.command-copy-btn').forEach(btn => {
+      btn.addEventListener('click', async function() {
+        const commandBlock = this.closest('.command-block');
+        let command;
+        
+        // Check if this is a sensitive command (with obfuscated data)
+        if (commandBlock.classList.contains('sensitive-command')) {
+          const obfuscatedCmd = commandBlock.getAttribute('data-sensitive-cmd');
+          if (obfuscatedCmd) {
+            // Deobfuscate to get the real command
+            command = Utils.deobfuscateValue(obfuscatedCmd);
+          }
+        }
+        
+        // Fallback to standard command retrieval
+        if (!command) {
+          command = commandBlock.getAttribute('data-command') || commandBlock.querySelector('code').textContent.trim();
+          // Decode HTML entities for clipboard (for escaped < and > in placeholders)
+          command = command.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
+        }
+        
+        try {
+          await navigator.clipboard.writeText(command);
+          
+          // Visual feedback
+          const originalIcon = this.querySelector('i').className;
+          this.classList.add('copied');
+          this.querySelector('i').className = 'bi bi-check';
+          
+          // Reset after 2 seconds
+          setTimeout(() => {
+            this.classList.remove('copied');
+            this.querySelector('i').className = originalIcon;
+          }, 2000);
+          
+          // Show toast notification
+          Utils.showFlashMessage('Command copied to clipboard\!', 'success');
+        } catch (err) {
+          console.error('Failed to copy:', err);
+          Utils.showFlashMessage('Failed to copy command', 'error');
+        }
+      });
+    });
   }
 
   handleReset() {
@@ -3130,7 +4468,7 @@ class App {
     Utils.updateProgress(0);
     this.updateNavbar();
     Utils.showFlashMessage('Session reset. Starting fresh configuration.', 'info');
-    window.location.hash = '/';
+    window.location.hash = '/select-provider';
   }
 
   render(content) {
@@ -3147,5 +4485,7 @@ class App {
 let app;
 document.addEventListener('DOMContentLoaded', () => {
   app = new App();
+  // Make app globally available for modal buttons
+  window.app = app;
 });
 

@@ -1,22 +1,36 @@
-terraform {
-  required_version = ">= 1.0"
-  required_providers {
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = "~> 3.0"
-    }
-    databricks = {
-      source  = "databricks/databricks"
-      version = "~> 1.26"
+# ============================================================================
+# Azure Provider Configuration
+# ============================================================================
+#
+# PURPOSE:
+#   This file configures the Terraform providers needed for Azure and Databricks.
+#
+# AUTHENTICATION:
+#   Azure: Uses credentials in this order:
+#     1. Azure CLI (az login)
+#     2. Service Principal environment variables
+#     3. Managed Identity (if running on Azure)
+#
+#   Databricks: Uses credentials from the created workspace
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# AZURE PROVIDER
+# ----------------------------------------------------------------------------
+provider "azurerm" {
+  features {
+    resource_group {
+      prevent_deletion_if_contains_resources = false
     }
   }
 }
 
-provider "azurerm" {
-  features {}
-}
-
+# ----------------------------------------------------------------------------
+# DATABRICKS PROVIDER - Workspace Level
+# ----------------------------------------------------------------------------
+# Used for workspace-level operations after the workspace is created
 provider "databricks" {
-  host = "https://accounts.azuredatabricks.net"
+  alias                       = "workspace"
+  host                        = azurerm_databricks_workspace.this.workspace_url
+  azure_workspace_resource_id = azurerm_databricks_workspace.this.id
 }
-

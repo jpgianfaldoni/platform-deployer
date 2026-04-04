@@ -468,27 +468,56 @@ test.describe('CIDR Calculations', () => {
         region: 'us-east-1',
         pricing_tier: 'STANDARD'
       });
-      
-      // First with /20
+
+      // Set up with /20 first
       await FormHelpers.fillNetworkConfig(page, {
         vpc_cidr: '10.0.0.0/20',
         availability_zones: ['us-east-1a', 'us-east-1b']
       });
-      
-      await page.waitForTimeout(2000);
-      const summary20 = await FormHelpers.getNetworkSummary(page);
-      
-      // Then with /16
+
+      // Wait for subnet calculations and slider to be ready
+      await page.waitForSelector('#network-utilization-percent', { state: 'visible', timeout: 10000 });
+      await page.waitForTimeout(1000);
+
+      // Set subnet size slider to /26 (fixed) to ensure consistent subnet sizes
+      const slider = page.locator('#subnet-size-slider');
+      await slider.evaluate((el) => {
+        el.value = 26;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      await page.waitForTimeout(1500);
+
+      const util20Text = await page.locator('#network-utilization-percent').textContent();
+      const util20 = parseFloat(util20Text);
+
+      // Switch to /16 — this triggers slider limits recalculation (debounced)
+      await page.fill('input[name="vpc_cidr"]', '');
       await page.fill('input[name="vpc_cidr"]', '10.0.0.0/16');
+
+      // Wait for the debounced recalculation to finish and slider to be re-enabled
       await page.waitForTimeout(2000);
-      const summary16 = await FormHelpers.getNetworkSummary(page);
-      
-      // Utilization should be lower with larger CIDR
-      if (summary20 && summary16) {
-        const util20 = parseFloat(summary20.utilization_percent);
-        const util16 = parseFloat(summary16.utilization_percent);
-        expect(util16).toBeLessThan(util20);
+
+      // Set slider to /26 again AFTER the VPC change has been processed
+      await slider.evaluate((el) => {
+        el.value = 26;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+
+      // Wait for recalculation with /26 subnets in /16 VPC
+      let util16 = util20;
+      for (let i = 0; i < 10; i++) {
+        await page.waitForTimeout(500);
+        const util16Text = await page.locator('#network-utilization-percent').textContent().catch(() => '');
+        util16 = parseFloat(util16Text);
+        if (util16 !== util20) break;
       }
+
+      // With /26 subnets: /20 has 4096 IPs, /16 has 65536 IPs
+      // Same 4 subnets of /26 (256 IPs) = 1024 used IPs
+      // /20 utilization: 1024/4096 = 25%, /16 utilization: 1024/65536 ≈ 1.6%
+      expect(util16).toBeLessThan(util20);
     });
   });
 

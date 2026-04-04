@@ -85,7 +85,7 @@ test.describe('AWS Provider Tests', () => {
 
     test('should complete AWS flow using existing VPC', async ({ page }) => {
       await FormHelpers.selectProvider(page, 'aws');
-      
+
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'aws-existing',
         region: 'eu-west-1',
@@ -93,19 +93,27 @@ test.describe('AWS Provider Tests', () => {
       });
       await page.waitForTimeout(500);
 
+      // Uncheck Create New VPC
+      const createNewVpc = page.locator('#create_new_vpc');
+      if (await createNewVpc.isChecked()) {
+        await createNewVpc.click();
+        await page.waitForTimeout(500);
+      }
+
+      // Fill existing VPC ID
+      const existingVpcId = page.locator('#existing_vpc_id');
+      await existingVpcId.waitFor({ state: 'visible', timeout: 5000 });
+      await existingVpcId.fill('vpc-0123456789abcdef0');
+
+      // Default subnet mode is "Create New Subnets" in existing VPC
+      // This still requires VPC CIDR and AZs for the new subnets
       await FormHelpers.fillNetworkConfig(page, {
         create_new_vpc: false,
-        existing_vpc_name: 'my-existing-vpc',
-        vpc_cidr: '10.32.0.0/12',
+        vpc_cidr: '10.32.0.0/16',
         availability_zones: ['eu-west-1a', 'eu-west-1b'],
         enable_private_link: false
       });
 
-      // When using existing VPC, subnet preview should not be visible
-      const subnetPreview = page.locator('#subnets-preview');
-      const isVisible = await subnetPreview.isVisible().catch(() => false);
-      expect(isVisible).toBe(false);
-      
       await page.waitForTimeout(1000);
       await FormHelpers.submitConfigForm(page);
       await page.waitForTimeout(1000);
@@ -506,16 +514,21 @@ test.describe('AWS Provider Tests', () => {
       expect(isDisabled).toBe(false);
     });
 
-    test('should hide subnet size slider when Create New VPC is disabled', async ({ page }) => {
+    test('should hide subnet size slider when using existing subnets', async ({ page }) => {
       // Disable Create New VPC
       const createNewVpc = page.locator('#create_new_vpc');
       await createNewVpc.uncheck();
       await page.waitForTimeout(500);
-      
-      // Slider should be hidden
+
+      // Select "Use Existing Subnets" mode (AWS-specific)
+      const subnetModeExisting = page.locator('#subnet_mode_existing');
+      await subnetModeExisting.click();
+      await page.waitForTimeout(500);
+
+      // Slider should be hidden when using existing subnets
       const sliderContainer = page.locator('#subnet-size-slider-container');
       await expect(sliderContainer).not.toBeVisible();
-      
+
       // Preview should also be hidden
       const preview = page.locator('#subnets-preview');
       await expect(preview).not.toBeVisible();
@@ -904,8 +917,8 @@ test.describe('AWS Provider Tests', () => {
       });
       
       await NavigationHelpers.reset(page);
-      await expect(page).toHaveURL(/.*#\/$/);
-      
+      await expect(page).toHaveURL(/.*#\/select-provider/, { timeout: 5000 });
+
       // Navigate to configure - should be empty
       await FormHelpers.selectProvider(page, 'aws');
       const projectPrefix = await page.locator('input[name="project_prefix"]').inputValue();

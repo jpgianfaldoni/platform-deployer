@@ -49,7 +49,7 @@ class CIDRUtils {
   static getNetworkAddress(ip, prefixLen) {
     const ipInt = CIDRUtils.ipToInt(ip);
     const mask = CIDRUtils.getMask(prefixLen);
-    return ipInt & mask;
+    return (ipInt & mask) >>> 0;
   }
 
   /**
@@ -202,12 +202,16 @@ class NetworkCalculator {
    * @param {string} vpcCIDR - The VPC CIDR block (e.g., "10.0.0.0/16")
    * @param {number} numAZs - Number of availability zones
    * @param {boolean} enablePrivateLink - Whether private link/endpoint is enabled
+   * @param {boolean} createServiceSubnet - Whether to create service subnet (defaults to enablePrivateLink)
    * @returns {Object} { min, max, default, totalSubnets, maxNodes }
    */
-  calculateSubnetSizeLimits(vpcCIDR, numAZs, enablePrivateLink = false) {
+  calculateSubnetSizeLimits(vpcCIDR, numAZs, enablePrivateLink = false, createServiceSubnet = null) {
     if (!this.validateCIDR(vpcCIDR)) {
       return { error: 'Invalid VPC CIDR format' };
     }
+    
+    // If createServiceSubnet is not explicitly set, default to enablePrivateLink value
+    const shouldCreateServiceSubnet = createServiceSubnet !== null ? createServiceSubnet : enablePrivateLink;
 
     const vpcPrefix = parseInt(vpcCIDR.split('/')[1], 10);
     const totalVPCIPs = CIDRUtils.getSubnetSize(vpcPrefix);
@@ -218,11 +222,11 @@ class NetworkCalculator {
     // Calculate number of subnets needed
     let numSubnets;
     if (this.provider === 'gcp') {
-      // GCP: host + pods + service (if privatelink)
-      numSubnets = enablePrivateLink ? 3 : 2;
+      // GCP: host + pods + service (if creating service subnet)
+      numSubnets = shouldCreateServiceSubnet ? 3 : 2;
     } else {
-      // AWS/Azure: 2 subnets per AZ (private + public) + service (if privatelink)
-      numSubnets = (numAZs * 2) + (enablePrivateLink ? 1 : 0);
+      // AWS/Azure: 2 subnets per AZ (private + public) + service (if creating service subnet)
+      numSubnets = (numAZs * 2) + (shouldCreateServiceSubnet ? 1 : 0);
     }
     
     // Calculate maximum subnet size that can fit all subnets
@@ -252,8 +256,9 @@ class NetworkCalculator {
       };
     }
     
-    // Default: middle point between min and max, favoring larger subnets
-    const defaultSubnetSize = Math.ceil((minSubnetSize + maxSubnetSize) / 2);
+    // Default: use the largest possible subnet size (most IPs)
+    // maxSubnetSize has the smaller prefix number = more IPs
+    const defaultSubnetSize = maxSubnetSize;
     
     // Calculate max nodes for each subnet size option
     const getMaxNodes = (prefix) => {
@@ -265,9 +270,9 @@ class NetworkCalculator {
     };
     
     return {
-      min: maxSubnetSize,  // Larger subnets (smaller prefix = more IPs)
-      max: minSubnetSize,  // Smaller subnets (larger prefix = fewer IPs)
-      default: defaultSubnetSize,
+      min: maxSubnetSize,  // Larger subnets (smaller prefix = more IPs) - slider left
+      max: minSubnetSize,  // Smaller subnets (larger prefix = fewer IPs) - slider right
+      default: defaultSubnetSize,  // Start with largest subnet (most IPs)
       totalSubnets: numSubnets,
       vpcPrefix: vpcPrefix,
       valid: true,
@@ -365,11 +370,15 @@ class NetworkCalculator {
    * @param {string} pricingTier - Databricks pricing tier
    * @param {boolean} enablePrivateLink - Whether private link is enabled
    * @param {number|null} customSubnetSize - Optional custom subnet size (prefix length)
+   * @param {boolean} createServiceSubnet - Whether to create service subnet (defaults to enablePrivateLink)
    */
-  allocateSubnets(vpcCIDR, availabilityZones, pricingTier = null, enablePrivateLink = false, customSubnetSize = null) {
+  allocateSubnets(vpcCIDR, availabilityZones, pricingTier = null, enablePrivateLink = false, customSubnetSize = null, createServiceSubnet = null) {
     if (!this.validateCIDR(vpcCIDR)) {
       throw new Error('Invalid VPC CIDR format');
     }
+    
+    // If createServiceSubnet is not explicitly set, default to enablePrivateLink value
+    const shouldCreateServiceSubnet = createServiceSubnet !== null ? createServiceSubnet : enablePrivateLink;
 
     const [vpcIP, vpcPrefix] = vpcCIDR.split('/');
     const vpcSize = parseInt(vpcPrefix, 10);
@@ -401,18 +410,18 @@ class NetworkCalculator {
     
     if (this.provider === 'aws' || this.provider === 'azure') {
       subnets.push(...this._allocateAWSAzureSubnets(
-        currentIP, availabilityZones, subnetSizes, enablePrivateLink
+        currentIP, availabilityZones, subnetSizes, shouldCreateServiceSubnet
       ));
     } else if (this.provider === 'gcp') {
       subnets.push(...this._allocateGCPSubnets(
-        currentIP, availabilityZones, subnetSizes, enablePrivateLink
+        currentIP, availabilityZones, subnetSizes, shouldCreateServiceSubnet
       ));
     }
     
     return subnets;
   }
 
-  _allocateAWSAzureSubnets(startIP, availabilityZones, subnetSizes, enablePrivateLink) {
+  _allocateAWSAzureSubnets(startIP, availabilityZones, subnetSizes, createServiceSubnet) {
     const subnets = [];
     let currentIP = startIP;
     
@@ -445,8 +454,8 @@ class NetworkCalculator {
       currentIP = this.getNextIPAfterSubnet(publicCIDR);
     }
     
-    // Service subnet (if Private Link is enabled)
-    if (enablePrivateLink && subnetSizes.service) {
+    // Service subnet (only if explicitly requested - e.g., PrivateLink with terraform-managed subnet)
+    if (createServiceSubnet && subnetSizes.service) {
       const serviceSize = subnetSizes.service;
       const serviceCIDR = this.getNextSubnetCIDR(currentIP, serviceSize);
       subnets.push(new SubnetAllocation(
@@ -461,7 +470,7 @@ class NetworkCalculator {
     return subnets;
   }
 
-  _allocateGCPSubnets(startIP, availabilityZones, subnetSizes, enablePrivateLink) {
+  _allocateGCPSubnets(startIP, availabilityZones, subnetSizes, createServiceSubnet) {
     const subnets = [];
     let currentIP = startIP;
     
@@ -491,8 +500,8 @@ class NetworkCalculator {
     // Move to next IP after this subnet
     currentIP = this.getNextIPAfterSubnet(podsCIDR);
     
-    // Service subnet (if Private Service Connect is enabled)
-    if (enablePrivateLink && subnetSizes.service) {
+    // Service subnet (only if explicitly requested - e.g., Private Service Connect with terraform-managed subnet)
+    if (createServiceSubnet && subnetSizes.service) {
       const serviceSize = subnetSizes.service;
       const serviceCIDR = this.getNextSubnetCIDR(currentIP, serviceSize);
       subnets.push(new SubnetAllocation(

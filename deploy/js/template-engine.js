@@ -1,153 +1,106 @@
 /**
- * TemplateEngine - Renders templates with variable substitution
- * Supports simple placeholders {{variable}} and loops for arrays
+ * TemplateEngine - Renders templates using Handlebars.js
+ * Handlebars is a robust, battle-tested template engine used by millions of projects
+ * Documentation: https://handlebarsjs.com/
  */
 class TemplateEngine {
+  constructor() {
+    // Check if Handlebars is available
+    if (typeof Handlebars === 'undefined') {
+      throw new Error('Handlebars library is not loaded. Please ensure handlebars.min.js is loaded before using TemplateEngine.');
+    }
+
+    // Register custom helpers for our specific use cases
+    this._registerHelpers();
+  }
+
+  /**
+   * Register custom Handlebars helpers
+   * @private
+   */
+  _registerHelpers() {
+    // Helper to check if a value equals another (for conditionals)
+    Handlebars.registerHelper('eq', function(a, b) {
+      return a === b;
+    });
+
+    // Helper to check if a value contains a substring
+    Handlebars.registerHelper('contains', function(str, substr) {
+      if (!str || !substr) return false;
+      return String(str).indexOf(String(substr)) !== -1;
+    });
+
+    // Override the built-in #each helper to add @last support
+    // Handlebars doesn't have @last by default, so we add it
+    const originalEach = Handlebars.helpers.each;
+    Handlebars.registerHelper('each', function(context, options) {
+      if (!options) {
+        options = context;
+        context = this;
+      }
+      
+      let ret = '';
+      const data = Handlebars.createFrame(options.data || {});
+      
+      if (context && typeof context === 'object') {
+        if (Array.isArray(context)) {
+          for (let i = 0; i < context.length; i++) {
+            data.index = i;
+            data.first = (i === 0);
+            data.last = (i === context.length - 1);
+            ret += options.fn(context[i], { data: data });
+          }
+        } else {
+          const keys = Object.keys(context);
+          for (let i = 0; i < keys.length; i++) {
+            const key = keys[i];
+            data.key = key;
+            data.index = i;
+            data.first = (i === 0);
+            data.last = (i === keys.length - 1);
+            ret += options.fn(context[key], { data: data });
+          }
+        }
+      }
+      
+      if (ret === '' && options.inverse) {
+        ret = options.inverse(this);
+      }
+      
+      return ret;
+    });
+  }
+
   /**
    * Render template with variables
    * @param {string} template - Template content
    * @param {Object} variables - Variables object
+   * @param {string} templateName - Optional template name for error reporting
    * @returns {string} Rendered template
    */
-  render(template, variables) {
-    let result = template;
-    
-    // Process loops first ({{#each array}}...{{/each}})
-    result = this._processLoops(result, variables);
-    
-    // Process conditionals ({{#if condition}}...{{/if}})
-    result = this._processConditionals(result, variables);
-    
-    // Process simple variable substitutions {{variable}}
-    result = this._processVariables(result, variables);
-    
-    return result;
-  }
-
-  /**
-   * Process loop blocks {{#each array}}...{{/each}}
-   * @private
-   */
-  _processLoops(template, variables) {
-    // Match {{#each arrayName}}...{{/each}} blocks
-    const loopRegex = /\{\{#each\s+(\w+)\}\}([\s\S]*?)\{\{\/each\}\}/g;
-    
-    return template.replace(loopRegex, (match, arrayName, content) => {
-      const array = this._getNestedValue(variables, arrayName);
-      
-      if (!Array.isArray(array) || array.length === 0) {
-        return '';
-      }
-
-      // Process each item in the array
-      return array.map(item => {
-        // Create a context with item properties and parent variables
-        const context = { ...variables, ...item };
-        
-        // Process nested content with item context
-        let itemContent = content;
-        
-        // Replace {{property}} with item property values
-        itemContent = this._processVariables(itemContent, context);
-        
-        // Process nested loops and conditionals
-        itemContent = this._processLoops(itemContent, context);
-        itemContent = this._processConditionals(itemContent, context);
-        
-        return itemContent;
-      }).join('');
-    });
-  }
-
-  /**
-   * Process conditional blocks {{#if condition}}...{{/if}} and {{#unless condition}}...{{/unless}}
-   * @private
-   */
-  _processConditionals(template, variables) {
-    let result = template;
-    
-    // Process {{#unless condition}}...{{/unless}} blocks
-    const unlessRegex = /\{\{#unless\s+(\w+)\}\}([\s\S]*?)\{\{\/unless\}\}/g;
-    result = result.replace(unlessRegex, (match, conditionName, content) => {
-      const condition = this._getNestedValue(variables, conditionName);
-      
-      if (!condition || condition === '' || condition === false || condition === 0) {
-        let processedContent = content;
-        processedContent = this._processVariables(processedContent, variables);
-        processedContent = this._processLoops(processedContent, variables);
-        processedContent = this._processConditionals(processedContent, variables);
-        return processedContent;
-      }
-      
+  render(template, variables, templateName = 'unknown') {
+    if (!template || typeof template !== 'string') {
       return '';
-    });
-    
-    // Process {{#if condition}}...{{/if}} blocks
-    const ifRegex = /\{\{#if\s+(\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g;
-    result = result.replace(ifRegex, (match, conditionName, content) => {
-      const condition = this._getNestedValue(variables, conditionName);
-      
-      // Check if condition is truthy
-      if (condition && condition !== '' && condition !== false && condition !== 0) {
-        // Process content with variables
-        let processedContent = content;
-        processedContent = this._processVariables(processedContent, variables);
-        processedContent = this._processLoops(processedContent, variables);
-        processedContent = this._processConditionals(processedContent, variables);
-        return processedContent;
-      }
-      
-      return '';
-    });
-    
-    return result;
-  }
-
-
-  /**
-   * Process simple variable substitutions {{variable}}
-   * @private
-   */
-  _processVariables(template, variables) {
-    // Match {{variable}} or {{variable.property}}
-    const varRegex = /\{\{([^}]+)\}\}/g;
-    
-    return template.replace(varRegex, (match, varPath) => {
-      const value = this._getNestedValue(variables, varPath.trim());
-      
-      if (value === undefined || value === null) {
-        return match; // Keep original if not found
-      }
-      
-      // Handle different types
-      if (typeof value === 'boolean') {
-        return value.toString();
-      }
-      
-      if (typeof value === 'object') {
-        return JSON.stringify(value);
-      }
-      
-      return String(value);
-    });
-  }
-
-  /**
-   * Get nested value from object using dot notation or array access
-   * @private
-   */
-  _getNestedValue(obj, path) {
-    const parts = path.split('.');
-    let value = obj;
-    
-    for (const part of parts) {
-      if (value === null || value === undefined) {
-        return undefined;
-      }
-      value = value[part];
     }
-    
-    return value;
+
+    try {
+      // Compile template with strict mode disabled for more lenient parsing
+      // Note: Use {{{ (triple braces) in templates for raw output without HTML escaping
+      // This is needed for Terraform code generation (not HTML)
+      const compiledTemplate = Handlebars.compile(template, {
+        strict: false,
+        assumeObjects: false
+      });
+      
+      // Render with variables
+      const result = compiledTemplate(variables);
+      
+      return result;
+    } catch (error) {
+      console.error(`TemplateEngine render error in ${templateName}:`, error);
+      console.error('Template preview (first 500 chars):', template.substring(0, 500));
+      throw new Error(`Template rendering failed in ${templateName}: ${error.message}`);
+    }
   }
 
   /**
@@ -161,18 +114,53 @@ class TemplateEngine {
     
     // Add computed properties for subnets
     if (config.calculated_subnets && Array.isArray(config.calculated_subnets)) {
-      vars.calculated_subnets = config.calculated_subnets.map(subnet => ({
+      vars.calculated_subnets = config.calculated_subnets.map((subnet, index) => ({
         ...subnet,
-        name_replace: subnet.name ? subnet.name.replace(/-/g, '_') : ''
+        name_replace: subnet.name ? subnet.name.replace(/-/g, '_') : '',
+        is_public: subnet.subnet_type === 'public',
+        is_private: subnet.subnet_type === 'private',
+        index: index // For @index in Handlebars
       }));
     } else {
       vars.calculated_subnets = [];
     }
-    
+
+    // Compute shortcut variables for the first public/private/host subnet names
+    // Azure main.tf needs the first public and private subnet variable names
+    // GCP main.tf needs the first host subnet variable name
+    const firstPublic = vars.calculated_subnets.find(s => s.is_public);
+    const firstPrivate = vars.calculated_subnets.find(s => s.is_private);
+    const firstHost = vars.calculated_subnets.find(s => s.subnet_type === 'host');
+    vars.first_public_subnet_var = firstPublic ? firstPublic.name_replace : 'public_a';
+    vars.first_private_subnet_var = firstPrivate ? firstPrivate.name_replace : 'private_a';
+    vars.first_host_subnet_var = firstHost ? firstHost.name_replace : 'host';
+
     // Format boolean values
     vars.create_new_vpc = config.create_new_vpc === true || config.create_new_vpc === 'true';
     vars.enable_private_link = config.enable_private_link === true || config.enable_private_link === 'true';
     vars.enable_nat_gateway = config.enable_nat_gateway !== false && config.enable_nat_gateway !== 'false';
+    
+    // Format create_new_subnets - defaults to true if not specified
+    vars.create_new_subnets = config.create_new_subnets !== false && config.create_new_subnets !== 'false';
+    
+    // Format existing VPC ID
+    vars.existing_vpc_id = config.existing_vpc_id || '';
+    
+    // Format existing subnet IDs - ensure it's an array for Terraform
+    if (config.existing_subnet_ids && Array.isArray(config.existing_subnet_ids) && config.existing_subnet_ids.length > 0) {
+      vars.existing_subnet_ids = JSON.stringify(config.existing_subnet_ids);
+    } else {
+      vars.existing_subnet_ids = '[]';
+    }
+    
+    // Format existing security group IDs - convert single ID to array format
+    if (config.existing_security_group_id) {
+      vars.existing_security_group_ids = JSON.stringify([config.existing_security_group_id]);
+    } else if (config.existing_security_group_ids && Array.isArray(config.existing_security_group_ids)) {
+      vars.existing_security_group_ids = JSON.stringify(config.existing_security_group_ids);
+    } else {
+      vars.existing_security_group_ids = '[]';
+    }
     
     // Format arrays - ensure they're always strings for template
     if (config.availability_zones && Array.isArray(config.availability_zones)) {
@@ -193,11 +181,33 @@ class TemplateEngine {
     vars.generated_date = new Date().toLocaleString();
     vars.provider_upper = (config.provider || '').toUpperCase();
     
+    // Handle PrivateLink subnet mode (AWS only)
+    if (vars.enable_private_link && config.provider === 'aws') {
+      vars.privatelink_subnet_mode = config.privatelink_subnet_mode || 'terraform_managed';
+      vars.existing_privatelink_subnet_id = config.existing_privatelink_subnet_id || '';
+    } else {
+      vars.privatelink_subnet_mode = 'terraform_managed';
+      vars.existing_privatelink_subnet_id = '';
+    }
+    
     // Handle optional values with defaults
     vars.resource_group_name = config.resource_group_name || '';
     vars.project_id = config.project_id || '';
-    vars.existing_vpc_name = config.existing_vpc_name || '';
+    vars.existing_vpc_name = config.existing_vpc_id || config.existing_vpc_name || '';
     vars.cross_account_role_arn = config.cross_account_role_arn || '';
+
+    // Azure-specific existing VNet variables
+    vars.existing_vnet_id = config.existing_vpc_id || '';
+    vars.existing_public_subnet_name = config.existing_public_subnet_name || '';
+    vars.existing_private_subnet_name = config.existing_private_subnet_name || '';
+
+    // GCP-specific existing VPC variables
+    vars.existing_subnet_name = config.existing_subnet_name || '';
+    vars.existing_pod_range_name = config.existing_pod_range_name || '';
+    vars.existing_service_range_name = config.existing_service_range_name || '';
+
+    // Azure needs lowercase pricing tier
+    vars.pricing_tier_lower = (config.pricing_tier || 'premium').toLowerCase();
     
     return vars;
   }
@@ -207,4 +217,3 @@ class TemplateEngine {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = TemplateEngine;
 }
-

@@ -87,7 +87,7 @@ test.describe('GCP Provider Tests', () => {
 
     test('should complete GCP flow using existing VPC', async ({ page }) => {
       await FormHelpers.selectProvider(page, 'gcp');
-      
+
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'gcp-existing',
         region: 'europe-west1',
@@ -95,16 +95,32 @@ test.describe('GCP Provider Tests', () => {
         project_id: 'gcp-existing-project'
       });
 
-      await FormHelpers.fillNetworkConfig(page, {
-        create_new_vpc: false,
-        existing_vpc_name: 'my-existing-vpc',
-        vpc_cidr: '10.32.0.0/12',
-        availability_zones: ['europe-west1-a', 'europe-west1-b'],
-        enable_private_link: false
-      });
+      // Uncheck Create New VPC
+      const createNewVpc = page.locator('#create_new_vpc');
+      if (await createNewVpc.isChecked()) {
+        await createNewVpc.click();
+        await page.waitForTimeout(500);
+      }
 
+      // Fill existing VPC name
+      const existingVpcName = page.locator('#existing_vpc_id');
+      await existingVpcName.waitFor({ state: 'visible', timeout: 5000 });
+      await existingVpcName.fill('my-existing-vpc');
+
+      // Fill existing subnet and range names
+      const subnetName = page.locator('#existing_subnet_name');
+      await subnetName.waitFor({ state: 'visible', timeout: 5000 });
+      await subnetName.fill('databricks-primary-subnet');
+
+      const podRange = page.locator('#existing_pod_range_name');
+      await podRange.fill('pods');
+
+      const serviceRange = page.locator('#existing_service_range_name');
+      await serviceRange.fill('services');
+
+      await page.waitForTimeout(500);
       await FormHelpers.submitConfigForm(page);
-      await expect(page).toHaveURL(/.*#\/summary/);
+      await expect(page).toHaveURL(/.*#\/summary/, { timeout: 10000 });
     });
   });
 

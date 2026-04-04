@@ -473,7 +473,7 @@ test.describe('Existing VPC/VNet Tests', () => {
     expect(isHiddenOrDisabled || true).toBeTruthy();
   });
 
-  test('should show existing VNet name field when using existing VNet for Azure', async ({ page }) => {
+  test('should show existing VNet ID field when using existing VNet for Azure', async ({ page }) => {
     await FormHelpers.selectProvider(page, 'azure');
     await FormHelpers.fillBasicConfig(page, {
       project_prefix: 'existing-vnet',
@@ -481,16 +481,16 @@ test.describe('Existing VPC/VNet Tests', () => {
       pricing_tier: 'STANDARD',
       resource_group_name: 'rg-existing'
     });
-    
+
     // Toggle to use existing VNet
     const createNewVpcCheckbox = page.locator('#create_new_vpc');
     if (await createNewVpcCheckbox.isChecked()) {
       await createNewVpcCheckbox.click();
       await page.waitForTimeout(500);
     }
-    
-    // Existing VNet name field should be visible
-    const existingVnetField = page.locator('input[name="existing_vpc_name"]');
+
+    // Existing VNet ID field should be visible
+    const existingVnetField = page.locator('#existing_vpc_id');
     await expect(existingVnetField).toBeVisible();
   });
 });
@@ -545,8 +545,8 @@ test.describe('Form Persistence Tests', () => {
     await page.goto('/#/reset');
     await page.waitForTimeout(2000);
     
-    // Should redirect to home
-    await expect(page).toHaveURL(/.*#\/$/, { timeout: 5000 });
+    // Should redirect to select-provider
+    await expect(page).toHaveURL(/.*#\/select-provider/, { timeout: 5000 });
     
     // Navigate to configure again
     await FormHelpers.selectProvider(page, 'aws');

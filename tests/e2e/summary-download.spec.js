@@ -402,10 +402,9 @@ test.describe('Download/Generate Tests', () => {
       // Check for download page content or instructions
       const currentUrl = page.url();
       if (currentUrl.includes('/download')) {
-        // Verify download page has instructions
-        await expect(page.locator('text=terraform init').first()).toBeVisible({ timeout: 5000 });
-        await expect(page.locator('text=terraform plan').first()).toBeVisible();
-        await expect(page.locator('text=terraform apply').first()).toBeVisible();
+        // Verify download page has deployment instructions in command blocks
+        await expect(page.locator('.command-block code:has-text("terraform init")').first()).toBeAttached({ timeout: 5000 });
+        await expect(page.locator('.command-block code:has-text("terraform apply")').first()).toBeAttached();
       }
     });
 

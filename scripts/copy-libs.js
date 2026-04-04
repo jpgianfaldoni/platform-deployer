@@ -12,6 +12,7 @@ const dirs = [
   path.join(libsDir, 'jszip'),
   path.join(libsDir, 'choices.js', 'css'),
   path.join(libsDir, 'choices.js', 'js'),
+  path.join(libsDir, 'handlebars'),
   path.join(fontsDir, 'manrope'),
   path.join(fontsDir, 'space-grotesk'),
   path.join(fontsDir, 'jetbrains-mono')
@@ -53,6 +54,10 @@ const filesToCopy = [
   {
     from: path.join(__dirname, '..', 'node_modules', 'choices.js', 'public', 'assets', 'scripts', 'choices.min.js'),
     to: path.join(libsDir, 'choices.js', 'js', 'choices.min.js')
+  },
+  {
+    from: path.join(__dirname, '..', 'node_modules', 'handlebars', 'dist', 'handlebars.min.js'),
+    to: path.join(libsDir, 'handlebars', 'handlebars.min.js')
   },
   // Fontes - Manrope (variable)
   {

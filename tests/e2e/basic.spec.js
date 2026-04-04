@@ -74,9 +74,9 @@ test.describe('Basic Application Tests', () => {
     // Wait for navigation and reset to complete
     await page.waitForTimeout(1500);
     
-    // After reset, should redirect to home
+    // After reset, should redirect to select-provider
     const finalHash = await page.evaluate(() => window.location.hash);
-    expect(finalHash).toBe('#/');
+    expect(finalHash).toBe('#/select-provider');
   });
 
   test('should have main content container', async ({ page }) => {

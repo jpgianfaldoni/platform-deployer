@@ -77,11 +77,11 @@ class FormHelpers {
       await page.waitForTimeout(300);
     }
     
-    // Fill existing VPC name if not creating new
-    if (config.existing_vpc_name !== undefined && !config.create_new_vpc) {
-      const existingVpcField = page.locator('input[name="existing_vpc_name"]');
+    // Fill existing VPC ID if not creating new
+    if (config.existing_vpc_id !== undefined && !config.create_new_vpc) {
+      const existingVpcField = page.locator('#existing_vpc_id');
       if (await existingVpcField.isVisible()) {
-        await existingVpcField.fill(config.existing_vpc_name);
+        await existingVpcField.fill(config.existing_vpc_id);
       }
     }
     

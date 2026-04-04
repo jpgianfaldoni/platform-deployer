@@ -2,35 +2,193 @@
 
 This Terraform project deploys a Databricks workspace on Microsoft Azure.
 
-## Configuration
+## Configuration Summary
 
-- **Provider**: Azure
-- **Region**: {{region}}
-- **Resource Group**: {{resource_group_name}}
-- **Project Prefix**: {{project_prefix}}
+| Setting | Value |
+|---------|-------|
+| **Provider** | Azure |
+| **Region** | {{region}} |
+| **Project Prefix** | {{project_prefix}} |
+| **Pricing Tier** | {{pricing_tier}} |
+| **VNet CIDR** | {{vpc_cidr}} |
+| **Private Link** | {{private_link_status}} |
 
 ## Prerequisites
 
-1. Azure subscription
-2. Terraform >= 1.0
-3. Azure CLI configured
+- Azure subscription with appropriate permissions (Contributor or Owner role)
+- Databricks account with Account Console access
+- Terraform >= 1.0 installed
+- Azure CLI installed
 
 ## Deployment Steps
 
-1. **Login to Azure**:
+Follow these steps in order to deploy your Databricks workspace.
+
+### Step 1: Extract and Review
+
+Extract the ZIP file and review the generated configuration files:
+
+```bash
+unzip {{project_prefix}}-azure-terraform.zip -d {{project_prefix}}-azure-terraform
+```
+
+Review the files, especially `terraform.tfvars` to ensure all values are correct for your environment.
+
+### Step 2: Navigate to Directory
+
+Change to the extracted Terraform project directory:
+
+```bash
+cd {{project_prefix}}-azure-terraform
+```
+
+### Step 3: Configure Azure Credentials
+
+Login to Azure and set your subscription:
+
+```bash
+az login
+az account set --subscription "your-subscription-id"
+```
+
+Verify you're using the correct subscription:
+
+```bash
+az account show
+```
+
+### Step 4: Initialize Terraform
+
+Initialize Terraform to download required providers and modules:
+
+```bash
+terraform init
+```
+
+### Step 5: Create Service Principal and Export Credentials
+
+> **⚠️ IMPORTANT: Always use a Service Principal instead of personal access tokens (PAT).**
+> Service Principals provide better security, auditability, and can be scoped to specific permissions.
+> Personal PATs are tied to individual users and should be avoided for automated deployments.
+
+#### Creating a Databricks Service Principal
+
+1. Go to [Databricks Account Console](https://accounts.cloud.databricks.com)
+2. Navigate to **User Management** → **Service Principals**
+3. Click **Add Service Principal**
+4. Enter a name (e.g., `terraform-deployer`) and click **Add**
+5. Select the newly created Service Principal
+6. Go to the **Secrets** tab and click **Generate secret**
+7. **Copy the Client ID and Secret immediately** (the secret is shown only once!)
+8. Go to the **Roles** tab and assign the **Account Admin** role
+
+> **Note for Azure:** Unlike AWS and GCP, Azure authentication does not require the Databricks Account ID
+> as an environment variable. The workspace is linked to your Azure subscription.
+
+#### Export Environment Variables
+
+Export the Service Principal credentials as environment variables:
+
+```bash
+export DATABRICKS_CLIENT_ID="<your-client-id>"
+export DATABRICKS_CLIENT_SECRET="<your-client-secret>"
+```
+
+**Never commit these values to version control!**
+
+### Step 6: Deploy Infrastructure
+
+Review the planned changes:
+
+```bash
+terraform plan
+```
+
+Apply the Terraform configuration to create your Databricks infrastructure:
+
+```bash
+terraform apply
+```
+
+Type `yes` when prompted to confirm the deployment.
+
+## Outputs
+
+After successful deployment, you will have access to:
+
+| Output | Description |
+|--------|-------------|
+| `workspace_url` | The URL to access your Databricks workspace |
+| `workspace_id` | The unique workspace identifier |
+| `resource_group_name` | The Azure resource group containing all resources |
+
+## Troubleshooting
+
+### Azure Authentication Error
+
+If you see authentication errors:
+
+```bash
+az login
+az account show
+```
+
+Make sure you're logged in and using the correct subscription.
+
+### Databricks Authentication Error
+
+If you see:
+```
+cannot configure default credentials
+```
+
+1. Verify all environment variables are set:
    ```bash
-   az login
+   echo $DATABRICKS_CLIENT_ID
+   echo $DATABRICKS_CLIENT_SECRET
    ```
 
-2. **Initialize Terraform**:
-   ```bash
-   terraform init
-   ```
+2. Verify that your Service Principal has the **Account Admin** role assigned in Databricks Account Console
 
-3. **Apply**:
-   ```bash
-   terraform apply
-   ```
+3. Ensure the Service Principal secret hasn't expired
 
-## Generated: {{generated_date}}
+### Resource Provider Not Registered
 
+If you see "resource provider not registered" errors:
+
+```bash
+az provider register --namespace Microsoft.Databricks
+az provider register --namespace Microsoft.Network
+az provider register --namespace Microsoft.Storage
+```
+
+Wait a few minutes for registration to complete.
+
+### Quota Exceeded
+
+If you see quota errors, you may need to request an increase for:
+- vCPU quota in your region
+- Network resources (VNets, subnets, public IPs)
+
+Contact Azure support or use the Azure Portal to request quota increases.
+
+## Important Notes
+
+- All resources are created within a single resource group for easy management
+- The VNet is configured with separate subnets for public and private clusters
+- NSG rules are automatically configured for Databricks requirements
+- All resources are tagged with the project prefix for easy identification
+
+## Cleanup
+
+To destroy all resources created by this project:
+
+```bash
+terraform destroy
+```
+
+Type `yes` when prompted. **Warning:** This will permanently delete all resources including data stored in the workspace.
+
+---
+
+**Generated:** {{generated_date}}

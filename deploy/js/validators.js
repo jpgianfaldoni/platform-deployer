@@ -221,6 +221,106 @@ class Validators {
   }
 
   /**
+   * Validate AWS Subnet ID format
+   */
+  static validateAwsSubnetId(subnetId) {
+    if (!subnetId || typeof subnetId !== 'string') {
+      return { valid: false, message: 'Subnet ID is required' };
+    }
+    
+    const trimmed = subnetId.trim();
+    
+    // AWS subnet IDs start with "subnet-" followed by 8 or 17 hex characters
+    if (!/^subnet-[a-f0-9]{8,17}$/i.test(trimmed)) {
+      return { valid: false, message: 'Invalid AWS Subnet ID format (e.g., subnet-0123456789abcdef0)' };
+    }
+    
+    return { valid: true, message: '' };
+  }
+
+  /**
+   * Validate AWS Security Group ID format
+   */
+  static validateAwsSecurityGroupId(sgId) {
+    if (!sgId || typeof sgId !== 'string') {
+      return { valid: false, message: 'Security Group ID is required' };
+    }
+    
+    const trimmed = sgId.trim();
+    
+    // AWS security group IDs start with "sg-" followed by 8 or 17 hex characters
+    if (!/^sg-[a-f0-9]{8,17}$/i.test(trimmed)) {
+      return { valid: false, message: 'Invalid AWS Security Group ID format (e.g., sg-0123456789abcdef0)' };
+    }
+    
+    return { valid: true, message: '' };
+  }
+
+  /**
+   * Validate AWS VPC ID format
+   */
+  static validateAwsVpcId(vpcId) {
+    if (!vpcId || typeof vpcId !== 'string') {
+      return { valid: false, message: 'VPC ID is required' };
+    }
+    
+    const trimmed = vpcId.trim();
+    
+    // AWS VPC IDs start with "vpc-" followed by 8 or 17 hex characters
+    if (!/^vpc-[a-f0-9]{8,17}$/i.test(trimmed)) {
+      return { valid: false, message: 'Invalid AWS VPC ID format (e.g., vpc-0123456789abcdef0)' };
+    }
+    
+    return { valid: true, message: '' };
+  }
+
+  /**
+   * Validate Azure VNet Resource ID format
+   */
+  static validateAzureVnetId(vnetId) {
+    if (!vnetId || typeof vnetId !== 'string') {
+      return { valid: false, message: 'VNet Resource ID is required' };
+    }
+    const trimmed = vnetId.trim();
+    const pattern = /^\/subscriptions\/[a-f0-9-]+\/resourceGroups\/[^/]+\/providers\/Microsoft\.Network\/virtualNetworks\/[^/]+$/i;
+    if (!pattern.test(trimmed)) {
+      return { valid: false, message: 'Invalid Azure VNet Resource ID format (e.g., /subscriptions/.../resourceGroups/.../providers/Microsoft.Network/virtualNetworks/my-vnet)' };
+    }
+    return { valid: true, message: '' };
+  }
+
+  /**
+   * Validate Azure subnet name
+   */
+  static validateAzureSubnetName(name) {
+    if (!name || typeof name !== 'string') {
+      return { valid: false, message: 'Subnet name is required' };
+    }
+    const trimmed = name.trim();
+    if (trimmed.length < 1 || trimmed.length > 80) {
+      return { valid: false, message: 'Subnet name must be 1-80 characters' };
+    }
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(trimmed)) {
+      return { valid: false, message: 'Subnet name must start with alphanumeric and contain only letters, numbers, hyphens, underscores, or periods' };
+    }
+    return { valid: true, message: '' };
+  }
+
+  /**
+   * Validate GCP resource name (VPC, subnet, IP range)
+   */
+  static validateGcpResourceName(name, label = 'Resource name') {
+    if (!name || typeof name !== 'string') {
+      return { valid: false, message: `${label} is required` };
+    }
+    const trimmed = name.trim();
+    if (!/^[a-z][a-z0-9-]{0,62}$/.test(trimmed)) {
+      return { valid: false, message: `${label} must start with lowercase letter, contain only lowercase letters, numbers, hyphens (max 63 chars)` };
+    }
+    return { valid: true, message: '' };
+  }
+
+  /**
    * Validate entire configuration
    */
   static validateConfiguration(config) {
@@ -242,24 +342,102 @@ class Validators {
       errors.pricing_tier = tierCheck.message;
     }
     
-    // Network
-    const cidrCheck = this.validateCIDR(config.vpc_cidr, 8, 24);
-    if (!cidrCheck.valid) {
-      errors.vpc_cidr = cidrCheck.message;
-    }
+    // Determine if we need subnet configuration (VPC CIDR, AZs, etc.)
+    const needsSubnetConfig = config.create_new_vpc ||
+      (config.provider === 'aws' && config.create_new_subnets !== false);
     
-    // Availability zones
-    if (config.availability_zones) {
-      const azCheck = this.validateAvailabilityZones(
-        config.availability_zones, 
-        config.provider, 
-        config.region
-      );
-      if (!azCheck.valid) {
-        errors.availability_zones = azCheck.message;
+    // Network - only validate VPC CIDR if we need subnet config
+    if (needsSubnetConfig) {
+      const cidrCheck = this.validateCIDR(config.vpc_cidr, 8, 24);
+      if (!cidrCheck.valid) {
+        errors.vpc_cidr = cidrCheck.message;
+      }
+      
+      // Availability zones
+      if (config.availability_zones) {
+        const azCheck = this.validateAvailabilityZones(
+          config.availability_zones, 
+          config.provider, 
+          config.region
+        );
+        if (!azCheck.valid) {
+          errors.availability_zones = azCheck.message;
+        }
       }
     }
     
+    // AWS-specific: Existing VPC validation
+    if (config.provider === 'aws' && !config.create_new_vpc) {
+      // Validate existing VPC ID
+      const vpcIdCheck = this.validateAwsVpcId(config.existing_vpc_id);
+      if (!vpcIdCheck.valid) {
+        errors.existing_vpc_id = vpcIdCheck.message;
+      }
+      
+      // If using existing subnets, validate subnet IDs and security group
+      if (config.create_new_subnets === false || config.subnet_mode === 'existing') {
+        // Validate at least 2 subnet IDs
+        if (!config.existing_subnet_ids || config.existing_subnet_ids.length < 2) {
+          errors.existing_subnet_ids = 'At least 2 subnet IDs are required for Databricks (in different AZs)';
+        } else {
+          // Validate each subnet ID format
+          for (let i = 0; i < config.existing_subnet_ids.length; i++) {
+            const subnetCheck = this.validateAwsSubnetId(config.existing_subnet_ids[i]);
+            if (!subnetCheck.valid) {
+              errors.existing_subnet_ids = `Invalid format for Subnet ID ${i + 1}: ${subnetCheck.message}`;
+              break;
+            }
+          }
+        }
+        
+        // Validate security group ID
+        if (!config.existing_security_group_id) {
+          errors.existing_security_group_id = 'Security Group ID is required when using existing subnets';
+        } else {
+          const sgCheck = this.validateAwsSecurityGroupId(config.existing_security_group_id);
+          if (!sgCheck.valid) {
+            errors.existing_security_group_id = sgCheck.message;
+          }
+        }
+      }
+    }
+    
+    // Azure-specific: Existing VNet validation
+    if (config.provider === 'azure' && !config.create_new_vpc) {
+      const vnetIdCheck = this.validateAzureVnetId(config.existing_vpc_id);
+      if (!vnetIdCheck.valid) {
+        errors.existing_vpc_id = vnetIdCheck.message;
+      }
+      const pubSubnetCheck = this.validateAzureSubnetName(config.existing_public_subnet_name);
+      if (!pubSubnetCheck.valid) {
+        errors.existing_public_subnet_name = pubSubnetCheck.message;
+      }
+      const privSubnetCheck = this.validateAzureSubnetName(config.existing_private_subnet_name);
+      if (!privSubnetCheck.valid) {
+        errors.existing_private_subnet_name = privSubnetCheck.message;
+      }
+    }
+
+    // GCP-specific: Existing VPC validation
+    if (config.provider === 'gcp' && !config.create_new_vpc) {
+      const vpcNameCheck = this.validateGcpResourceName(config.existing_vpc_id, 'VPC name');
+      if (!vpcNameCheck.valid) {
+        errors.existing_vpc_id = vpcNameCheck.message;
+      }
+      const subnetCheck = this.validateGcpResourceName(config.existing_subnet_name, 'Subnet name');
+      if (!subnetCheck.valid) {
+        errors.existing_subnet_name = subnetCheck.message;
+      }
+      const podRangeCheck = this.validateGcpResourceName(config.existing_pod_range_name, 'Pod IP range name');
+      if (!podRangeCheck.valid) {
+        errors.existing_pod_range_name = podRangeCheck.message;
+      }
+      const svcRangeCheck = this.validateGcpResourceName(config.existing_service_range_name, 'Service IP range name');
+      if (!svcRangeCheck.valid) {
+        errors.existing_service_range_name = svcRangeCheck.message;
+      }
+    }
+
     // Provider-specific
     if (config.provider === 'azure' && !config.resource_group_name) {
       errors.resource_group_name = 'Resource group name is required for Azure';
@@ -272,6 +450,28 @@ class Validators {
     // Pricing tier features
     const featureErrors = this.validatePricingTierFeatures(config);
     Object.assign(errors, featureErrors);
+    
+    // AWS-specific: PrivateLink subnet validation
+    if (config.provider === 'aws' && config.enable_private_link) {
+      // When using existing subnets (not creating new ones), user must provide PrivateLink subnet
+      const usingExistingSubnets = !config.create_new_vpc && 
+        (config.create_new_subnets === false || config.subnet_mode === 'existing');
+      
+      if (usingExistingSubnets && config.privatelink_subnet_mode === 'terraform_managed') {
+        errors.privatelink_subnet_mode = 'When using existing subnets, you must select "Use Existing Subnet" for PrivateLink and provide a subnet ID';
+      }
+      
+      if (config.privatelink_subnet_mode === 'user_managed') {
+        if (!config.existing_privatelink_subnet_id) {
+          errors.existing_privatelink_subnet_id = 'Subnet ID is required when using user-managed PrivateLink subnet';
+        } else {
+          const subnetCheck = this.validateAwsSubnetId(config.existing_privatelink_subnet_id);
+          if (!subnetCheck.valid) {
+            errors.existing_privatelink_subnet_id = subnetCheck.message;
+          }
+        }
+      }
+    }
     
     // Tags
     if (config.tags) {
