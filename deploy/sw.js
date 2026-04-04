@@ -1,5 +1,5 @@
 // Service Worker for Databricks Deployer PWA
-const CACHE_NAME = 'databricks-deployer-v7';
+const CACHE_NAME = 'databricks-deployer-v8';
 const BASE_PATH = self.location.pathname.replace('/sw.js', '') || './';
 
 // Template files to cache
@@ -174,6 +174,14 @@ self.addEventListener('fetch', (event) => {
             });
         })
     );
+    return;
+  }
+
+  // Always fetch version.json from network (never cache deploy metadata)
+  if (url.pathname.endsWith('/version.json')) {
+    event.respondWith(fetch(event.request).catch(() => new Response('{}', {
+      headers: { 'Content-Type': 'application/json' }
+    })));
     return;
   }
 
