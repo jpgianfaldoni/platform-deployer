@@ -3,7 +3,7 @@
  * These tests cover edge cases in form validation that aren't covered by main provider tests
  */
 
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('../helpers/coverage-fixture');
 const FormHelpers = require('../helpers/form-helpers');
 const ValidationHelpers = require('../helpers/validation-helpers');
 const NavigationHelpers = require('../helpers/navigation-helpers');

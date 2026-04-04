@@ -3,7 +3,7 @@
  * These tests validate that subnet calculations are correct and don't overlap
  */
 
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('../helpers/coverage-fixture');
 const FormHelpers = require('../helpers/form-helpers');
 
 test.describe('CIDR Calculations', () => {

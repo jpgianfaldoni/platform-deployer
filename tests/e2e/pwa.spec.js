@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('../helpers/coverage-fixture');
 
 test.describe('PWA Functionality Tests', () => {
   test.beforeEach(async ({ page }) => {

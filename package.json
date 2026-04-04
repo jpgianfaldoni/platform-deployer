@@ -8,12 +8,14 @@
     "test:ui": "playwright test --ui",
     "test:debug": "playwright test --debug",
     "test:headed": "playwright test --headed",
-    "test:coverage": "playwright test --config=playwright.coverage.config.js && node scripts/collect-coverage.js",
+    "test:coverage": "COVERAGE=true playwright test --config=playwright.coverage.config.js",
     "coverage": "npm run test:coverage",
     "start": "bash scripts/run.sh",
     "build:libs": "node scripts/copy-libs.js",
     "deploy": "bash scripts/deploy.sh",
-    "postinstall": "npm run build:libs"
+    "postinstall": "npm run build:libs",
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest"
   },
   "keywords": [
     "pwa",
@@ -25,7 +27,9 @@
   "license": "MIT",
   "devDependencies": {
     "@playwright/test": "^1.57.0",
-    "v8-to-istanbul": "^9.3.0"
+    "@vitest/coverage-v8": "^4.1.2",
+    "v8-to-istanbul": "^9.3.0",
+    "vitest": "^4.1.2"
   },
   "engines": {
     "node": ">=18.0.0"

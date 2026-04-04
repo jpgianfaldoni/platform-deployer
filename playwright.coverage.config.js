@@ -2,35 +2,55 @@
 const { defineConfig, devices } = require('@playwright/test');
 
 /**
- * Playwright configuration with code coverage enabled
- * Use this config when running coverage tests: playwright test --config=playwright.coverage.config.js
+ * Playwright configuration for code coverage runs.
+ *
+ * This config:
+ *   - Runs ALL e2e spec files (not just coverage.spec.js)
+ *   - Sets COVERAGE=true so that coverage.js helpers collect V8 data
+ *   - Cleans .coverage/ before tests (globalSetup)
+ *   - Generates the Istanbul report after tests (globalTeardown)
+ *
+ * Usage:
+ *   COVERAGE=true npx playwright test --config=playwright.coverage.config.js
+ *   npm run test:coverage
  */
+
+// Ensure the env var is set even when the config is loaded without it in the
+// shell (e.g. direct npx invocation without the COVERAGE= prefix).
+process.env.COVERAGE = 'true';
 
 module.exports = defineConfig({
   testDir: './tests/e2e',
-  fullyParallel: true,
+
+  // Run tests serially so coverage files don't collide; parallel is fine too
+  // but serial is safer for file writes.
+  fullyParallel: false,
+  workers: 1,
+
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  retries: 0,
+
   reporter: [
-    ['html'],
-    ['json', { outputFile: 'coverage/coverage.json' }],
     ['list'],
+    ['json', { outputFile: 'coverage/playwright/test-results.json' }],
   ],
-  
+
+  globalSetup: './tests/helpers/coverage-global-setup.js',
+  globalTeardown: './tests/helpers/coverage-global-teardown.js',
+
   use: {
     baseURL: 'http://localhost:8000',
-    trace: 'on-first-retry',
+    trace: 'off',
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    video: 'off',
   },
 
   projects: [
     {
-      name: 'chromium',
-      use: { 
+      name: 'chromium-coverage',
+      use: {
         ...devices['Desktop Chrome'],
-        // Enable JavaScript coverage collection
+        // --js-flags=--expose-gc is sometimes needed for V8 coverage
         launchOptions: {
           args: ['--js-flags=--expose-gc'],
         },
@@ -46,4 +66,3 @@ module.exports = defineConfig({
     timeout: 120 * 1000,
   },
 });
-

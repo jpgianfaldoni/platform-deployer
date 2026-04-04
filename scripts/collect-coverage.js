@@ -2,29 +2,35 @@
 
 /**
  * Script to collect and aggregate code coverage from Playwright tests
- * This script collects V8 coverage data from the browser and generates reports
+ * Uses v8-to-istanbul to convert V8 coverage data into real Istanbul
+ * line/branch/function coverage reports.
  */
 
+const v8toIstanbul = require('v8-to-istanbul');
 const fs = require('fs');
 const path = require('path');
 
 const COVERAGE_DIR = path.join(__dirname, '../.coverage');
-const REPORT_DIR = path.join(__dirname, '../coverage');
-const DEPLOY_JS_DIR = path.join(__dirname, '../deploy/js');
+const REPORT_DIR = path.join(__dirname, '../coverage/playwright');
+const DEPLOY_DIR = path.join(__dirname, '../deploy');
 
-// Ensure directories exist
-if (!fs.existsSync(COVERAGE_DIR)) {
-  fs.mkdirSync(COVERAGE_DIR, { recursive: true });
-}
+const SOURCE_FILES = [
+  'js/app.js',
+  'js/utils.js',
+  'js/validators.js',
+  'js/network-calculator.js',
+  'js/template-engine.js',
+  'js/template-loader.js',
+  'js/terraform-generator.js',
+];
 
-if (!fs.existsSync(REPORT_DIR)) {
-  fs.mkdirSync(REPORT_DIR, { recursive: true });
-}
+// Ensure output directory exists
+fs.mkdirSync(REPORT_DIR, { recursive: true });
 
 console.log('Collecting coverage data...');
 
-// Read all coverage files
-const coverageFiles = fs.existsSync(COVERAGE_DIR) 
+// Read all coverage JSON files
+const coverageFiles = fs.existsSync(COVERAGE_DIR)
   ? fs.readdirSync(COVERAGE_DIR).filter(f => f.endsWith('.json'))
   : [];
 
@@ -35,293 +41,298 @@ if (coverageFiles.length === 0) {
 
 console.log(`Found ${coverageFiles.length} coverage file(s)`);
 
-// Aggregate coverage data
-const aggregatedCoverage = {};
-let totalFiles = 0;
-let coveredFiles = 0;
+// Collect all V8 entries keyed by relative path (e.g. "js/app.js")
+// Each key maps to an array of V8 function coverage arrays (one per test run).
+const v8EntriesByFile = {};
 
-coverageFiles.forEach(file => {
+for (const file of coverageFiles) {
+  let coverageData;
   try {
-    const coverageData = JSON.parse(
-      fs.readFileSync(path.join(COVERAGE_DIR, file), 'utf8')
-    );
-    
-    // Coverage data is an array of coverage entries
-    if (Array.isArray(coverageData)) {
-      coverageData.forEach(entry => {
-        const url = entry.url || '';
-        
-        // Skip if not a valid URL or not our JS files
-        if (!url || (!url.includes('/js/') && !url.includes('localhost:8000/js/'))) {
-          return;
-        }
-        
-        try {
-          // Extract file path from URL
-          const urlObj = new URL(url);
-          let filePath = urlObj.pathname;
-          
-          // Remove leading slash
-          if (filePath.startsWith('/')) {
-            filePath = filePath.substring(1);
-          }
-          
-          // Only process JavaScript files from deploy/js directory
-          if (!filePath.startsWith('js/') && !filePath.includes('/js/')) {
-            return;
-          }
-          
-          // Normalize path
-          const normalizedPath = filePath.replace(/^js\//, '');
-          
-          if (!aggregatedCoverage[normalizedPath]) {
-            aggregatedCoverage[normalizedPath] = {
-              path: normalizedPath,
-              url: url,
-              functions: entry.functions || [],
-              scripts: entry.scripts || [],
-              hasCoverage: false,
-            };
-            totalFiles++;
-          }
-          
-          // Merge coverage data - check if functions have coverage
-          if (entry.functions && entry.functions.length > 0) {
-            // Check if any function is actually covered (has ranges)
-            const hasCoverage = entry.functions.some(func => 
-              func.ranges && func.ranges.length > 0 && func.ranges.some(range => range.count > 0)
-            );
-            
-            if (hasCoverage) {
-              aggregatedCoverage[normalizedPath].hasCoverage = true;
-            }
-          }
-        } catch (urlError) {
-          // Skip invalid URLs
-          return;
-        }
-      });
-    }
-  } catch (error) {
-    console.warn(`Error processing ${file}:`, error.message);
+    coverageData = JSON.parse(fs.readFileSync(path.join(COVERAGE_DIR, file), 'utf8'));
+  } catch (e) {
+    console.warn(`Skipping ${file}: ${e.message}`);
+    continue;
   }
+
+  if (!Array.isArray(coverageData)) continue;
+
+  for (const entry of coverageData) {
+    const url = entry.url || '';
+    if (!url) continue;
+
+    // Match URLs like http://localhost:8000/js/app.js
+    let relativePath;
+    try {
+      const parsed = new URL(url);
+      const pathname = parsed.pathname.replace(/^\//, ''); // strip leading /
+      if (SOURCE_FILES.includes(pathname)) {
+        relativePath = pathname;
+      }
+    } catch (_) {
+      continue;
+    }
+
+    if (!relativePath) continue;
+
+    if (!v8EntriesByFile[relativePath]) {
+      v8EntriesByFile[relativePath] = [];
+    }
+    if (entry.functions && entry.functions.length > 0) {
+      v8EntriesByFile[relativePath].push(entry.functions);
+    }
+  }
+}
+
+const foundFiles = Object.keys(v8EntriesByFile);
+if (foundFiles.length === 0) {
+  console.log('No matching JS coverage entries found in the collected data.');
+  process.exit(1);
+}
+
+console.log(`Processing ${foundFiles.length} source file(s)...\n`);
+
+// Convert each file's V8 coverage to Istanbul format and merge across runs
+async function processFiles() {
+  const mergedIstanbul = {}; // relativePath -> Istanbul coverage data
+
+  for (const relativePath of SOURCE_FILES) {
+    const localFilePath = path.join(DEPLOY_DIR, relativePath);
+
+    if (!fs.existsSync(localFilePath)) {
+      console.warn(`Source file not found, skipping: ${localFilePath}`);
+      continue;
+    }
+
+    const sourceContent = fs.readFileSync(localFilePath, 'utf8');
+    const runsList = v8EntriesByFile[relativePath] || [];
+
+    if (runsList.length === 0) {
+      // File was never loaded — create zero coverage
+      const converter = v8toIstanbul(localFilePath, 0, { source: sourceContent });
+      await converter.load();
+      // Apply empty coverage (all zero)
+      converter.applyCoverage([]);
+      const istanbul = converter.toIstanbul();
+      mergedIstanbul[relativePath] = istanbul[Object.keys(istanbul)[0]];
+      continue;
+    }
+
+    let merged = null;
+
+    for (const functions of runsList) {
+      const converter = v8toIstanbul(localFilePath, 0, { source: sourceContent });
+      await converter.load();
+      converter.applyCoverage(functions);
+      const istanbul = converter.toIstanbul();
+      const fileKey = Object.keys(istanbul)[0];
+      const data = istanbul[fileKey];
+
+      if (!merged) {
+        merged = data;
+      } else {
+        // Merge: take max of each counter (union of covered areas)
+        for (const id of Object.keys(data.s)) {
+          merged.s[id] = Math.max(merged.s[id] || 0, data.s[id] || 0);
+        }
+        for (const id of Object.keys(data.f)) {
+          merged.f[id] = Math.max(merged.f[id] || 0, data.f[id] || 0);
+        }
+        for (const id of Object.keys(data.b)) {
+          if (!merged.b[id]) merged.b[id] = data.b[id];
+          else {
+            merged.b[id] = merged.b[id].map((v, i) => Math.max(v, data.b[id][i] || 0));
+          }
+        }
+      }
+    }
+
+    mergedIstanbul[relativePath] = merged;
+  }
+
+  return mergedIstanbul;
+}
+
+processFiles().then(mergedIstanbul => {
+  // ---- Text summary ----
+  printTextSummary(mergedIstanbul);
+
+  // ---- HTML report ----
+  const html = generateHTML(mergedIstanbul);
+  const htmlPath = path.join(REPORT_DIR, 'index.html');
+  fs.writeFileSync(htmlPath, html);
+
+  // ---- Istanbul JSON (for tooling) ----
+  const jsonPath = path.join(REPORT_DIR, 'coverage-final.json');
+  // Build a flat map keyed by absolute file path
+  const finalJson = {};
+  for (const [rel, data] of Object.entries(mergedIstanbul)) {
+    if (data) {
+      finalJson[path.join(DEPLOY_DIR, rel)] = data;
+    }
+  }
+  fs.writeFileSync(jsonPath, JSON.stringify(finalJson, null, 2));
+
+  console.log(`\nReports written to: ${REPORT_DIR}/`);
+  console.log(`  HTML:             ${htmlPath}`);
+  console.log(`  JSON:             ${jsonPath}`);
+}).catch(err => {
+  console.error('Coverage processing failed:', err);
+  process.exit(1);
 });
 
-// Count covered files
-const coveredFilesCount = Object.values(aggregatedCoverage).filter(
-  file => file.hasCoverage || (file.functions && file.functions.length > 0)
-).length;
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-// Generate coverage summary
-const summary = {
-  timestamp: new Date().toISOString(),
-  totalFiles: totalFiles,
-  coveredFiles: coveredFilesCount,
-  coveragePercentage: totalFiles > 0 ? ((coveredFilesCount / totalFiles) * 100).toFixed(2) : 0,
-  files: Object.keys(aggregatedCoverage).map(key => ({
-    file: key,
-    hasCoverage: aggregatedCoverage[key].hasCoverage || (aggregatedCoverage[key].functions && aggregatedCoverage[key].functions.length > 0),
-    functionsCount: aggregatedCoverage[key].functions ? aggregatedCoverage[key].functions.length : 0,
-  })),
-};
+function calcStats(data) {
+  if (!data) {
+    return { stmts: [0, 0], funcs: [0, 0], branches: [0, 0], lines: [0, 0] };
+  }
 
-// Write summary
-const summaryPath = path.join(REPORT_DIR, 'coverage-summary.json');
-fs.writeFileSync(summaryPath, JSON.stringify(summary, null, 2));
+  const stmtTotal = Object.keys(data.s).length;
+  const stmtCovered = Object.values(data.s).filter(v => v > 0).length;
 
-// Generate HTML report
-const htmlReport = generateHTMLReport(summary, aggregatedCoverage);
-const htmlReportPath = path.join(REPORT_DIR, 'index.html');
-fs.writeFileSync(htmlReportPath, htmlReport);
+  const funcTotal = Object.keys(data.f).length;
+  const funcCovered = Object.values(data.f).filter(v => v > 0).length;
 
-// Generate LCOV format (for compatibility with tools like Codecov)
-const lcovReport = generateLCOVReport(aggregatedCoverage);
-const lcovPath = path.join(REPORT_DIR, 'lcov.info');
-fs.writeFileSync(lcovPath, lcovReport);
+  let branchTotal = 0;
+  let branchCovered = 0;
+  for (const counts of Object.values(data.b)) {
+    branchTotal += counts.length;
+    branchCovered += counts.filter(v => v > 0).length;
+  }
 
-console.log(`\nCoverage Report Generated:`);
-console.log(`  Summary: ${REPORT_DIR}/coverage-summary.json`);
-console.log(`  HTML: ${REPORT_DIR}/index.html`);
-console.log(`  LCOV: ${REPORT_DIR}/lcov.info`);
-console.log(`\nCoverage: ${summary.coveragePercentage}% (${summary.coveredFiles}/${summary.totalFiles} files)`);
+  // Lines: use statementMap to determine which lines are covered
+  const lineMap = {};
+  for (const [id, loc] of Object.entries(data.statementMap || {})) {
+    const line = loc.start.line;
+    if (lineMap[line] === undefined) lineMap[line] = 0;
+    lineMap[line] = Math.max(lineMap[line], data.s[id] || 0);
+  }
+  const lineTotal = Object.keys(lineMap).length;
+  const lineCovered = Object.values(lineMap).filter(v => v > 0).length;
 
-function generateHTMLReport(summary, coverage) {
-  const filesList = Object.entries(coverage).map(([key, data]) => {
-    const hasCoverage = data.hasCoverage || (data.functions && data.functions.length > 0);
-    const status = hasCoverage ? 'covered' : 'uncovered';
-    const statusClass = status === 'covered' ? 'coverage-high' : 'coverage-low';
-    const functionsCount = data.functions ? data.functions.length : 0;
-    return `
-      <tr>
-        <td>${data.path}</td>
-        <td class="${statusClass}">${status}</td>
-        <td>${functionsCount}</td>
-      </tr>
-    `;
-  }).join('');
+  return {
+    stmts: [stmtCovered, stmtTotal],
+    funcs: [funcCovered, funcTotal],
+    branches: [branchCovered, branchTotal],
+    lines: [lineCovered, lineTotal],
+  };
+}
 
-  return `
-<!DOCTYPE html>
+function pct(covered, total) {
+  if (total === 0) return '100.00';
+  return ((covered / total) * 100).toFixed(2);
+}
+
+function printTextSummary(mergedIstanbul) {
+  const COL = 30;
+  const header = [
+    'File'.padEnd(COL),
+    'Stmts'.padStart(8),
+    'Branch'.padStart(8),
+    'Funcs'.padStart(8),
+    'Lines'.padStart(8),
+  ].join(' | ');
+  const sep = '-'.repeat(header.length);
+
+  console.log('\n' + sep);
+  console.log(header);
+  console.log(sep);
+
+  const totals = { stmts: [0, 0], funcs: [0, 0], branches: [0, 0], lines: [0, 0] };
+
+  for (const rel of SOURCE_FILES) {
+    const data = mergedIstanbul[rel];
+    const s = calcStats(data);
+
+    for (const k of ['stmts', 'funcs', 'branches', 'lines']) {
+      totals[k][0] += s[k][0];
+      totals[k][1] += s[k][1];
+    }
+
+    const row = [
+      rel.padEnd(COL),
+      `${pct(s.stmts[0], s.stmts[1])}%`.padStart(8),
+      `${pct(s.branches[0], s.branches[1])}%`.padStart(8),
+      `${pct(s.funcs[0], s.funcs[1])}%`.padStart(8),
+      `${pct(s.lines[0], s.lines[1])}%`.padStart(8),
+    ].join(' | ');
+    console.log(row);
+  }
+
+  console.log(sep);
+  const allRow = [
+    'All files'.padEnd(COL),
+    `${pct(totals.stmts[0], totals.stmts[1])}%`.padStart(8),
+    `${pct(totals.branches[0], totals.branches[1])}%`.padStart(8),
+    `${pct(totals.funcs[0], totals.funcs[1])}%`.padStart(8),
+    `${pct(totals.lines[0], totals.lines[1])}%`.padStart(8),
+  ].join(' | ');
+  console.log(allRow);
+  console.log(sep + '\n');
+}
+
+function coverageClass(p) {
+  const n = parseFloat(p);
+  if (n >= 80) return 'high';
+  if (n >= 50) return 'medium';
+  return 'low';
+}
+
+function generateHTML(mergedIstanbul) {
+  const rows = SOURCE_FILES.map(rel => {
+    const data = mergedIstanbul[rel];
+    const s = calcStats(data);
+    const sp = pct(s.stmts[0], s.stmts[1]);
+    const bp = pct(s.branches[0], s.branches[1]);
+    const fp = pct(s.funcs[0], s.funcs[1]);
+    const lp = pct(s.lines[0], s.lines[1]);
+    return `<tr>
+      <td>${rel}</td>
+      <td class="cov ${coverageClass(sp)}">${sp}%<br><small>${s.stmts[0]}/${s.stmts[1]}</small></td>
+      <td class="cov ${coverageClass(bp)}">${bp}%<br><small>${s.branches[0]}/${s.branches[1]}</small></td>
+      <td class="cov ${coverageClass(fp)}">${fp}%<br><small>${s.funcs[0]}/${s.funcs[1]}</small></td>
+      <td class="cov ${coverageClass(lp)}">${lp}%<br><small>${s.lines[0]}/${s.lines[1]}</small></td>
+    </tr>`;
+  }).join('\n');
+
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Code Coverage Report</title>
+  <title>Coverage Report</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { 
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-      background: #f5f5f5;
-      padding: 20px;
-      color: #333;
-    }
-    .container { max-width: 1200px; margin: 0 auto; }
-    header { 
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      padding: 30px;
-      border-radius: 8px;
-      margin-bottom: 30px;
-      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    }
-    h1 { font-size: 2em; margin-bottom: 10px; }
-    .summary { 
-      display: grid; 
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 20px;
-      margin-bottom: 30px;
-    }
-    .summary-card {
-      background: white;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .summary-card h3 { 
-      color: #666; 
-      font-size: 0.9em; 
-      text-transform: uppercase;
-      margin-bottom: 10px;
-    }
-    .summary-card .value {
-      font-size: 2em;
-      font-weight: bold;
-      color: #667eea;
-    }
-    table {
-      width: 100%;
-      background: white;
-      border-collapse: collapse;
-      border-radius: 8px;
-      overflow: hidden;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    th {
-      background: #667eea;
-      color: white;
-      padding: 15px;
-      text-align: left;
-      font-weight: 600;
-    }
-    td {
-      padding: 12px 15px;
-      border-bottom: 1px solid #eee;
-    }
-    tr:hover { background: #f9f9f9; }
-    .coverage-high { color: #4CAF50; font-weight: bold; }
-    .coverage-low { color: #f44336; font-weight: bold; }
-    .coverage-medium { color: #ff9800; font-weight: bold; }
-    footer {
-      margin-top: 30px;
-      text-align: center;
-      color: #666;
-      font-size: 0.9em;
-    }
+    body { font-family: monospace; background: #1e1e1e; color: #ccc; padding: 20px; }
+    h1 { color: #fff; margin-bottom: 16px; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #444; padding: 8px 14px; text-align: right; }
+    th { background: #333; color: #fff; }
+    td:first-child { text-align: left; }
+    .cov.high { color: #6ec96e; }
+    .cov.medium { color: #e6c86e; }
+    .cov.low { color: #e06c75; }
+    small { color: #888; }
+    p.ts { color: #666; font-size: 0.85em; margin-top: 12px; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <header>
-      <h1>📊 Code Coverage Report</h1>
-      <p>Generated: ${new Date(summary.timestamp).toLocaleString()}</p>
-    </header>
-    
-    <div class="summary">
-      <div class="summary-card">
-        <h3>Total Files</h3>
-        <div class="value">${summary.totalFiles}</div>
-      </div>
-      <div class="summary-card">
-        <h3>Covered Files</h3>
-        <div class="value">${summary.coveredFiles}</div>
-      </div>
-      <div class="summary-card">
-        <h3>Coverage</h3>
-        <div class="value ${getCoverageClass(summary.coveragePercentage)}">${summary.coveragePercentage}%</div>
-      </div>
-    </div>
-    
-    <h2 style="margin-bottom: 15px;">Files Coverage</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>File</th>
-          <th>Status</th>
-          <th>Functions Covered</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${filesList}
-      </tbody>
-    </table>
-    
-    <footer>
-      <p>This report was generated from Playwright test coverage data.</p>
-      <p>Run <code>npm run test:coverage</code> to regenerate.</p>
-    </footer>
-  </div>
+  <h1>Playwright Coverage Report</h1>
+  <table>
+    <thead>
+      <tr>
+        <th>File</th>
+        <th>Statements</th>
+        <th>Branches</th>
+        <th>Functions</th>
+        <th>Lines</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rows}
+    </tbody>
+  </table>
+  <p class="ts">Generated: ${new Date().toISOString()}</p>
 </body>
-</html>
-  `;
+</html>`;
 }
-
-function generateLCOVReport(coverage) {
-  let lcov = '';
-  
-  Object.entries(coverage).forEach(([key, data]) => {
-    const filePath = path.join(DEPLOY_JS_DIR, data.path);
-    if (fs.existsSync(filePath)) {
-      const source = fs.readFileSync(filePath, 'utf8');
-      const lines = source.split('\n');
-      
-      lcov += `SF:${data.path}\n`;
-      
-      // Add function coverage
-      data.functions.forEach((func, index) => {
-        if (func.ranges && func.ranges.length > 0) {
-          func.ranges.forEach(range => {
-            lcov += `FNF:${index + 1}\n`;
-            lcov += `FNH:${func.isBlockCovered ? 1 : 0}\n`;
-          });
-        }
-      });
-      
-      // Add line coverage (simplified)
-      lines.forEach((line, index) => {
-        lcov += `DA:${index + 1},1\n`;
-      });
-      
-      lcov += 'end_of_record\n';
-    }
-  });
-  
-  return lcov;
-}
-
-function getCoverageClass(percentage) {
-  const pct = parseFloat(percentage);
-  if (pct >= 80) return 'coverage-high';
-  if (pct >= 50) return 'coverage-medium';
-  return 'coverage-low';
-}
-

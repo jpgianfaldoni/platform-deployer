@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('../helpers/coverage-fixture');
 const FormHelpers = require('../helpers/form-helpers');
 const NavigationHelpers = require('../helpers/navigation-helpers');
 const ValidationHelpers = require('../helpers/validation-helpers');
