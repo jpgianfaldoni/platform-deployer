@@ -153,6 +153,7 @@
                     <p>
                         Simplifying Databricks infrastructure deployment across multi-cloud environments.
                     </p>
+                    <p class="deploy-version" id="deploy-version"></p>
                 </div>
             </div>
         </div>
@@ -506,6 +507,20 @@
     <script src="./js/template-engine.js?v=2.0.0"></script>
     <script src="./js/terraform-generator.js?v=1.0.0"></script>
     <script src="./js/app.js?v=2.1.2"></script>
+
+    <!-- Deploy version display (fetches latest gh-pages commit from GitHub API) -->
+    <script>
+        fetch('https://api.github.com/repos/databricks-solutions/oneclick-deployer/branches/gh-pages')
+            .then(r => r.ok ? r.json() : null)
+            .then(b => {
+                if (!b) return;
+                const sha = b.commit.sha.substring(0, 7);
+                const date = new Date(b.commit.commit.committer.date)
+                    .toISOString().replace('T', ' ').substring(0, 16) + ' UTC';
+                document.getElementById('deploy-version').textContent =
+                    'Deployed ' + date + ' \u2014 ' + sha;
+            }).catch(() => {});
+    </script>
 
     <!-- Theme Toggle & Service Worker Registration & PWA Install Logic -->
     <script>
