@@ -508,18 +508,12 @@
     <script src="./js/terraform-generator.js?v=1.0.0"></script>
     <script src="./js/app.js?v=2.1.2"></script>
 
-    <!-- Deploy version display (fetches latest gh-pages commit from GitHub API) -->
+    <!-- Deploy version display (reads version.json generated at deploy time) -->
     <script>
-        fetch('https://api.github.com/repos/databricks-solutions/oneclick-deployer/branches/gh-pages')
-            .then(r => r.ok ? r.json() : null)
-            .then(b => {
-                if (!b) return;
-                const sha = b.commit.sha.substring(0, 7);
-                const date = new Date(b.commit.commit.committer.date)
-                    .toISOString().replace('T', ' ').substring(0, 16) + ' UTC';
-                document.getElementById('deploy-version').textContent =
-                    'Deployed ' + date + ' \u2014 ' + sha;
-            }).catch(() => {});
+        fetch('./version.json').then(r => r.ok ? r.json() : null).then(v => {
+            if (v) document.getElementById('deploy-version').textContent =
+                'Deployed ' + v.date + ' \u2014 ' + v.commit;
+        }).catch(() => {});
     </script>
 
     <!-- Theme Toggle & Service Worker Registration & PWA Install Logic -->

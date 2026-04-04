@@ -25,6 +25,9 @@ build/
 /playwright/.cache/
 *.zip
 
+# Deploy version (generated at deploy time)
+deploy/version.json
+
 # Coverage
 /.coverage/
 /coverage/

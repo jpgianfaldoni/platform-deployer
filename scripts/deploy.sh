@@ -32,6 +32,11 @@ TEMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
 cp -r "$DEPLOY_DIR"/. "$TEMP_DIR"/
+
+# Write deploy version metadata
+DEPLOY_DATE=$(date -u '+%Y-%m-%d %H:%M UTC')
+printf '{"date":"%s","commit":"%s"}\n' "$DEPLOY_DATE" "$COMMIT_SHA" > "$TEMP_DIR/version.json"
+
 cd "$TEMP_DIR"
 git init -q
 git checkout -q -b "$BRANCH"
