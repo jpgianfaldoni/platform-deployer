@@ -31,6 +31,9 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.14.6
+          # validate-terraform.js sends an expression to `terraform console` via STDIN.
+          # The setup action's wrapper does not forward STDIN and would hang here.
+          terraform_wrapper: false
       - run: npm run test:terraform
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
