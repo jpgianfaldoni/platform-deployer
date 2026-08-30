@@ -1,0 +1,35 @@
+# PWA specific ignores
+.DS_Store
+*.log
+node_modules/
+.env
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Build artifacts
+dist/
+build/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Playwright
+/test-results/
+/playwright-report/
+/playwright/.cache/
+*.zip
+
+# Deploy version (generated at deploy time)
+deploy/version.json
+
+# Coverage
+/.coverage/
+/coverage/
+coverage.json
+*.lcov

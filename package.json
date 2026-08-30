@@ -1,0 +1,44 @@
+{
+  "name": "platform-deployer",
+  "version": "1.0.0",
+  "description": "Static PWA that packages pinned Databricks AWS Terraform examples with generated tfvars",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build.js",
+    "build:libs": "node scripts/copy-libs.js",
+    "vendor": "node scripts/vendor-terraform.js",
+    "start": "npm run build && python3 -m http.server 8000 -d dist",
+    "test": "npm run test:unit && npm run build && npm run test:terraform && npm run test:e2e",
+    "test:terraform": "node scripts/validate-terraform.js",
+    "test:e2e": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:debug": "playwright test --debug",
+    "test:headed": "playwright test --headed",
+    "postinstall": "npm run build:libs",
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest"
+  },
+  "keywords": [
+    "pwa",
+    "databricks",
+    "terraform",
+    "progressive-web-app"
+  ],
+  "author": "Joao Gianfaldoni",
+  "license": "MIT",
+  "devDependencies": {
+    "@playwright/test": "^1.57.0",
+    "vitest": "^4.1.2"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@fontsource-variable/manrope": "^5.2.8",
+    "@fontsource-variable/space-grotesk": "^5.2.10",
+    "@fontsource/jetbrains-mono": "^5.2.8",
+    "bootstrap": "5.3.2",
+    "bootstrap-icons": "1.11.1",
+    "jszip": "3.10.1"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/databricks-solutions/technical-services-solutions.git",
+  "commit": "175101db58231cad1a3a3b8e266a7541735eeeaa",
+  "licenseFiles": [
+    "LICENSE.md",
+    "NOTICE.md"
+  ],
+  "variants": {
+    "aws-standard": {
+      "label": "AWS BYOVPC with Unity Catalog",
+      "privateLink": false,
+      "path": "workspace-setup/terraform-examples/aws/aws-byovpc-uc"
+    },
+    "aws-privatelink": {
+      "label": "AWS BYOVPC with Classic PrivateLink",
+      "privateLink": true,
+      "path": "workspace-setup/terraform-examples/aws/aws-byovpc-classic-privatelink"
+    }
+  }
+}
