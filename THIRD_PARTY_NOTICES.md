@@ -10,4 +10,4 @@ At the time of adaptation, that repository declared `MIT` in `package.json` but 
 
 Terraform projects are copied without modification from [`databricks-solutions/technical-services-solutions`](https://github.com/databricks-solutions/technical-services-solutions) at the commit configured in `config/upstreams.json`.
 
-The Databricks license and notice from that repository are included in the GitHub Pages artifact and in every generated ZIP. Use of those materials is limited to the terms in the included `LICENSE.md` and `NOTICE.md`.
+The Databricks license and notice from that repository are retained in the GitHub Pages build artifact alongside the vendored sources. Generated ZIPs contain only the selected example and generated `terraform.tfvars` file.

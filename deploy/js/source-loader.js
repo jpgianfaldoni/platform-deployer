@@ -37,11 +37,7 @@
         path: file.path,
         content: await this.fetchVerified(`${manifest.commit}/${id}/${file.path}`, file.sha256)
       })));
-      const commonFiles = await Promise.all(manifest.commonFiles.map(async file => ({
-        path: file.path,
-        content: await this.fetchVerified(`${manifest.commit}/${file.path}`, file.sha256)
-      })));
-      return { manifest, variant, files, commonFiles };
+      return { manifest, variant, files };
     }
   }
 

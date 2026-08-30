@@ -1,4 +1,4 @@
-const CACHE_NAME = 'platform-deployer-v1';
+const CACHE_NAME = 'platform-deployer-v2';
 const BASE_URL = new URL('./', self.location).href;
 
 const shellFiles = [
@@ -9,11 +9,13 @@ const shellFiles = [
   'libs/bootstrap-icons/font/bootstrap-icons.css',
   'libs/bootstrap-icons/font/fonts/bootstrap-icons.woff',
   'libs/bootstrap-icons/font/fonts/bootstrap-icons.woff2',
+  'libs/choices.js/css/choices.min.css', 'libs/choices.js/js/choices.min.js',
   'libs/jszip/jszip.min.js', 'icons/favicon.svg', 'icons/icon-192x192.png',
   'fonts/manrope/manrope-latin-wght-normal.woff2',
   'fonts/space-grotesk/space-grotesk-latin-wght-normal.woff2',
   'fonts/jetbrains-mono/jetbrains-mono-latin-400-normal.woff2',
-  'fonts/jetbrains-mono/jetbrains-mono-latin-500-normal.woff2'
+  'fonts/jetbrains-mono/jetbrains-mono-latin-500-normal.woff2',
+  'fonts/jetbrains-mono/jetbrains-mono-latin-700-normal.woff2'
 ];
 
 async function terraformSourceUrls() {
@@ -22,7 +24,6 @@ async function terraformSourceUrls() {
   if (!response.ok) throw new Error(`Source manifest returned ${response.status}`);
   const manifest = await response.json();
   const urls = [manifestUrl];
-  manifest.commonFiles.forEach(file => urls.push(new URL(`terraform-sources/${manifest.commit}/${file.path}`, BASE_URL).href));
   Object.entries(manifest.variants).forEach(([id, variant]) => {
     variant.files.forEach(file => urls.push(new URL(`terraform-sources/${manifest.commit}/${id}/${file.path}`, BASE_URL).href));
   });

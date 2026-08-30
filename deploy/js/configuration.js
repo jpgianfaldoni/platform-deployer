@@ -38,6 +38,7 @@
 
   function normalize(input = {}) {
     const privateLink = toBoolean(input.enable_private_link);
+    const region = String(input.region || 'us-west-2').trim();
     const config = {
       schemaVersion: 1,
       provider: 'aws',
@@ -45,14 +46,14 @@
       resource_prefix: String(input.resource_prefix || input.project_prefix || 'databricks-workspace').trim(),
       databricks_account_id: String(input.databricks_account_id || '').trim(),
       aws_account_id: String(input.aws_account_id || '').trim(),
-      region: String(input.region || 'us-west-2').trim(),
+      region,
       enable_private_link: privateLink,
       pricing_tier: privateLink ? 'ENTERPRISE' : String(input.pricing_tier || 'PREMIUM').toUpperCase(),
       network_mode: String(input.network_mode || 'managed'),
       network_configuration: String(input.network_configuration || 'standard'),
-      vpc_cidr_range: String(input.vpc_cidr_range || '10.0.0.0/16').trim(),
+      vpc_cidr_range: String(input.vpc_cidr_range || '10.0.0.0/22').trim(),
       subnet_prefix: Number(input.subnet_prefix || 24),
-      availability_zones: toList(input.availability_zones).length ? toList(input.availability_zones) : ['us-west-2a', 'us-west-2b'],
+      availability_zones: toList(input.availability_zones).length ? toList(input.availability_zones) : [`${region}a`, `${region}b`],
       vpc_id: String(input.vpc_id || '').trim(),
       subnet_ids: toList(input.subnet_ids),
       security_group_ids: toList(input.security_group_ids),

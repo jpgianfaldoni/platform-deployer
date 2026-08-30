@@ -23,16 +23,7 @@
       const zip = new this.JSZip();
 
       source.files.forEach(file => zip.file(file.path, file.content));
-      source.commonFiles.forEach(file => zip.file(file.path, file.content));
       zip.file('tf/terraform.tfvars', Tfvars.generate(config));
-      zip.file('SOURCE_MANIFEST.json', `${JSON.stringify({
-        repository: source.manifest.repository,
-        commit: source.manifest.commit,
-        sourceUrl: source.manifest.sourceUrl,
-        variant: variantId,
-        upstreamPath: source.variant.upstreamPath,
-        generatedBy: 'Platform Deployer'
-      }, null, 2)}\n`);
 
       return {
         blob: await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' }),

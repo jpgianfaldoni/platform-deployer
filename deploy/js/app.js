@@ -1,5 +1,5 @@
 (function () {
-  const STORAGE_KEY = 'platform-deployer-config-v1';
+  const STORAGE_KEY = 'platform-deployer-config-v2';
   const REGION_NAMES = {
     'ap-northeast-1': 'Asia Pacific (Tokyo)', 'ap-northeast-2': 'Asia Pacific (Seoul)',
     'ap-south-1': 'Asia Pacific (Mumbai)', 'ap-southeast-1': 'Asia Pacific (Singapore)',
@@ -38,7 +38,7 @@
           provider: 'aws', project_prefix: 'databricks-workspace', resource_prefix: 'databricks-workspace',
           region: 'us-west-2', availability_zones: ['us-west-2a', 'us-west-2b'], subnet_prefix: 24,
           pricing_tier: 'PREMIUM', network_mode: 'managed', network_configuration: 'standard',
-          vpc_cidr_range: '10.0.0.0/16', metastore_mode: 'new', metastore_name: 'databricks-workspace-metastore',
+          vpc_cidr_range: '10.0.0.0/22', metastore_mode: 'new', metastore_name: 'databricks-workspace-metastore',
           new_catalog: true, new_cluster: false
         };
       } catch {
@@ -94,7 +94,7 @@
             <div class="col-lg-6">
               <span class="badge bg-primary-subtle text-primary mb-3">AWS available now</span>
               <h1 class="hero-title">Deploy Databricks Infrastructure in Minutes</h1>
-              <p class="hero-subtitle">Choose your AWS topology, review the calculated network, and download the exact pinned Technical Services Terraform code with a ready-to-use <code>terraform.tfvars</code>.</p>
+              <p class="hero-subtitle">One-Click Deployer simplifies Databricks infrastructure deployment across AWS, Azure, and GCP. Transform complex Terraform configurations into a simple, guided experience with intelligent automation.</p>
               <div class="hero-cta"><a href="#/select-provider" class="btn btn-primary btn-lg"><i class="bi bi-rocket-takeoff me-2"></i>Get Started</a></div>
               <div class="row mt-5 g-3 stagger-children">
                 <div class="col-4"><div class="glass p-3 rounded-3 text-center"><div class="h2 fw-bold mb-1 text-gradient">2</div><div class="text-sm text-muted">Reviewed Sources</div></div></div>
@@ -118,7 +118,7 @@
         </section>
         <section class="py-5 bg-surface"><div class="container">
           <div class="row g-4">
-            ${this.feature('bi-git', 'Reviewed Terraform', 'Every deployment downloads a pinned Technical Services commit and records its provenance.')}
+            ${this.feature('bi-git', 'Reviewed Terraform', 'Every deployment packages a pinned Technical Services commit with verified integrity.')}
             ${this.feature('bi-diagram-3-fill', 'Topology-aware tfvars', 'Controls only appear when the selected upstream Terraform example can honor them.')}
             ${this.feature('bi-wifi-off', 'Offline downloads', 'The PWA caches both Terraform variants for reliable same-origin ZIP generation.')}
           </div>
@@ -190,15 +190,39 @@
     }
 
     networkFields(c, managed, existing, fullyPrivate) {
-      const mode = c.enable_private_link
-        ? this.select('network_configuration', 'Network Path', c.network_configuration, [['standard', 'Managed VPC — standard NAT'], ['fully_private', 'Managed VPC — fully private'], ['custom', 'Existing custom network']], 'col-md-12')
-        : this.select('network_mode', 'Network Path', c.network_mode, [['managed', 'Create a managed VPC'], ['existing', 'Use an existing VPC and subnets']], 'col-md-12');
-      const managedFields = `<div class="row g-3 mt-1">
-        ${this.input('vpc_cidr_range', 'VPC CIDR', c.vpc_cidr_range, '10.0.0.0/16', 'col-md-6', true)}
-        ${this.select('subnet_prefix', 'Workspace Subnet Size', String(c.subnet_prefix), Array.from({ length: 10 }, (_, index) => { const value = String(17 + index); return [value, `/${value}`]; }), 'col-md-6')}
-        <div class="col-12"><label class="form-label fw-semibold">Availability Zones <span class="text-danger">*</span></label><div class="zone-grid">${this.zoneOptions(c)}</div><div class="form-text">Choose at least two zones. Workspace subnets are limited to /17 through /26.</div></div>
-        <div class="col-12"><div id="network-preview">${this.networkPreview(c)}</div></div>
-      </div>`;
+      const slider = this.subnetSliderState(c);
+      const previewConfig = slider.value === c.subnet_prefix ? c : PlatformConfiguration.normalize({ ...c, subnet_prefix: slider.value });
+      const ipsPerSubnet = 2 ** (32 - slider.value);
+      const maxNodes = Math.floor(Math.max(0, ipsPerSubnet - 5) / 2);
+      const managedMode = c.enable_private_link
+        ? `<div class="row mb-3">${this.select('network_configuration', 'PrivateLink Network Mode', c.network_configuration === 'fully_private' ? 'fully_private' : 'standard', [['standard', 'Standard NAT'], ['fully_private', 'Fully private']], 'col-md-12')}</div>`
+        : '';
+      const mode = `<div class="mb-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="create_new_vpc" ${managed ? 'checked' : ''}><label class="form-check-label fw-semibold" for="create_new_vpc">Create New VPC</label></div><div class="form-text">Create a new VPC or use an existing one</div></div>`;
+      const managedFields = `${managedMode}
+        <div class="mb-3">
+          <label class="form-label fw-semibold" for="vpc_cidr_range">VPC CIDR Block <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" id="vpc_cidr_range" name="vpc_cidr_range" value="${escapeHtml(c.vpc_cidr_range)}" placeholder="e.g., 10.0.0.0/22" required>
+          <div class="form-text">CIDR block for the VPC (between /8 and /24)</div><div class="invalid-feedback"></div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold" for="availability-zones-select">Availability Zones <span class="text-danger">*</span></label>
+          <select id="availability-zones-select" class="form-select" name="availability_zones" multiple required>${this.zoneOptions(c)}</select>
+          <div class="form-text">Type to search and select availability zones. Selected zones will appear as tags.</div><div class="invalid-feedback"></div>
+        </div>
+        <div id="subnet-size-slider-container" class="mb-4">
+          <label class="form-label fw-semibold" for="subnet-size-slider"><i class="bi bi-sliders me-2"></i>Subnet Size</label>
+          <div class="subnet-slider-wrapper">
+            <input type="range" class="form-range subnet-size-slider" id="subnet-size-slider" name="subnet_prefix" min="${slider.min}" max="${slider.max}" step="1" value="${slider.value}" ${slider.disabled ? 'disabled' : ''}>
+            <div class="slider-labels d-flex justify-content-between mt-1"><span id="slider-label-min">/${slider.min} (${(2 ** (32 - slider.min)).toLocaleString()} IPs)</span><span id="slider-label-max">/${slider.max} (${(2 ** (32 - slider.max)).toLocaleString()} IPs)</span></div>
+          </div>
+          <div class="subnet-size-details mt-3"><div class="row g-2 text-center">
+            <div class="col-4"><div class="subnet-metric"><div class="h5 mb-0 text-primary" id="subnet-size-display">/<span>${slider.value}</span></div><div class="small text-muted">Subnet Prefix</div></div></div>
+            <div class="col-4"><div class="subnet-metric"><div class="h5 mb-0 text-success" id="subnet-ips-display">${ipsPerSubnet.toLocaleString()}</div><div class="small text-muted">IPs per Subnet</div></div></div>
+            <div class="col-4"><div class="subnet-metric"><div class="h5 mb-0 text-info" id="subnet-nodes-display">~${maxNodes.toLocaleString()}</div><div class="small text-muted">Max Nodes</div></div></div>
+          </div></div>
+          <div class="form-text mt-2">Adjust the subnet size based on your expected cluster size. Larger subnets support more concurrent nodes.</div>
+        </div>
+        <div id="network-preview">${this.networkPreview(previewConfig)}</div>`;
       const existingFields = `<div class="row g-3 mt-1">
         ${this.input('vpc_id', 'Existing VPC ID', c.vpc_id, 'vpc-0123456789abcdef0', 'col-md-6', true)}
         ${this.textarea('subnet_ids', 'Workspace Subnet IDs', c.subnet_ids.join('\n'), 'subnet-...\nsubnet-...', 'col-md-6', 'At least two private subnets in different AZs.')}
@@ -210,8 +234,8 @@
 
     privateLinkFields(c) {
       return `<div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="enable_private_link" name="enable_private_link" ${c.enable_private_link ? 'checked' : ''}><label class="form-check-label fw-semibold" for="enable_private_link">Enable AWS PrivateLink</label></div>
-        <div class="form-text">Switches the downloaded project to the dedicated Classic PrivateLink source. PrivateLink requires Enterprise tier.</div>
-        <div class="alert alert-info mt-3 mb-0"><i class="bi bi-info-circle me-2"></i>${c.enable_private_link ? 'The ZIP will contain aws-byovpc-classic-privatelink.' : 'The ZIP will contain aws-byovpc-uc. Its NAT settings are hard-coded to a single NAT gateway.'}</div>`;
+        <div class="form-text">Routes workspace control-plane connectivity through AWS PrivateLink. PrivateLink requires Enterprise tier.</div>
+        ${c.enable_private_link ? '' : '<div class="alert alert-info mt-3 mb-0"><i class="bi bi-info-circle me-2"></i>The standard network uses the source\'s hard-coded single NAT gateway.</div>'}`;
     }
 
     metastoreFields(c) {
@@ -247,21 +271,66 @@
     zoneOptions(c) {
       return ['a', 'b', 'c', 'd', 'e', 'f'].map(letter => {
         const zone = `${c.region}${letter}`;
-        return `<label class="zone-option"><input class="form-check-input" type="checkbox" name="availability_zones" value="${zone}" ${c.availability_zones.includes(zone) ? 'checked' : ''}><span>${zone}</span></label>`;
+        return `<option value="${zone}" ${c.availability_zones.includes(zone) ? 'selected' : ''}>${zone}</option>`;
       }).join('');
+    }
+
+    subnetAllocationOptions(c) {
+      return {
+        publicSubnets: !c.enable_private_link || c.network_configuration === 'standard',
+        intraSubnet: !c.enable_private_link,
+        endpointSubnet: c.enable_private_link && c.network_configuration === 'fully_private'
+      };
+    }
+
+    subnetSliderState(c) {
+      const fallback = { min: 17, max: 26, value: Math.min(26, Math.max(17, Number(c.subnet_prefix) || 24)), disabled: true };
+      if (!CIDR.isValid(c.vpc_cidr_range) || c.availability_zones.length < 2) return fallback;
+      const vpcPrefix = CIDR.parse(c.vpc_cidr_range).prefix;
+      const options = this.subnetAllocationOptions(c);
+      let min = null;
+      for (let prefix = Math.max(17, vpcPrefix + 1); prefix <= 26; prefix += 1) {
+        try {
+          CIDR.allocate(c.vpc_cidr_range, c.availability_zones, prefix, options);
+          min = prefix;
+          break;
+        } catch { /* Try the next, smaller subnet size. */ }
+      }
+      if (min === null) return fallback;
+      return { min, max: 26, value: Math.min(26, Math.max(min, Number(c.subnet_prefix) || min)), disabled: false };
     }
 
     networkPreview(c) {
       if (c.network_error) return `<div class="alert alert-danger mb-0"><i class="bi bi-exclamation-triangle me-2"></i>${escapeHtml(c.network_error)}</div>`;
       if (!c.calculated_subnets.length) return '';
-      return `<div class="subnet-preview"><h6><i class="bi bi-calculator me-2"></i>Calculated subnet allocation</h6><div class="row g-2">${c.calculated_subnets.map(subnet => `<div class="col-md-6"><div class="subnet-preview-item"><span class="badge bg-${subnet.type === 'private' ? 'primary' : subnet.type === 'public' ? 'success' : 'info'}">${subnet.type}</span><code>${subnet.cidr}</code><small>${subnet.zone}</small></div></div>`).join('')}</div></div>`;
+      const counters = {};
+      const labels = { private: 'Workspace Private Subnet', public: 'NAT Public Subnet', intra: 'Intra Subnet', endpoint: 'PrivateLink Endpoint Subnet' };
+      const totalIps = CIDR.parse(c.vpc_cidr_range).size;
+      const usedIps = c.calculated_subnets.reduce((total, subnet) => total + CIDR.parse(subnet.cidr).size, 0);
+      const availableIps = Math.max(0, totalIps - usedIps);
+      const utilization = ((usedIps / totalIps) * 100).toFixed(1);
+      const cards = c.calculated_subnets.map(subnet => {
+        counters[subnet.type] = (counters[subnet.type] || 0) + 1;
+        const numbered = ['private', 'public'].includes(subnet.type) ? ` ${counters[subnet.type]}` : '';
+        const badge = subnet.type === 'private' ? 'primary' : subnet.type === 'public' ? 'success' : 'warning';
+        return `<div class="col-md-6"><div class="card subnet-card h-100"><div class="card-body p-3"><div class="d-flex justify-content-between align-items-start mb-2"><h6 class="card-title mb-0">${labels[subnet.type]}${numbered}</h6><span class="badge bg-${badge} subnet-type">${subnet.type}</span></div><div class="text-muted small"><div><strong>CIDR:</strong> ${subnet.cidr}</div><div><strong>Size:</strong> /${subnet.prefix}</div><div><strong>Zone:</strong> ${subnet.zone}</div></div></div></div></div>`;
+      }).join('');
+      return `<div class="mt-4"><h6 class="fw-bold text-primary mb-3"><i class="bi bi-calculator me-2"></i>Calculated Subnet Allocation</h6><div class="row g-3">${cards}</div><div class="card mt-3"><div class="card-body"><h6 class="card-title mb-3">Network Utilization Summary</h6><div class="row text-center"><div class="col-3"><div class="h6 text-primary mb-1">${totalIps.toLocaleString()}</div><div class="small text-muted">Total IPs</div></div><div class="col-3"><div class="h6 text-success mb-1">${usedIps.toLocaleString()}</div><div class="small text-muted">Used IPs</div></div><div class="col-3"><div class="h6 text-warning mb-1">${availableIps.toLocaleString()}</div><div class="small text-muted">Available IPs</div></div><div class="col-3"><div class="h6 text-info mb-1">${utilization}%</div><div class="small text-muted">Utilization</div></div></div></div></div></div>`;
     }
 
     collectForm() {
       const form = document.getElementById('config-form');
-      const data = Object.fromEntries(new FormData(form).entries());
-      data.availability_zones = new FormData(form).getAll('availability_zones');
+      const formData = new FormData(form);
+      const data = Object.fromEntries(formData.entries());
+      if (form.querySelector('[name="availability_zones"]')) data.availability_zones = formData.getAll('availability_zones');
       data.enable_private_link = document.getElementById('enable_private_link').checked;
+      const createNewVpc = document.getElementById('create_new_vpc')?.checked ?? true;
+      if (data.enable_private_link) {
+        const managedMode = data.network_configuration || this.config.network_configuration;
+        data.network_configuration = createNewVpc && managedMode === 'fully_private' ? 'fully_private' : createNewVpc ? 'standard' : 'custom';
+      } else {
+        data.network_mode = createNewVpc ? 'managed' : 'existing';
+      }
       data.new_catalog = document.getElementById('new_catalog')?.checked ?? this.config.new_catalog ?? true;
       data.new_cluster = document.getElementById('new_cluster')?.checked ?? this.config.new_cluster ?? false;
       return { ...this.config, ...data };
@@ -269,7 +338,8 @@
 
     bindConfigurationForm() {
       const form = document.getElementById('config-form');
-      const rerenderNames = ['enable_private_link', 'network_mode', 'network_configuration', 'metastore_mode', 'region'];
+      this.initializeAvailabilityZoneChoices();
+      const rerenderNames = ['enable_private_link', 'create_new_vpc', 'network_configuration', 'metastore_mode', 'region'];
       rerenderNames.forEach(name => document.querySelector(`[name="${name}"]`)?.addEventListener('change', event => {
         const previousRegion = this.config.region;
         this.config = this.collectForm();
@@ -282,15 +352,16 @@
         this.saveConfig(); this.renderConfiguration();
       }));
       ['vpc_cidr_range', 'subnet_prefix'].forEach(name => document.querySelector(`[name="${name}"]`)?.addEventListener('input', () => this.refreshPreview()));
-      document.querySelectorAll('[name="availability_zones"]').forEach(field => field.addEventListener('change', () => this.refreshPreview()));
+      document.querySelector('[name="availability_zones"]')?.addEventListener('change', () => this.refreshPreview());
       form.addEventListener('submit', event => {
         event.preventDefault();
         const result = PlatformConfiguration.validate(this.collectForm());
         form.querySelectorAll('.is-invalid').forEach(field => field.classList.remove('is-invalid'));
+        form.querySelectorAll('.choices.is-invalid').forEach(field => field.classList.remove('is-invalid'));
         if (!result.valid) {
           result.errors.forEach(error => {
             const field = form.querySelector(`[name="${error.field}"]`);
-            if (field) { field.classList.add('is-invalid'); const feedback = field.parentElement.querySelector('.invalid-feedback'); if (feedback) feedback.textContent = error.message; }
+            if (field) { field.classList.add('is-invalid'); field.closest('.choices')?.classList.add('is-invalid'); const feedback = field.parentElement.querySelector('.invalid-feedback'); if (feedback) feedback.textContent = error.message; }
           });
           this.flash(result.errors[0].message);
           form.querySelector('.is-invalid')?.focus();
@@ -300,8 +371,42 @@
       });
     }
 
+    initializeAvailabilityZoneChoices() {
+      const field = document.getElementById('availability-zones-select');
+      if (!field || typeof Choices === 'undefined') return;
+      field.choicesInstance = new Choices(field, {
+        removeItemButton: true,
+        searchEnabled: true,
+        searchChoices: true,
+        placeholder: true,
+        placeholderValue: 'Select availability zones',
+        searchPlaceholderValue: 'Type to search...',
+        maxItemCount: 6,
+        duplicateItemsAllowed: false,
+        shouldSort: false,
+        allowHTML: false,
+        itemSelectText: ''
+      });
+    }
+
     refreshPreview() {
-      const normalized = PlatformConfiguration.normalize(this.collectForm());
+      let normalized = PlatformConfiguration.normalize(this.collectForm());
+      const state = this.subnetSliderState(normalized);
+      const slider = document.getElementById('subnet-size-slider');
+      if (slider) {
+        slider.min = state.min;
+        slider.max = state.max;
+        slider.disabled = state.disabled;
+        slider.classList.toggle('disabled', state.disabled);
+        slider.value = state.value;
+        document.getElementById('slider-label-min').textContent = `/${state.min} (${(2 ** (32 - state.min)).toLocaleString()} IPs)`;
+        document.getElementById('slider-label-max').textContent = `/${state.max} (${(2 ** (32 - state.max)).toLocaleString()} IPs)`;
+        document.querySelector('#subnet-size-display span').textContent = state.value;
+        const ips = 2 ** (32 - state.value);
+        document.getElementById('subnet-ips-display').textContent = ips.toLocaleString();
+        document.getElementById('subnet-nodes-display').textContent = `~${Math.floor(Math.max(0, ips - 5) / 2).toLocaleString()}`;
+        normalized = PlatformConfiguration.normalize(this.collectForm());
+      }
       const preview = document.getElementById('network-preview');
       if (preview) preview.innerHTML = this.networkPreview(normalized);
     }
@@ -315,7 +420,7 @@
       this.render(`<div class="container my-5"><div class="row"><div class="col-lg-9 mx-auto">
         <div class="text-center mb-5"><i class="bi bi-clipboard-check text-success" style="font-size:4rem"></i><h1 class="text-gradient mt-3">Review Configuration</h1><p class="lead">The selected Terraform source and generated values are ready to package.</p></div>
         ${this.card('bg-primary text-white', 'bi-list-check', 'Deployment Summary', `<div class="summary-grid">${this.summaryItem('Project', c.project_prefix)}${this.summaryItem('Region', c.region)}${this.summaryItem('PrivateLink', c.enable_private_link ? 'Enabled' : 'Disabled')}${this.summaryItem('Network path', topology)}${this.summaryItem('Pricing tier', c.pricing_tier)}${this.summaryItem('Metastore', c.metastore_mode === 'existing' ? 'Existing' : c.metastore_name)}</div>`)}
-        ${this.card('bg-success text-white', 'bi-box-seam', 'Download Contents', `<ul class="mb-0"><li>Unmodified upstream <code>README.md</code> and <code>tf/*.tf</code></li><li>Generated <code>tf/terraform.tfvars</code></li><li>Databricks <code>LICENSE.md</code> and <code>NOTICE.md</code></li><li><code>SOURCE_MANIFEST.json</code> with the exact upstream commit</li></ul>`)}
+        ${this.card('bg-success text-white', 'bi-box-seam', 'Download Contents', `<ul class="mb-0"><li>Unmodified upstream <code>README.md</code> and <code>tf/*.tf</code></li><li>Generated <code>tf/terraform.tfvars</code></li></ul>`)}
         <div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-2"></i>Review the Terraform plan before applying. Network registrations and VPC endpoint registrations are difficult to change after workspace creation.</div>
         <div class="d-flex justify-content-between"><a href="#/configure" class="btn btn-outline-secondary btn-lg"><i class="bi bi-arrow-left me-2"></i>Edit</a><button id="generate-project" class="btn btn-primary btn-lg"><i class="bi bi-download me-2"></i>Generate Terraform ZIP</button></div>
       </div></div></div>`);
