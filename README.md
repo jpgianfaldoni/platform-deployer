@@ -7,7 +7,7 @@ The current release supports AWS only:
 - Without PrivateLink: `aws-byovpc-uc`
 - With PrivateLink: `aws-byovpc-classic-privatelink`
 
-The Technical Services repository is pinned to commit `175101db58231cad1a3a3b8e266a7541735eeeaa`. GitHub Actions fetches that exact revision during every build, validates it, and publishes the resulting static artifact. The browser never fetches code from GitHub.
+The Technical Services repository is pinned to commit `f22cf9488f918b26686f9b78458d1eac302c4ac6`, the head of [PR 76](https://github.com/databricks-solutions/technical-services-solutions/pull/76). GitHub Actions fetches that exact revision during every build, validates it, and publishes the resulting static artifact. The browser never fetches code from GitHub.
 
 ## Local development
 

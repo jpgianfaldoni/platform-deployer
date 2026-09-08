@@ -47,6 +47,7 @@
       assignment('tags', hclMap(config.tags))
     ]);
     addSection(lines, 'Network configuration', [
+      assignment('nat_gateway_mode', hclString(config.nat_gateway_mode === 'per_az' ? 'per_az' : 'single')),
       assignment('vpc_id', hclString(managed ? '' : config.vpc_id)),
       assignment('vpc_cidr_range', hclString(config.vpc_cidr_range)),
       assignment('availability_zones', hclList(managed ? config.availability_zones : [])),
@@ -91,6 +92,7 @@
     ]);
     addSection(lines, 'Network configuration', [
       assignment('network_configuration', hclString(config.network_configuration)),
+      assignment('nat_gateway_mode', hclString(config.nat_gateway_mode === 'per_az' ? 'per_az' : 'single')),
       assignment('vpc_cidr_range', hclString(config.vpc_cidr_range)),
       assignment('availability_zones', hclList(managed ? config.availability_zones : [])),
       assignment('private_subnets_cidr', hclList(managed ? config.private_subnets_cidr : [])),

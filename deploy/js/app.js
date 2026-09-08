@@ -38,8 +38,9 @@
           provider: 'aws', project_prefix: 'databricks-workspace', resource_prefix: 'databricks-workspace',
           region: 'us-west-2', availability_zones: ['us-west-2a', 'us-west-2b'], subnet_prefix: 24,
           pricing_tier: 'PREMIUM', network_mode: 'managed', network_configuration: 'standard',
+          nat_gateway_mode: 'single',
           vpc_cidr_range: '10.0.0.0/22', metastore_mode: 'new', metastore_name: 'databricks-workspace-metastore',
-          new_catalog: true, new_cluster: false
+          new_catalog: false, new_cluster: false
         };
       } catch {
         localStorage.removeItem(STORAGE_KEY);
@@ -161,6 +162,7 @@
       const existing = !pl ? c.network_mode === 'existing' : c.network_configuration === 'custom';
       const managed = !existing;
       const fullyPrivate = pl && c.network_configuration === 'fully_private';
+      const privateLinkRequired = managed && c.nat_gateway_mode === 'none' && !pl;
       this.render(`<div class="container my-5"><div class="row"><div class="col-xl-9 mx-auto">
         <div class="text-center mb-5"><div class="provider-badge mb-3"><i class="bi bi-amazon text-warning me-2" style="font-size:2rem"></i><span class="h2 fw-bold">AWS Configuration</span></div><p class="lead text-muted">All fields map directly to the selected pinned Terraform example.</p></div>
         <form id="config-form" novalidate>
@@ -168,8 +170,7 @@
           ${this.card('bg-success text-white', 'bi-diagram-3-fill', 'Network Configuration', this.networkFields(c, managed, existing, fullyPrivate))}
           ${this.card('bg-warning text-dark', 'bi-shield-check', 'Private Connectivity', this.privateLinkFields(c))}
           ${this.card('bg-info text-dark', 'bi-database-fill', 'Unity Catalog Metastore', this.metastoreFields(c))}
-          <div class="accordion mb-4" id="advanced-accordion"><div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#advanced-fields"><i class="bi bi-sliders me-2"></i>Advanced Configuration</button></h2><div id="advanced-fields" class="accordion-collapse collapse"><div class="accordion-body">${this.advancedFields(c)}</div></div></div></div>
-          <div class="d-flex justify-content-between"><a href="#/select-provider" class="btn btn-outline-secondary btn-lg"><i class="bi bi-arrow-left me-2"></i>Back</a><button type="submit" class="btn btn-primary btn-lg">Review Configuration<i class="bi bi-arrow-right ms-2"></i></button></div>
+          <div class="d-flex justify-content-between"><a href="#/select-provider" class="btn btn-outline-secondary btn-lg"><i class="bi bi-arrow-left me-2"></i>Back</a><button id="review-configuration" type="submit" class="btn btn-primary btn-lg" ${privateLinkRequired ? 'disabled aria-disabled="true"' : ''}>Review Configuration<i class="bi bi-arrow-right ms-2"></i></button></div>
         </form>
       </div></div></div>`);
       this.bindConfigurationForm();
@@ -194,11 +195,13 @@
       const previewConfig = slider.value === c.subnet_prefix ? c : PlatformConfiguration.normalize({ ...c, subnet_prefix: slider.value });
       const ipsPerSubnet = 2 ** (32 - slider.value);
       const maxNodes = Math.floor(Math.max(0, ipsPerSubnet - 5) / 2);
-      const managedMode = c.enable_private_link
-        ? `<div class="row mb-3">${this.select('network_configuration', 'PrivateLink Network Mode', c.network_configuration === 'fully_private' ? 'fully_private' : 'standard', [['standard', 'Standard NAT'], ['fully_private', 'Fully private']], 'col-md-12')}</div>`
+      const mode = `<div class="mb-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="create_new_vpc" name="create_new_vpc" ${managed ? 'checked' : ''}><label class="form-check-label fw-semibold" for="create_new_vpc">Create New VPC</label></div><div class="form-text">Create a new VPC or use an existing one</div></div>`;
+      const natNotice = c.nat_gateway_mode === 'none'
+        ? c.enable_private_link
+          ? '<div class="alert alert-info mt-3 mb-0"><i class="bi bi-lock me-2"></i>No NAT gateway creates a fully private VPC. Backend PrivateLink provides the required control-plane communication.</div>'
+          : '<div class="alert alert-warning mt-3 mb-0" role="alert"><i class="bi bi-exclamation-triangle me-2"></i><strong>Backend PrivateLink is required.</strong> Enable AWS PrivateLink below to provide control-plane communication before continuing.</div>'
         : '';
-      const mode = `<div class="mb-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="create_new_vpc" ${managed ? 'checked' : ''}><label class="form-check-label fw-semibold" for="create_new_vpc">Create New VPC</label></div><div class="form-text">Create a new VPC or use an existing one</div></div>`;
-      const managedFields = `${managedMode}
+      const managedFields = `<div class="row mb-3">${this.select('nat_gateway_mode', 'NAT Gateway', c.nat_gateway_mode, [['single', 'Single NAT gateway'], ['per_az', 'One NAT gateway per availability zone'], ['none', 'No NAT gateway']], 'col-md-12')}</div>
         <div class="mb-3">
           <label class="form-label fw-semibold" for="vpc_cidr_range">VPC CIDR Block <span class="text-danger">*</span></label>
           <input type="text" class="form-control" id="vpc_cidr_range" name="vpc_cidr_range" value="${escapeHtml(c.vpc_cidr_range)}" placeholder="e.g., 10.0.0.0/22" required>
@@ -222,38 +225,25 @@
           </div></div>
           <div class="form-text mt-2">Adjust the subnet size based on your expected cluster size. Larger subnets support more concurrent nodes.</div>
         </div>
-        <div id="network-preview">${this.networkPreview(previewConfig)}</div>`;
+        <div id="network-preview">${this.networkPreview(previewConfig)}</div>${natNotice}`;
       const existingFields = `<div class="row g-3 mt-1">
-        ${this.input('vpc_id', 'Existing VPC ID', c.vpc_id, 'vpc-0123456789abcdef0', 'col-md-6', true)}
-        ${this.textarea('subnet_ids', 'Workspace Subnet IDs', c.subnet_ids.join('\n'), 'subnet-...\nsubnet-...', 'col-md-6', 'At least two private subnets in different AZs.')}
-        ${this.textarea('security_group_ids', 'Workspace Security Group IDs', c.security_group_ids.join('\n'), 'sg-...', 'col-md-6', c.enable_private_link ? 'At least one is required for custom PrivateLink.' : 'Optional; leave empty to let the source create one.')}
-        ${c.enable_private_link ? this.input('backend_rest_aws_vpce_id', 'Backend REST VPC Endpoint ID', c.backend_rest_aws_vpce_id, 'vpce-...', 'col-md-6', true) + this.input('backend_relay_aws_vpce_id', 'SCC Relay VPC Endpoint ID', c.backend_relay_aws_vpce_id, 'vpce-...', 'col-md-6', true) : '<div class="col-12"><div class="alert alert-warning mb-0"><i class="bi bi-exclamation-triangle me-2"></i>The non-PrivateLink source does not create AWS service endpoints when reusing a VPC; prepare required routing and endpoints beforehand.</div></div>'}
+        <div class="col-12"><div class="alert alert-info mb-0"><i class="bi bi-info-circle me-2"></i>Provide an existing VPC and at least two private subnets in different Availability Zones.</div></div>
+        ${this.input('vpc_id', 'Existing VPC ID', c.vpc_id, 'vpc-0123456789abcdef0', 'col-md-6', true, 'ID of the existing AWS VPC.')}
+        ${this.textarea('subnet_ids', 'Existing Subnet IDs', c.subnet_ids.join('\n'), 'subnet-0123456789abcdef0\nsubnet-0fedcba9876543210', 'col-md-6', 'Enter one subnet ID per line; at least two are required.')}
+        ${c.enable_private_link ? this.textarea('security_group_ids', 'Workspace Security Group IDs', c.security_group_ids.join('\n'), 'sg-...', 'col-md-6', 'At least one is required for custom PrivateLink.') + this.input('backend_rest_aws_vpce_id', 'Backend REST VPC Endpoint ID', c.backend_rest_aws_vpce_id, 'vpce-...', 'col-md-6', true) + this.input('backend_relay_aws_vpce_id', 'SCC Relay VPC Endpoint ID', c.backend_relay_aws_vpce_id, 'vpce-...', 'col-md-6', true) : ''}
       </div>`;
-      return `${mode}${managed ? managedFields : existingFields}${fullyPrivate ? '<div class="alert alert-info mt-3 mb-0"><i class="bi bi-lock me-2"></i>Fully private mode creates no NAT gateway or internet gateway and uses a dedicated /27 endpoint subnet.</div>' : ''}`;
+      return `${mode}${managed ? managedFields : existingFields}${fullyPrivate ? '<div class="form-text mt-2">The fully private topology also creates a dedicated /27 endpoint subnet and no internet gateway.</div>' : ''}`;
     }
 
     privateLinkFields(c) {
       return `<div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="enable_private_link" name="enable_private_link" ${c.enable_private_link ? 'checked' : ''}><label class="form-check-label fw-semibold" for="enable_private_link">Enable AWS PrivateLink</label></div>
         <div class="form-text">Routes workspace control-plane connectivity through AWS PrivateLink. PrivateLink requires Enterprise tier.</div>
-        ${c.enable_private_link ? '' : '<div class="alert alert-info mt-3 mb-0"><i class="bi bi-info-circle me-2"></i>The standard network uses the source\'s hard-coded single NAT gateway.</div>'}`;
+        ${c.nat_gateway_mode === 'none' && !c.enable_private_link ? '<div class="alert alert-warning mt-3 mb-0"><i class="bi bi-exclamation-triangle me-2"></i>Select this option to satisfy the backend PrivateLink requirement for a deployment without NAT.</div>' : ''}`;
     }
 
     metastoreFields(c) {
       return `<div class="row g-3">${this.select('metastore_mode', 'Metastore', c.metastore_mode, [['new', 'Create a new metastore'], ['existing', 'Attach an existing metastore']], 'col-md-6')}
         ${c.metastore_mode === 'existing' ? this.input('metastore_id', 'Existing Metastore ID', c.metastore_id, 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', 'col-md-6', true) : this.input('metastore_name', 'New Metastore Name', c.metastore_name, 'my-metastore', 'col-md-6', true)}</div>`;
-    }
-
-    advancedFields(c) {
-      return `<div class="row g-3">
-        ${this.input('resource_prefix', 'AWS Resource Prefix', c.resource_prefix, c.project_prefix, 'col-md-6', true, 'Lowercase letters, numbers, dots, and hyphens; maximum 40 characters.')}
-        ${this.textarea('tags', 'AWS Tags', Object.entries(c.tags).map(([key, value]) => `${key}=${value}`).join('\n'), 'Environment=dev\nTeam=data-platform', 'col-md-6', 'One key=value pair per line.')}
-        ${this.textarea('sg_egress_ports', 'Security Group Egress Ports', c.sg_egress_ports.join(', '), '443, 2443, 8443', 'col-md-6')}
-        ${c.enable_private_link ? this.textarea('additional_egress_ips', 'Additional Egress CIDRs', c.additional_egress_ips.join('\n'), '198.51.100.5/32', 'col-md-6') : this.input('new_security_group_name', 'New Security Group Name', c.new_security_group_name, `${c.resource_prefix}-databricks-sg`, 'col-md-6')}
-        ${!c.enable_private_link ? `<div class="col-12"><hr><div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="new_catalog" id="new_catalog" ${c.new_catalog ? 'checked' : ''}><label class="form-check-label fw-semibold" for="new_catalog">Create user-defined Unity Catalog catalog</label></div></div>
-          ${this.input('catalog_name', 'Catalog Name Override', c.catalog_name, 'Optional', 'col-md-4')}${this.input('external_location_name', 'External Location Override', c.external_location_name, 'Optional', 'col-md-4')}${this.input('storage_credential_name', 'Storage Credential Override', c.storage_credential_name, 'Optional', 'col-md-4')}
-          <div class="col-12"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="new_cluster" id="new_cluster" ${c.new_cluster ? 'checked' : ''}><label class="form-check-label fw-semibold" for="new_cluster">Create validation cluster</label></div></div>
-          ${this.input('cluster_autotermination_minutes', 'Cluster Auto-termination (minutes)', c.cluster_autotermination_minutes, '10', 'col-md-4', false, 'Minimum 10 minutes.', 'number', '10')}` : ''}
-      </div>`;
     }
 
     input(name, label, value, placeholder, width = 'col-md-6', required = false, help = '', type = 'text', min = '') {
@@ -277,7 +267,7 @@
 
     subnetAllocationOptions(c) {
       return {
-        publicSubnets: !c.enable_private_link || c.network_configuration === 'standard',
+        publicSubnets: c.nat_gateway_mode !== 'none',
         intraSubnet: !c.enable_private_link,
         endpointSubnet: c.enable_private_link && c.network_configuration === 'fully_private'
       };
@@ -326,20 +316,19 @@
       data.enable_private_link = document.getElementById('enable_private_link').checked;
       const createNewVpc = document.getElementById('create_new_vpc')?.checked ?? true;
       if (data.enable_private_link) {
-        const managedMode = data.network_configuration || this.config.network_configuration;
-        data.network_configuration = createNewVpc && managedMode === 'fully_private' ? 'fully_private' : createNewVpc ? 'standard' : 'custom';
+        data.network_configuration = createNewVpc && data.nat_gateway_mode === 'none' ? 'fully_private' : createNewVpc ? 'standard' : 'custom';
       } else {
         data.network_mode = createNewVpc ? 'managed' : 'existing';
       }
-      data.new_catalog = document.getElementById('new_catalog')?.checked ?? this.config.new_catalog ?? true;
-      data.new_cluster = document.getElementById('new_cluster')?.checked ?? this.config.new_cluster ?? false;
+      data.new_catalog = false;
+      data.new_cluster = false;
       return { ...this.config, ...data };
     }
 
     bindConfigurationForm() {
       const form = document.getElementById('config-form');
       this.initializeAvailabilityZoneChoices();
-      const rerenderNames = ['enable_private_link', 'create_new_vpc', 'network_configuration', 'metastore_mode', 'region'];
+      const rerenderNames = ['enable_private_link', 'create_new_vpc', 'nat_gateway_mode', 'metastore_mode', 'region'];
       rerenderNames.forEach(name => document.querySelector(`[name="${name}"]`)?.addEventListener('change', event => {
         const previousRegion = this.config.region;
         this.config = this.collectForm();
@@ -417,9 +406,10 @@
       const c = result.config;
       this.updateProgress(3);
       const topology = c.enable_private_link ? c.network_configuration : c.network_mode;
+      const natTopology = c.nat_gateway_mode === 'none' ? 'None' : c.nat_gateway_mode === 'per_az' ? 'One per availability zone' : 'Single';
       this.render(`<div class="container my-5"><div class="row"><div class="col-lg-9 mx-auto">
         <div class="text-center mb-5"><i class="bi bi-clipboard-check text-success" style="font-size:4rem"></i><h1 class="text-gradient mt-3">Review Configuration</h1><p class="lead">The selected Terraform source and generated values are ready to package.</p></div>
-        ${this.card('bg-primary text-white', 'bi-list-check', 'Deployment Summary', `<div class="summary-grid">${this.summaryItem('Project', c.project_prefix)}${this.summaryItem('Region', c.region)}${this.summaryItem('PrivateLink', c.enable_private_link ? 'Enabled' : 'Disabled')}${this.summaryItem('Network path', topology)}${this.summaryItem('Pricing tier', c.pricing_tier)}${this.summaryItem('Metastore', c.metastore_mode === 'existing' ? 'Existing' : c.metastore_name)}</div>`)}
+        ${this.card('bg-primary text-white', 'bi-list-check', 'Deployment Summary', `<div class="summary-grid">${this.summaryItem('Project', c.project_prefix)}${this.summaryItem('Region', c.region)}${this.summaryItem('PrivateLink', c.enable_private_link ? 'Enabled' : 'Disabled')}${this.summaryItem('Network path', topology)}${this.summaryItem('NAT gateway', natTopology)}${this.summaryItem('Pricing tier', c.pricing_tier)}${this.summaryItem('Metastore', c.metastore_mode === 'existing' ? 'Existing' : c.metastore_name)}</div>`)}
         ${this.card('bg-success text-white', 'bi-box-seam', 'Download Contents', `<ul class="mb-0"><li>Unmodified upstream <code>README.md</code> and <code>tf/*.tf</code></li><li>Generated <code>tf/terraform.tfvars</code></li></ul>`)}
         <div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-2"></i>Review the Terraform plan before applying. Network registrations and VPC endpoint registrations are difficult to change after workspace creation.</div>
         <div class="d-flex justify-content-between"><a href="#/configure" class="btn btn-outline-secondary btn-lg"><i class="bi bi-arrow-left me-2"></i>Edit</a><button id="generate-project" class="btn btn-primary btn-lg"><i class="bi bi-download me-2"></i>Generate Terraform ZIP</button></div>
@@ -477,10 +467,24 @@
       } catch { /* Local source mode has no generated version file. */ }
     }
 
-    registerServiceWorker() {
-      if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-        navigator.serviceWorker.register('./sw.js').catch(error => console.warn('Service worker registration failed', error));
+    async registerServiceWorker() {
+      if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
+      const isLocal = ['localhost', '127.0.0.1', '::1'].includes(location.hostname);
+      if (isLocal) {
+        const wasControlled = Boolean(navigator.serviceWorker.controller);
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map(registration => registration.unregister()));
+        if ('caches' in window) {
+          const cacheNames = await caches.keys();
+          await Promise.all(cacheNames.filter(name => name.startsWith('platform-deployer-')).map(name => caches.delete(name)));
+        }
+        if (wasControlled && !sessionStorage.getItem('platform-deployer-local-cache-reset')) {
+          sessionStorage.setItem('platform-deployer-local-cache-reset', 'true');
+          location.reload();
+        }
+        return;
       }
+      navigator.serviceWorker.register('./sw.js?v=3').catch(error => console.warn('Service worker registration failed', error));
     }
   }
 

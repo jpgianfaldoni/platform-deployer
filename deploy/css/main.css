@@ -932,6 +932,17 @@ pre code {
   transform: translateY(0);
 }
 
+.btn-primary:disabled,
+.btn-primary.disabled {
+  background: var(--text-muted);
+  border-color: var(--border-strong);
+  color: var(--bg-card);
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 0.65;
+  transform: none;
+}
+
 /* Secondary Button */
 .btn-secondary {
   background: var(--bg-elevated);
@@ -1030,11 +1041,25 @@ pre code {
   color: var(--text-primary);
 }
 
+.card > .card-header:first-child {
+  border-top-left-radius: calc(var(--radius-xl) - 1px);
+  border-top-right-radius: calc(var(--radius-xl) - 1px);
+}
+
 .card-body {
   padding: var(--space-6);
   color: var(--text-primary);
   background: var(--bg-card) !important;
   overflow: visible;
+}
+
+.card > .card-body:last-child {
+  border-bottom-left-radius: calc(var(--radius-xl) - 1px);
+  border-bottom-right-radius: calc(var(--radius-xl) - 1px);
+}
+
+.card > .card-body:first-child:last-child {
+  border-radius: calc(var(--radius-xl) - 1px);
 }
 
 /* Fix switches inside cards */

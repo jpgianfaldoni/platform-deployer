@@ -1,10 +1,10 @@
-const CACHE_NAME = 'platform-deployer-v2';
+const CACHE_NAME = 'platform-deployer-v5';
 const BASE_URL = new URL('./', self.location).href;
 
 const shellFiles = [
-  '', 'index.html', 'manifest.json', 'css/main.css',
-  'js/cidr-utils.js', 'js/configuration.js', 'js/tfvars-generator.js',
-  'js/source-loader.js', 'js/terraform-generator.js', 'js/app.js',
+  '', 'index.html', 'manifest.json', 'css/main.css?v=4',
+  'js/cidr-utils.js?v=3', 'js/configuration.js?v=3', 'js/tfvars-generator.js?v=3',
+  'js/source-loader.js?v=3', 'js/terraform-generator.js?v=3', 'js/app.js?v=3',
   'libs/bootstrap/css/bootstrap.min.css', 'libs/bootstrap/js/bootstrap.bundle.min.js',
   'libs/bootstrap-icons/font/bootstrap-icons.css',
   'libs/bootstrap-icons/font/fonts/bootstrap-icons.woff',

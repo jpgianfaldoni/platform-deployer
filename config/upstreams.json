@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "repository": "https://github.com/databricks-solutions/technical-services-solutions.git",
-  "commit": "175101db58231cad1a3a3b8e266a7541735eeeaa",
+  "commit": "f22cf9488f918b26686f9b78458d1eac302c4ac6",
   "licenseFiles": [
     "LICENSE.md",
     "NOTICE.md"
