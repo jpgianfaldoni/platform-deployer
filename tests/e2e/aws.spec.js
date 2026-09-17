@@ -6,7 +6,7 @@ const ValidationHelpers = require('../helpers/validation-helpers');
 test.describe('AWS Provider Tests', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     // Clear any existing storage
     await page.evaluate(() => {
       localStorage.clear();
@@ -46,7 +46,7 @@ test.describe('AWS Provider Tests', () => {
 
       // Step 5: Verify summary page
       await expect(page.locator('text=Configuration Summary')).toBeVisible();
-      await expect(page.locator('text=test-aws')).toBeVisible();
+      await expect(page.getByText('test-aws', { exact: true }).first()).toBeVisible();
       await expect(page.locator('code:has-text("us-east-1")').first()).toBeVisible();
       await expect(page.locator('text=ENTERPRISE')).toBeVisible();
 
@@ -59,13 +59,13 @@ test.describe('AWS Provider Tests', () => {
       expect(['/download', '/summary']).toContain(currentRoute);
     });
 
-    test('should complete AWS flow with Standard tier without Private Link', async ({ page }) => {
+    test('should complete AWS flow with Premium tier without Private Link', async ({ page }) => {
       await FormHelpers.selectProvider(page, 'aws');
       
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'aws-standard',
         region: 'us-west-2',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'PREMIUM'
       });
       await page.waitForTimeout(500);
 
@@ -100,19 +100,16 @@ test.describe('AWS Provider Tests', () => {
         await page.waitForTimeout(500);
       }
 
-      // Fill existing VPC ID
-      const existingVpcId = page.locator('#existing_vpc_id');
-      await existingVpcId.waitFor({ state: 'visible', timeout: 5000 });
-      await existingVpcId.fill('vpc-0123456789abcdef0');
-
-      // Default subnet mode is "Create New Subnets" in existing VPC
-      // This still requires VPC CIDR and AZs for the new subnets
+      // The upstream source reuses the VPC, private subnets, and security group.
       await FormHelpers.fillNetworkConfig(page, {
         create_new_vpc: false,
-        vpc_cidr: '10.32.0.0/16',
-        availability_zones: ['eu-west-1a', 'eu-west-1b'],
+        existing_vpc_id: 'vpc-0123456789abcdef0',
         enable_private_link: false
       });
+      const subnetInputs = page.locator('.existing-subnet-input');
+      await subnetInputs.nth(0).fill('subnet-0123456789abcdef0');
+      await subnetInputs.nth(1).fill('subnet-1234567890abcdef0');
+      await page.locator('#existing_security_group_id').fill('sg-0123456789abcdef0');
 
       await page.waitForTimeout(1000);
       await FormHelpers.submitConfigForm(page);
@@ -129,7 +126,7 @@ test.describe('AWS Provider Tests', () => {
     test('should require project prefix', async ({ page }) => {
       await FormHelpers.fillBasicConfig(page, {
         region: 'us-east-1',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'PREMIUM'
       });
       
       await FormHelpers.fillNetworkConfig(page, {
@@ -170,7 +167,7 @@ test.describe('AWS Provider Tests', () => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'test',
         region: 'us-east-1',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'PREMIUM'
       });
       
       const vpcCidrField = page.locator('input[name="vpc_cidr"]');
@@ -185,7 +182,7 @@ test.describe('AWS Provider Tests', () => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'test',
         region: 'us-east-1',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'PREMIUM'
       });
       
       await FormHelpers.fillNetworkConfig(page, {
@@ -211,7 +208,7 @@ test.describe('AWS Provider Tests', () => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'a',
         region: 'us-east-1',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'PREMIUM'
       });
       
       // Fill network config with valid zones so only project prefix validation fails
@@ -230,7 +227,7 @@ test.describe('AWS Provider Tests', () => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'test@invalid',
         region: 'us-east-1',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'PREMIUM'
       });
       
       // Fill network config with valid zones so only project prefix validation fails
@@ -249,7 +246,7 @@ test.describe('AWS Provider Tests', () => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'test',
         region: 'us-east-1',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'PREMIUM'
       });
       
       await FormHelpers.fillNetworkConfig(page, {
@@ -267,7 +264,7 @@ test.describe('AWS Provider Tests', () => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'test',
         region: 'us-east-1',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'PREMIUM'
       });
       
       await FormHelpers.fillNetworkConfig(page, {
@@ -289,38 +286,30 @@ test.describe('AWS Provider Tests', () => {
       await FormHelpers.selectProvider(page, 'aws');
     });
 
-    test('should show warning when Private Link enabled with Standard tier', async ({ page }) => {
-      await FormHelpers.fillBasicConfig(page, {
-        project_prefix: 'test',
-        region: 'us-east-1',
-        pricing_tier: 'STANDARD'
-      });
-      
-      await FormHelpers.fillNetworkConfig(page, {
-        vpc_cidr: '10.0.0.0/20',
-        availability_zones: ['us-east-1a'],
-        enable_private_link: true
-      });
-      
-      const hasWarning = await ValidationHelpers.hasPrivateLinkWarning(page);
-      expect(hasWarning).toBeTruthy();
-    });
-
-    test('should show warning when Private Link enabled with Premium tier', async ({ page }) => {
+    test('should keep Private Link disabled with Premium tier', async ({ page }) => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'test',
         region: 'us-east-1',
         pricing_tier: 'PREMIUM'
       });
-      
-      await FormHelpers.fillNetworkConfig(page, {
-        vpc_cidr: '10.0.0.0/20',
-        availability_zones: ['us-east-1a'],
-        enable_private_link: true
+
+      await expect(page.locator('#enable_private_link')).toBeDisabled();
+      await expect(page.locator('#enable_private_link')).not.toBeChecked();
+    });
+
+    test('should enable the Private Link toggle after selecting Enterprise', async ({ page }) => {
+      await FormHelpers.fillBasicConfig(page, {
+        project_prefix: 'test',
+        region: 'us-east-1',
+        pricing_tier: 'PREMIUM'
       });
-      
-      const hasWarning = await ValidationHelpers.hasPrivateLinkWarning(page);
-      expect(hasWarning).toBeTruthy();
+
+      await expect(page.locator('#enable_private_link')).toBeDisabled();
+      await FormHelpers.fillBasicConfig(page, {
+        pricing_tier: 'ENTERPRISE'
+      });
+
+      await expect(page.locator('#enable_private_link')).toBeEnabled();
     });
 
     test('should allow Private Link with Enterprise tier', async ({ page }) => {
@@ -333,7 +322,7 @@ test.describe('AWS Provider Tests', () => {
       
       await FormHelpers.fillNetworkConfig(page, {
         vpc_cidr: '10.0.0.0/20',
-        availability_zones: ['us-east-1a'],
+        availability_zones: ['us-east-1a', 'us-east-1b'],
         enable_private_link: true
       });
       
@@ -341,32 +330,31 @@ test.describe('AWS Provider Tests', () => {
       const hasWarning = await ValidationHelpers.hasPrivateLinkWarning(page);
       expect(hasWarning).toBeFalsy();
       
-      // Should calculate service subnet
+      // The Technical Services PrivateLink source uses the workspace subnets
+      // and does not use the legacy generated service-subnet input.
       await page.waitForTimeout(2000);
       const subnets = await FormHelpers.getSubnetPreview(page);
-      expect(subnets).not.toBeNull();
-      expect(subnets.length).toBeGreaterThan(0);
-      const serviceSubnet = subnets.find(s => s.type === 'service');
-      expect(serviceSubnet).toBeDefined();
+      expect(subnets).toHaveLength(4);
+      expect(subnets.find(s => s.type === 'service')).toBeUndefined();
     });
 
-    test('should prevent submission with Private Link and wrong tier', async ({ page }) => {
+    test('should clear Private Link when changing from Enterprise to Premium', async ({ page }) => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'test',
         region: 'us-east-1',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'ENTERPRISE'
       });
       
       await FormHelpers.fillNetworkConfig(page, {
         vpc_cidr: '10.0.0.0/20',
-        availability_zones: ['us-east-1a', 'us-east-1b'], // AWS requires at least 2 AZs
+        availability_zones: ['us-east-1a', 'us-east-1b'],
         enable_private_link: true
       });
-      
-      await FormHelpers.submitConfigForm(page, true); // allowInvalid=true for validation tests
-      await page.waitForTimeout(500); // Wait for validation to be applied
-      const hasError = await ValidationHelpers.hasFieldValidationError(page, 'enable_private_link', 'Enterprise');
-      expect(hasError).toBeTruthy();
+
+      await expect(page.locator('#enable_private_link')).toBeChecked();
+      await FormHelpers.fillBasicConfig(page, { pricing_tier: 'PREMIUM' });
+      await expect(page.locator('#enable_private_link')).toBeDisabled();
+      await expect(page.locator('#enable_private_link')).not.toBeChecked();
     });
   });
 
@@ -376,7 +364,7 @@ test.describe('AWS Provider Tests', () => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'test',
         region: 'us-east-1',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'PREMIUM'
       });
     });
 
@@ -444,26 +432,24 @@ test.describe('AWS Provider Tests', () => {
       expect(count2).toBeGreaterThan(count1);
     });
 
-    test('should recalculate subnets when pricing tier changes', async ({ page }) => {
+    test('should keep the standard network topology when pricing tier changes', async ({ page }) => {
       await FormHelpers.fillNetworkConfig(page, {
         vpc_cidr: '10.0.0.0/20',
-        availability_zones: ['us-east-1a'],
-        enable_private_link: true
+        availability_zones: ['us-east-1a', 'us-east-1b'],
+        enable_private_link: false
       });
       
       await page.waitForTimeout(2000);
+      const before = await FormHelpers.getSubnetPreview(page);
       
       // Change to Enterprise tier
       await page.selectOption('select[name="pricing_tier"]', 'ENTERPRISE');
       await page.waitForTimeout(2000);
       
-      const subnets = await FormHelpers.getSubnetPreview(page);
-      expect(subnets).not.toBeNull();
-      expect(subnets.length).toBeGreaterThan(0);
-      
-      // Should now have service subnet
-      const serviceSubnet = subnets.find(s => s.type === 'service');
-      expect(serviceSubnet).toBeDefined();
+      const after = await FormHelpers.getSubnetPreview(page);
+      expect(before).not.toBeNull();
+      expect(after).not.toBeNull();
+      expect(after.length).toBe(before.length);
     });
 
     test('should recalculate subnets when Private Link toggles', async ({ page }) => {
@@ -492,8 +478,8 @@ test.describe('AWS Provider Tests', () => {
       const subnets2 = await FormHelpers.getSubnetPreview(page);
       const count2 = subnets2 ? subnets2.length : 0;
       
-      // Should have one more subnet (service subnet)
-      expect(count2).toBe(count1 + 1);
+      // Standard uses an intra subnet; the PrivateLink source does not.
+      expect(count2).toBe(count1 - 1);
     });
 
     test('should show subnet size slider when Create New VPC is enabled', async ({ page }) => {
@@ -514,18 +500,13 @@ test.describe('AWS Provider Tests', () => {
       expect(isDisabled).toBe(false);
     });
 
-    test('should hide subnet size slider when using existing subnets', async ({ page }) => {
+    test('should hide subnet size controls when using an existing VPC', async ({ page }) => {
       // Disable Create New VPC
       const createNewVpc = page.locator('#create_new_vpc');
       await createNewVpc.uncheck();
       await page.waitForTimeout(500);
 
-      // Select "Use Existing Subnets" mode (AWS-specific)
-      const subnetModeExisting = page.locator('#subnet_mode_existing');
-      await subnetModeExisting.click();
-      await page.waitForTimeout(500);
-
-      // Slider should be hidden when using existing subnets
+      // The upstream source requires existing subnets in existing-VPC mode.
       const sliderContainer = page.locator('#subnet-size-slider-container');
       await expect(sliderContainer).not.toBeVisible();
 
@@ -589,7 +570,7 @@ test.describe('AWS Provider Tests', () => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'test-aws',
         region: 'us-east-1',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'PREMIUM'
       });
       
       // Verify Choices.js component exists (select is hidden, container is visible)
@@ -617,7 +598,7 @@ test.describe('AWS Provider Tests', () => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'test-aws',
         region: 'us-east-1',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'PREMIUM'
       });
       
       // Select 2 zones using helper
@@ -644,7 +625,7 @@ test.describe('AWS Provider Tests', () => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'test-aws',
         region: 'us-east-1',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'PREMIUM'
       });
       
       // Select only 1 zone using Choices.js (below minimum of 2 for AWS)
@@ -663,7 +644,7 @@ test.describe('AWS Provider Tests', () => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'test-aws',
         region: 'us-east-1',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'PREMIUM'
       });
       
       // Get initial options from select element
@@ -690,7 +671,7 @@ test.describe('AWS Provider Tests', () => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'test-aws',
         region: 'us-east-1',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'PREMIUM'
       });
       
       const zones = ['us-east-1a', 'us-east-1b', 'us-east-1c'];
@@ -714,7 +695,7 @@ test.describe('AWS Provider Tests', () => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'test-aws',
         region: 'us-east-1',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'PREMIUM'
       });
       
       // Select only 1 zone using Choices.js (below minimum of 2 for AWS)
@@ -734,7 +715,7 @@ test.describe('AWS Provider Tests', () => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'test-aws',
         region: 'us-east-1',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'PREMIUM'
       });
       
       const zones = ['us-east-1a', 'us-east-1b', 'us-east-1c', 'us-east-1d', 'us-east-1e', 'us-east-1f'];
@@ -757,7 +738,7 @@ test.describe('AWS Provider Tests', () => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'test-aws',
         region: 'us-east-1',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'PREMIUM'
       });
       
       // Get options from the underlying select element
@@ -787,7 +768,7 @@ test.describe('AWS Provider Tests', () => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'test',
         region: 'us-east-1',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'PREMIUM'
       });
     });
 
@@ -826,7 +807,7 @@ test.describe('AWS Provider Tests', () => {
       expect(summary.utilization_percent).toBeTruthy();
     });
 
-    test('should calculate service subnet for Enterprise tier with Private Link', async ({ page }) => {
+    test('should omit the legacy service subnet for Enterprise Private Link', async ({ page }) => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'test',
         region: 'us-east-1',
@@ -836,7 +817,7 @@ test.describe('AWS Provider Tests', () => {
       
       await FormHelpers.fillNetworkConfig(page, {
         vpc_cidr: '10.0.0.0/20',
-        availability_zones: ['us-east-1a'],
+        availability_zones: ['us-east-1a', 'us-east-1b'],
         enable_private_link: true
       });
       
@@ -844,10 +825,9 @@ test.describe('AWS Provider Tests', () => {
       
       const subnets = await FormHelpers.getSubnetPreview(page);
       expect(subnets).not.toBeNull();
-      expect(subnets.length).toBeGreaterThan(0);
+      expect(subnets).toHaveLength(4);
       const serviceSubnet = subnets.find(s => s.type === 'service');
-      expect(serviceSubnet).toBeDefined();
-      expect(serviceSubnet.name).toContain('service');
+      expect(serviceSubnet).toBeUndefined();
     });
   });
 
@@ -865,7 +845,7 @@ test.describe('AWS Provider Tests', () => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'test',
         region: 'us-east-1',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'PREMIUM'
       });
       await FormHelpers.fillNetworkConfig(page, {
         vpc_cidr: '10.0.0.0/20',
@@ -883,7 +863,7 @@ test.describe('AWS Provider Tests', () => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'persist-test',
         region: 'us-east-1',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'PREMIUM'
       });
       await page.waitForTimeout(500);
       
@@ -913,7 +893,7 @@ test.describe('AWS Provider Tests', () => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'test',
         region: 'us-east-1',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'PREMIUM'
       });
       
       await NavigationHelpers.reset(page);
@@ -926,4 +906,3 @@ test.describe('AWS Provider Tests', () => {
     });
   });
 });
-

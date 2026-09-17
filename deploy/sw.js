@@ -1,35 +1,17 @@
 // Service Worker for Databricks Deployer PWA
-const CACHE_NAME = 'databricks-deployer-v8';
+const CACHE_NAME = 'databricks-deployer-v13';
 const BASE_PATH = self.location.pathname.replace('/sw.js', '') || './';
 
 // Template files to cache
 const templateFiles = [
   // AWS templates
-  'templates/aws/config.json',
-  'templates/aws/provider.tf.template',
-  'templates/aws/variables.tf.template',
   'templates/aws/tfvars.tf.template',
-  'templates/aws/main.tf.template',
-  'templates/aws/outputs.tf.template',
-  'templates/aws/versions.tf.template',
   'templates/aws/readme.md.template',
   // Azure templates
-  'templates/azure/config.json',
-  'templates/azure/provider.tf.template',
-  'templates/azure/variables.tf.template',
   'templates/azure/tfvars.tf.template',
-  'templates/azure/main.tf.template',
-  'templates/azure/outputs.tf.template',
-  'templates/azure/versions.tf.template',
   'templates/azure/readme.md.template',
   // GCP templates
-  'templates/gcp/config.json',
-  'templates/gcp/provider.tf.template',
-  'templates/gcp/variables.tf.template',
   'templates/gcp/tfvars.tf.template',
-  'templates/gcp/main.tf.template',
-  'templates/gcp/outputs.tf.template',
-  'templates/gcp/versions.tf.template',
   'templates/gcp/readme.md.template',
   // Module templates
   'templates/modules/network/main.tf.template',
@@ -72,6 +54,19 @@ const urlsToCache = [
   ...templateFiles.map(file => BASE_PATH + file)
 ];
 
+async function cacheTerraformSources(cache) {
+  const manifestUrl = BASE_PATH + 'terraform-sources/manifest.json';
+  const response = await fetch(manifestUrl, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`Terraform manifest returned ${response.status}`);
+  const manifest = await response.clone().json();
+  await cache.put(manifestUrl, response);
+  const sourceFiles = [
+    ...(manifest.commonFiles || []),
+    ...Object.values(manifest.variants || {}).flatMap(variant => variant.files || [])
+  ];
+  await Promise.all(sourceFiles.map(file => cache.add(BASE_PATH + 'terraform-sources/' + file.artifactPath)));
+}
+
 // Install event - cache resources
 self.addEventListener('install', (event) => {
   console.log('Service Worker installing...');
@@ -90,7 +85,10 @@ self.addEventListener('install', (event) => {
           });
         });
         
-        return Promise.allSettled(cachePromises);
+        return Promise.allSettled(cachePromises).then(async (results) => {
+          await cacheTerraformSources(cache);
+          return results;
+        });
       })
       .then((results) => {
         const successful = results.filter(r => r.status === 'fulfilled').length;
@@ -265,4 +263,3 @@ self.addEventListener('message', (event) => {
     );
   }
 });
-

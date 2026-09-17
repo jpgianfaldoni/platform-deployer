@@ -21,7 +21,7 @@ test.describe('CIDR Calculations', () => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'test',
         region: 'us-east-1',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'PREMIUM'
       });
       
       await FormHelpers.fillNetworkConfig(page, {
@@ -64,7 +64,7 @@ test.describe('CIDR Calculations', () => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'test',
         region: 'us-east-1',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'PREMIUM'
       });
       
       await FormHelpers.fillNetworkConfig(page, {
@@ -75,7 +75,7 @@ test.describe('CIDR Calculations', () => {
       await page.waitForTimeout(3000);
       
       const subnets = await FormHelpers.getSubnetPreview(page);
-      expect(subnets.length).toBe(2); // 1 private + 1 public
+      expect(subnets.length).toBe(3); // 1 private + 1 public + 1 intra
       
       // Verify subnets are sequential by checking they don't overlap and are in order
       const sequential = await page.evaluate((subnetData) => {
@@ -101,7 +101,7 @@ test.describe('CIDR Calculations', () => {
       expect(sequential).toBe(true);
     });
 
-    test('should include service subnet for Enterprise tier with Private Link', async ({ page }) => {
+    test('should omit the legacy service subnet for Enterprise Private Link', async ({ page }) => {
       await FormHelpers.selectProvider(page, 'aws');
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'test',
@@ -118,10 +118,10 @@ test.describe('CIDR Calculations', () => {
       await page.waitForTimeout(3000);
       
       const subnets = await FormHelpers.getSubnetPreview(page);
-      expect(subnets.length).toBe(3); // 1 private + 1 public + 1 service
+      expect(subnets.length).toBe(2); // 1 private + 1 public
       
       const serviceSubnet = subnets.find(s => s.type === 'service');
-      expect(serviceSubnet).toBeDefined();
+      expect(serviceSubnet).toBeUndefined();
       
       // Verify all subnets are valid using NetworkCalculator
       const validation = await page.evaluate((subnetData) => {
@@ -146,22 +146,21 @@ test.describe('CIDR Calculations', () => {
   test.describe('Azure CIDR Calculations', () => {
     test('should calculate non-overlapping subnets for Azure', async ({ page }) => {
       await FormHelpers.selectProvider(page, 'azure');
-      await FormHelpers.fillBasicConfig(page, {
+      await FormHelpers.fillAzureConfig(page, {
         project_prefix: 'test',
         region: 'eastus',
-        pricing_tier: 'STANDARD',
-        resource_group_name: 'rg-test'
+        resource_group_name: 'rg-test',
+        azure_vnet_resource_group_name: 'rg-test-network'
       });
       
       await FormHelpers.fillNetworkConfig(page, {
-        vpc_cidr: '10.0.0.0/20',
-        availability_zones: ['1', '2']
+        vpc_cidr: '10.0.0.0/20'
       });
       
       await page.waitForTimeout(3000);
       
       const subnets = await FormHelpers.getSubnetPreview(page);
-      expect(subnets.length).toBeGreaterThanOrEqual(2); // At least 2 subnets
+      expect(subnets).toHaveLength(2);
       
       const validation = await page.evaluate((subnetData) => {
         const { NetworkCalculator } = window;
@@ -182,58 +181,13 @@ test.describe('CIDR Calculations', () => {
     });
   });
 
-  test.describe('GCP CIDR Calculations', () => {
-    test('should calculate host and pods subnets correctly', async ({ page }) => {
-      await FormHelpers.selectProvider(page, 'gcp');
-      await FormHelpers.fillBasicConfig(page, {
-        project_prefix: 'test',
-        region: 'us-central1',
-        pricing_tier: 'STANDARD',
-        project_id: 'test-project'
-      });
-      
-      await FormHelpers.fillNetworkConfig(page, {
-        vpc_cidr: '10.0.0.0/20',
-        availability_zones: ['us-central1-a']
-      });
-      
-      await page.waitForTimeout(3000);
-      
-      const subnets = await FormHelpers.getSubnetPreview(page);
-      expect(subnets.length).toBe(2); // 1 host + 1 pods
-      
-      const hostSubnet = subnets.find(s => s.type === 'host');
-      const podsSubnet = subnets.find(s => s.type === 'pods');
-      
-      expect(hostSubnet).toBeDefined();
-      expect(podsSubnet).toBeDefined();
-      
-      const validation = await page.evaluate((subnetData) => {
-        const { NetworkCalculator } = window;
-        if (!NetworkCalculator) return { valid: false, message: 'NetworkCalculator not available' };
-        
-        const vpcCIDR = '10.0.0.0/20';
-        const subnetAllocations = subnetData.map((s, idx) => ({
-          name: s.name || `subnet-${idx}`,
-          cidr: s.cidr,
-          size: parseInt(s.cidr.split('/')[1], 10) || 26
-        }));
-        
-        const calc = new NetworkCalculator('gcp');
-        return calc.validateSubnetAllocation(vpcCIDR, subnetAllocations);
-      }, subnets);
-      
-      expect(validation.valid).toBe(true);
-    });
-  });
-
   test.describe('Network Utilization', () => {
     test('should display accurate network utilization summary', async ({ page }) => {
       await FormHelpers.selectProvider(page, 'aws');
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'test',
         region: 'us-east-1',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'PREMIUM'
       });
       
       await FormHelpers.fillNetworkConfig(page, {
@@ -288,7 +242,7 @@ test.describe('CIDR Calculations', () => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'large-cidr',
         region: 'us-east-1',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'PREMIUM'
       });
       
       await FormHelpers.fillNetworkConfig(page, {
@@ -321,12 +275,12 @@ test.describe('CIDR Calculations', () => {
       expect(validation.valid).toBe(true);
     });
 
-    test('should handle minimum CIDR block (/24)', async ({ page }) => {
+    test('should report that /24 is too small for the AWS source topology', async ({ page }) => {
       await FormHelpers.selectProvider(page, 'aws');
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'min-cidr',
         region: 'us-east-1',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'PREMIUM'
       });
       
       await FormHelpers.fillNetworkConfig(page, {
@@ -355,7 +309,7 @@ test.describe('CIDR Calculations', () => {
           return calc.validateSubnetAllocation(vpcCIDR, subnetAllocations);
         }, subnets);
         
-        expect(validation.valid).toBe(true);
+        expect(validation.valid).toBe(false);
       }
     });
 
@@ -412,23 +366,22 @@ test.describe('CIDR Calculations', () => {
 
     test('should handle /12 CIDR block correctly', async ({ page }) => {
       await FormHelpers.selectProvider(page, 'azure');
-      await FormHelpers.fillBasicConfig(page, {
+      await FormHelpers.fillAzureConfig(page, {
         project_prefix: 'azure-12',
         region: 'eastus',
-        pricing_tier: 'STANDARD',
-        resource_group_name: 'rg-cidr-12'
+        resource_group_name: 'rg-cidr-12',
+        azure_vnet_resource_group_name: 'rg-cidr-12-network'
       });
       
       await FormHelpers.fillNetworkConfig(page, {
-        vpc_cidr: '10.0.0.0/12',
-        availability_zones: ['1', '2', '3']
+        vpc_cidr: '10.0.0.0/12'
       });
       
       await page.waitForTimeout(3000);
       
       const subnets = await FormHelpers.getSubnetPreview(page);
       expect(subnets).not.toBeNull();
-      expect(subnets.length).toBeGreaterThanOrEqual(2);
+      expect(subnets).toHaveLength(2);
     });
 
     test('should show warning for CIDR too small for configuration', async ({ page }) => {
@@ -466,7 +419,7 @@ test.describe('CIDR Calculations', () => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'util-test',
         region: 'us-east-1',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'PREMIUM'
       });
 
       // Set up with /20 first
@@ -527,7 +480,7 @@ test.describe('CIDR Calculations', () => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'max-az',
         region: 'us-east-1',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'PREMIUM'
       });
       
       await FormHelpers.fillNetworkConfig(page, {
@@ -543,47 +496,27 @@ test.describe('CIDR Calculations', () => {
       expect(subnets.length).toBeGreaterThanOrEqual(6);
     });
 
-    test('should calculate subnets correctly with maximum AZs for Azure (3)', async ({ page }) => {
+    test('should allocate an endpoint subnet for Azure Private Link', async ({ page }) => {
       await FormHelpers.selectProvider(page, 'azure');
-      await FormHelpers.fillBasicConfig(page, {
-        project_prefix: 'azure-max-az',
+      await FormHelpers.fillAzureConfig(page, {
+        project_prefix: 'azure-private-cidr',
         region: 'eastus',
-        pricing_tier: 'STANDARD',
-        resource_group_name: 'rg-max-az'
+        resource_group_name: 'rg-private-cidr',
+        azure_vnet_resource_group_name: 'rg-private-cidr-network'
       });
       
       await FormHelpers.fillNetworkConfig(page, {
         vpc_cidr: '10.0.0.0/16',
-        availability_zones: ['1', '2', '3']
+        enable_private_link: true
       });
       
       await page.waitForTimeout(3000);
       
       const subnets = await FormHelpers.getSubnetPreview(page);
       expect(subnets).not.toBeNull();
-      expect(subnets.length).toBeGreaterThanOrEqual(3);
+      expect(subnets).toHaveLength(3);
+      expect(subnets.find(subnet => subnet.type === 'service')).toBeDefined();
     });
 
-    test('should calculate subnets correctly with maximum AZs for GCP (6)', async ({ page }) => {
-      await FormHelpers.selectProvider(page, 'gcp');
-      await FormHelpers.fillBasicConfig(page, {
-        project_prefix: 'gcp-max-az',
-        region: 'us-central1',
-        pricing_tier: 'STANDARD',
-        project_id: 'gcp-max-az-proj'
-      });
-      
-      await FormHelpers.fillNetworkConfig(page, {
-        vpc_cidr: '10.0.0.0/16',
-        availability_zones: ['us-central1-a', 'us-central1-b', 'us-central1-c', 'us-central1-d', 'us-central1-e', 'us-central1-f']
-      });
-      
-      await page.waitForTimeout(3000);
-      
-      const subnets = await FormHelpers.getSubnetPreview(page);
-      expect(subnets).not.toBeNull();
-      expect(subnets.length).toBeGreaterThanOrEqual(2); // GCP has host + pods
-    });
   });
 });
-

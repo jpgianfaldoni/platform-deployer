@@ -1664,6 +1664,25 @@ pre code {
   color: var(--error-text);
 }
 
+/* Bootstrap defaults to light-theme danger text unless data-bs-theme is set. */
+[data-theme="dark"] .alert-danger,
+[data-theme="dark"] .alert-error {
+  --bs-alert-color: var(--error-text);
+  --bs-alert-link-color: var(--error-text);
+  color: var(--error-text);
+}
+
+[data-theme="dark"] .alert-danger .alert-message,
+[data-theme="dark"] .alert-danger .alert-link,
+[data-theme="dark"] .alert-danger i,
+[data-theme="dark"] .alert-danger strong,
+[data-theme="dark"] .alert-error .alert-message,
+[data-theme="dark"] .alert-error .alert-link,
+[data-theme="dark"] .alert-error i,
+[data-theme="dark"] .alert-error strong {
+  color: inherit;
+}
+
 .alert-warning {
   border-left-color: var(--warning);
   background: var(--warning-subtle);
@@ -2080,6 +2099,10 @@ pre code {
   border-radius: var(--radius-lg);
   padding: var(--space-4);
   transition: all var(--transition-fast);
+}
+
+.card.subnet-allocation-card {
+  overflow: hidden !important;
 }
 
 .subnet-card:hover {

@@ -428,9 +428,10 @@
                         <!-- Azure Panel -->
                         <div class="tab-pane fade" id="azure-creds-panel" role="tabpanel" aria-labelledby="azure-creds-tab">
                             <form id="azure-credentials-form" class="credentials-form">
-                                <div class="mb-3 text-muted">
-                                    <i class="bi bi-info-circle me-1"></i>
-                                    <small>Azure does not require a Databricks Account ID for authentication.</small>
+                                <div class="mb-3">
+                                    <label for="azure-account-id" class="form-label">Databricks Account ID</label>
+                                    <input type="text" class="form-control credential-input" id="azure-account-id" placeholder="Enter your Databricks Account ID" autocomplete="off">
+                                    <div class="form-text">Required by the account-level Terraform resources</div>
                                 </div>
                                 <div class="mb-3">
                                     <label for="azure-client-id" class="form-label">Client ID (Service Principal)</label>
@@ -500,13 +501,13 @@
     
     <!-- App JavaScript -->
     <script src="./js/network-calculator.js?v=1.0.0"></script>
-    <script src="./js/validators.js?v=1.0.0"></script>
+    <script src="./js/validators.js?v=1.0.3"></script>
     <script src="./js/utils.js?v=2.1.0"></script>
     <script src="./libs/handlebars/handlebars.min.js?v=4.7.8"></script>
-    <script src="./js/template-loader.js?v=1.0.0"></script>
-    <script src="./js/template-engine.js?v=2.0.0"></script>
-    <script src="./js/terraform-generator.js?v=1.0.0"></script>
-    <script src="./js/app.js?v=2.1.2"></script>
+    <script src="./js/template-loader.js?v=1.1.0"></script>
+    <script src="./js/template-engine.js?v=2.1.0"></script>
+    <script src="./js/terraform-generator.js?v=1.1.0"></script>
+    <script src="./js/app.js?v=2.2.0"></script>
 
     <!-- Deploy version display (reads version.json generated at deploy time) -->
     <script>
@@ -584,7 +585,7 @@
         // Service Worker Registration
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js?v=2.1.0')
+                navigator.serviceWorker.register('./sw.js?v=2.1.2')
                     .then((registration) => {
                         console.log('SW registered:', registration);
                         
@@ -961,4 +962,3 @@
     </style>
 </body>
 </html>
-

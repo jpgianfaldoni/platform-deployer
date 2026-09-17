@@ -11,6 +11,8 @@
     "test:coverage": "COVERAGE=true playwright test --config=playwright.coverage.config.js",
     "coverage": "npm run test:coverage",
     "start": "bash scripts/run.sh",
+    "dev": "node scripts/dev.js",
+    "build": "node scripts/build.js",
     "build:libs": "node scripts/copy-libs.js",
     "deploy": "bash scripts/deploy.sh",
     "postinstall": "npm run build:libs",

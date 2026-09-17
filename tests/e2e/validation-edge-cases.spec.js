@@ -22,7 +22,7 @@ test.describe('Project Prefix Validation Edge Cases', () => {
     await FormHelpers.fillBasicConfig(page, {
       project_prefix: '123test',
       region: 'us-east-1',
-      pricing_tier: 'STANDARD'
+      pricing_tier: 'PREMIUM'
     });
     
     await FormHelpers.fillNetworkConfig(page, {
@@ -51,7 +51,7 @@ test.describe('Project Prefix Validation Edge Cases', () => {
     await FormHelpers.fillBasicConfig(page, {
       project_prefix: 'TestProject',
       region: 'us-east-1',
-      pricing_tier: 'STANDARD'
+      pricing_tier: 'PREMIUM'
     });
     
     await FormHelpers.fillNetworkConfig(page, {
@@ -78,7 +78,7 @@ test.describe('Project Prefix Validation Edge Cases', () => {
     await FormHelpers.fillBasicConfig(page, {
       project_prefix: 'test@project!',
       region: 'us-east-1',
-      pricing_tier: 'STANDARD'
+      pricing_tier: 'PREMIUM'
     });
     
     await FormHelpers.fillNetworkConfig(page, {
@@ -104,7 +104,7 @@ test.describe('Project Prefix Validation Edge Cases', () => {
     await FormHelpers.fillBasicConfig(page, {
       project_prefix: 'test-project-name',
       region: 'us-east-1',
-      pricing_tier: 'STANDARD'
+      pricing_tier: 'PREMIUM'
     });
     
     await FormHelpers.fillNetworkConfig(page, {
@@ -119,11 +119,11 @@ test.describe('Project Prefix Validation Edge Cases', () => {
     await expect(page).toHaveURL(/.*#\/summary/, { timeout: 10000 });
   });
 
-  test('should accept project prefix with underscores', async ({ page }) => {
+  test('should reject AWS project prefixes with underscores', async ({ page }) => {
     await FormHelpers.fillBasicConfig(page, {
       project_prefix: 'test_project_name',
       region: 'us-east-1',
-      pricing_tier: 'STANDARD'
+      pricing_tier: 'PREMIUM'
     });
     
     await FormHelpers.fillNetworkConfig(page, {
@@ -131,17 +131,17 @@ test.describe('Project Prefix Validation Edge Cases', () => {
       availability_zones: ['us-east-1a', 'us-east-1b']
     });
     
-    await FormHelpers.submitConfigForm(page);
+    await FormHelpers.submitConfigForm(page, true);
     await page.waitForTimeout(500);
-    
-    // Should navigate to summary (valid prefix)
-    await expect(page).toHaveURL(/.*#\/summary/, { timeout: 10000 });
+
+    expect(await ValidationHelpers.hasFieldValidationError(page, 'project_prefix', 'lowercase')).toBeTruthy();
+    await expect(page).toHaveURL(/.*#\/configure/);
   });
 
   test('should reject empty project prefix', async ({ page }) => {
     // Don't fill project_prefix
     await page.selectOption('select[name="region"]', 'us-east-1');
-    await page.selectOption('select[name="pricing_tier"]', 'STANDARD');
+    await page.selectOption('select[name="pricing_tier"]', 'PREMIUM');
     
     await FormHelpers.fillNetworkConfig(page, {
       vpc_cidr: '10.0.0.0/20',
@@ -206,20 +206,21 @@ test.describe('Provider Switch Tests', () => {
     const resourceGroupField = page.locator('input[name="resource_group_name"]');
     await expect(resourceGroupField).toBeVisible();
     
-    // Verify pricing tier options changed (Azure has Standard/Premium only)
-    const pricingOptions = await page.locator('select[name="pricing_tier"] option').allTextContents();
-    expect(pricingOptions).not.toContain('ENTERPRISE');
-    expect(pricingOptions.some(opt => opt.includes('PREMIUM') || opt.includes('Premium'))).toBeTruthy();
+    // Both Technical Services Azure sources deploy Premium workspaces.
+    const pricingOptions = await page.locator('select[name="pricing_tier"] option').evaluateAll(options =>
+      options.map(option => option.value).filter(Boolean)
+    );
+    expect(pricingOptions).toEqual(['PREMIUM']);
   });
 
   test('should reset configuration when switching from Azure to GCP', async ({ page }) => {
     // First, configure Azure
     await FormHelpers.selectProvider(page, 'azure');
-    await FormHelpers.fillBasicConfig(page, {
+    await FormHelpers.fillAzureConfig(page, {
       project_prefix: 'azure-config',
       region: 'eastus',
-      pricing_tier: 'PREMIUM',
-      resource_group_name: 'rg-test'
+      resource_group_name: 'rg-test',
+      azure_vnet_resource_group_name: 'rg-test-network'
     });
     await page.waitForTimeout(500);
     
@@ -246,7 +247,6 @@ test.describe('Provider Switch Tests', () => {
     await FormHelpers.fillBasicConfig(page, {
       project_prefix: 'gcp-config',
       region: 'us-central1',
-      pricing_tier: 'PREMIUM',
       project_id: 'my-gcp-project'
     });
     await page.waitForTimeout(500);
@@ -282,13 +282,13 @@ test.describe('Provider Switch Tests', () => {
     await expect(projectIdField).not.toBeVisible();
   });
 
-  test('should update availability zone options when switching providers', async ({ page }) => {
+  test('should use the fixed Azure subnet topology when switching providers', async ({ page }) => {
     // Configure AWS with us-east-1
     await FormHelpers.selectProvider(page, 'aws');
     await FormHelpers.fillBasicConfig(page, {
       project_prefix: 'aws-az',
       region: 'us-east-1',
-      pricing_tier: 'STANDARD'
+      pricing_tier: 'PREMIUM'
     });
     
     // Get AWS AZ options
@@ -298,17 +298,18 @@ test.describe('Provider Switch Tests', () => {
     // Navigate back and select Azure
     await NavigationHelpers.navigateBack(page);
     await FormHelpers.selectProvider(page, 'azure');
-    await FormHelpers.fillBasicConfig(page, {
+    await FormHelpers.fillAzureConfig(page, {
       project_prefix: 'azure-az',
       region: 'eastus',
-      pricing_tier: 'STANDARD',
-      resource_group_name: 'rg-az'
+      resource_group_name: 'rg-az',
+      azure_vnet_resource_group_name: 'rg-az-network'
     });
     
-    // Get Azure AZ options (should be 1, 2, 3)
-    const azureAzOptions = await page.locator('#availability-zones-select option').allTextContents();
-    expect(azureAzOptions.some(opt => opt.includes('1') || opt.includes('2') || opt.includes('3'))).toBeTruthy();
-    expect(azureAzOptions.some(opt => opt.includes('us-east-1'))).toBeFalsy();
+    // The upstream Azure sources require exactly two workspace subnets and do
+    // not accept availability-zone inputs.
+    await expect(page.locator('#availability-zones-select')).toHaveCount(0);
+    const azureSubnets = await FormHelpers.getSubnetPreview(page);
+    expect(azureSubnets).toHaveLength(2);
   });
 });
 
@@ -326,7 +327,7 @@ test.describe('VPC CIDR Validation Edge Cases', () => {
     await FormHelpers.fillBasicConfig(page, {
       project_prefix: 'cidr-test',
       region: 'us-east-1',
-      pricing_tier: 'STANDARD'
+      pricing_tier: 'PREMIUM'
     });
     
     await page.fill('input[name="vpc_cidr"]', '10.0.0.0');
@@ -344,7 +345,7 @@ test.describe('VPC CIDR Validation Edge Cases', () => {
     await FormHelpers.fillBasicConfig(page, {
       project_prefix: 'cidr-invalid-ip',
       region: 'us-east-1',
-      pricing_tier: 'STANDARD'
+      pricing_tier: 'PREMIUM'
     });
     
     await page.fill('input[name="vpc_cidr"]', '999.999.999.999/20');
@@ -362,7 +363,7 @@ test.describe('VPC CIDR Validation Edge Cases', () => {
     await FormHelpers.fillBasicConfig(page, {
       project_prefix: 'cidr-invalid-prefix',
       region: 'us-east-1',
-      pricing_tier: 'STANDARD'
+      pricing_tier: 'PREMIUM'
     });
     
     await page.fill('input[name="vpc_cidr"]', '10.0.0.0/99');
@@ -380,7 +381,7 @@ test.describe('VPC CIDR Validation Edge Cases', () => {
     await FormHelpers.fillBasicConfig(page, {
       project_prefix: 'cidr-valid-ip',
       region: 'us-east-1',
-      pricing_tier: 'STANDARD'
+      pricing_tier: 'PREMIUM'
     });
     
     // Test 10.x.x.x range
@@ -421,7 +422,7 @@ test.describe('Existing VPC/VNet Tests', () => {
     await FormHelpers.fillBasicConfig(page, {
       project_prefix: 'existing-vpc',
       region: 'us-east-1',
-      pricing_tier: 'STANDARD'
+      pricing_tier: 'PREMIUM'
     });
     
     // Toggle to use existing VPC
@@ -431,15 +432,12 @@ test.describe('Existing VPC/VNet Tests', () => {
       await page.waitForTimeout(500);
     }
     
-    // Don't fill existing VPC name
-    await FormHelpers.selectAvailabilityZones(page, ['us-east-1a', 'us-east-1b']);
-    
+    // Don't fill the existing VPC ID. Existing mode intentionally hides the
+    // availability-zone selector because all network resources are reused.
     await FormHelpers.submitConfigForm(page, true);
-    await page.waitForTimeout(500);
-    
-    // Should show validation error or stay on configure
-    const currentUrl = page.url();
-    // Might navigate to summary if field is optional, or stay on configure
+    const validity = await ValidationHelpers.getFieldValidationMessage(page, 'existing_vpc_id');
+    expect(validity.valueMissing).toBeTruthy();
+    await expect(page).toHaveURL(/.*#\/configure/);
   });
 
   test('should hide VPC CIDR field when using existing VPC for AWS', async ({ page }) => {
@@ -447,7 +445,7 @@ test.describe('Existing VPC/VNet Tests', () => {
     await FormHelpers.fillBasicConfig(page, {
       project_prefix: 'hide-cidr',
       region: 'us-east-1',
-      pricing_tier: 'STANDARD'
+      pricing_tier: 'PREMIUM'
     });
     
     // Initially, VPC CIDR should be visible
@@ -475,11 +473,11 @@ test.describe('Existing VPC/VNet Tests', () => {
 
   test('should show existing VNet ID field when using existing VNet for Azure', async ({ page }) => {
     await FormHelpers.selectProvider(page, 'azure');
-    await FormHelpers.fillBasicConfig(page, {
+    await FormHelpers.fillAzureConfig(page, {
       project_prefix: 'existing-vnet',
       region: 'eastus',
-      pricing_tier: 'STANDARD',
-      resource_group_name: 'rg-existing'
+      resource_group_name: 'rg-existing',
+      azure_vnet_resource_group_name: 'rg-existing-network'
     });
 
     // Toggle to use existing VNet
@@ -509,7 +507,7 @@ test.describe('Form Persistence Tests', () => {
     await FormHelpers.fillBasicConfig(page, {
       project_prefix: 'persist-refresh',
       region: 'us-east-1',
-      pricing_tier: 'STANDARD'
+      pricing_tier: 'PREMIUM'
     });
     await FormHelpers.fillNetworkConfig(page, {
       vpc_cidr: '10.0.0.0/20',
@@ -538,7 +536,7 @@ test.describe('Form Persistence Tests', () => {
     await FormHelpers.fillBasicConfig(page, {
       project_prefix: 'will-be-cleared',
       region: 'us-east-1',
-      pricing_tier: 'STANDARD'
+      pricing_tier: 'PREMIUM'
     });
     
     // Navigate to reset
@@ -556,4 +554,3 @@ test.describe('Form Persistence Tests', () => {
     expect(projectPrefix).toBe('');
   });
 });
-

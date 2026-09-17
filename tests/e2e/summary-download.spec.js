@@ -39,8 +39,8 @@ test.describe('Summary Page Tests', () => {
       
       // Verify key configuration values are displayed
       await expect(page.locator('text=Configuration Summary')).toBeVisible();
-      await expect(page.locator(`text=${config.project_prefix}`)).toBeVisible();
-      await expect(page.locator(`text=${config.pricing_tier}`)).toBeVisible();
+      await expect(page.getByText(config.project_prefix, { exact: true }).first()).toBeVisible();
+      await expect(page.getByText(config.pricing_tier, { exact: true })).toBeVisible();
       
       // Verify region is displayed somewhere
       const pageContent = await page.content();
@@ -55,7 +55,7 @@ test.describe('Summary Page Tests', () => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'aws-subnets',
         region: 'us-west-2',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'PREMIUM'
       });
       await FormHelpers.fillNetworkConfig(page, {
         vpc_cidr: '10.0.0.0/20',
@@ -75,7 +75,7 @@ test.describe('Summary Page Tests', () => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'aws-subnet-count',
         region: 'us-west-2',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'PREMIUM'
       });
       await FormHelpers.fillNetworkConfig(page, {
         vpc_cidr: '10.0.0.0/20',
@@ -109,12 +109,14 @@ test.describe('Summary Page Tests', () => {
       };
       const networkConfig = {
         vpc_cidr: '10.0.0.0/16',
-        availability_zones: ['1', '2'],
-        enable_private_link: true
+        enable_private_link: false
       };
       
       await FormHelpers.selectProvider(page, 'azure');
-      await FormHelpers.fillBasicConfig(page, config);
+      await FormHelpers.fillAzureConfig(page, {
+        ...config,
+        azure_vnet_resource_group_name: 'rg-test-summary-network'
+      });
       await FormHelpers.fillNetworkConfig(page, networkConfig);
       await page.waitForTimeout(1000);
       await FormHelpers.submitConfigForm(page);
@@ -122,9 +124,9 @@ test.describe('Summary Page Tests', () => {
       
       // Verify all configuration values are displayed
       await expect(page.locator('text=Configuration Summary')).toBeVisible();
-      await expect(page.locator(`text=${config.project_prefix}`)).toBeVisible();
-      await expect(page.locator(`text=${config.pricing_tier}`)).toBeVisible();
-      await expect(page.locator(`text=${config.resource_group_name}`)).toBeVisible();
+      await expect(page.getByText(config.project_prefix, { exact: true }).first()).toBeVisible();
+      await expect(page.getByText(config.pricing_tier, { exact: true })).toBeVisible();
+      await expect(page.getByText(config.resource_group_name, { exact: true })).toBeVisible();
       
       // Verify region is displayed
       const regionElement = page.locator(`code:has-text("${config.region}")`).first();
@@ -133,15 +135,14 @@ test.describe('Summary Page Tests', () => {
 
     test('should display Azure-specific labels on summary page', async ({ page }) => {
       await FormHelpers.selectProvider(page, 'azure');
-      await FormHelpers.fillBasicConfig(page, {
+      await FormHelpers.fillAzureConfig(page, {
         project_prefix: 'azure-labels',
         region: 'westus2',
-        pricing_tier: 'STANDARD',
-        resource_group_name: 'rg-labels'
+        resource_group_name: 'rg-labels',
+        azure_vnet_resource_group_name: 'rg-labels-network'
       });
       await FormHelpers.fillNetworkConfig(page, {
-        vpc_cidr: '10.0.0.0/20',
-        availability_zones: ['1']
+        vpc_cidr: '10.0.0.0/20'
       });
       await page.waitForTimeout(1000);
       await FormHelpers.submitConfigForm(page);
@@ -157,18 +158,15 @@ test.describe('Summary Page Tests', () => {
       const config = {
         project_prefix: 'gcp-summary-test',
         region: 'us-central1',
-        pricing_tier: 'PREMIUM',
-        project_id: 'gcp-project-summary'
-      };
-      const networkConfig = {
-        vpc_cidr: '10.0.0.0/16',
-        availability_zones: ['us-central1-a', 'us-central1-b'],
-        enable_private_link: true
+        project_id: 'gcp-project-summary',
+        google_service_account_email: 'creator@gcp-project-summary.iam.gserviceaccount.com',
+        databricks_account_id: '11111111-1111-4111-8111-111111111111',
+        databricks_admin_user: 'admin@example.com',
+        subnet_cidr: '10.10.0.0/20'
       };
       
       await FormHelpers.selectProvider(page, 'gcp');
-      await FormHelpers.fillBasicConfig(page, config);
-      await FormHelpers.fillNetworkConfig(page, networkConfig);
+      await FormHelpers.fillGcpConfig(page, config);
       await page.waitForTimeout(1000);
       await FormHelpers.submitConfigForm(page);
       await expect(page).toHaveURL(/.*#\/summary/, { timeout: 10000 });
@@ -176,8 +174,9 @@ test.describe('Summary Page Tests', () => {
       // Verify all configuration values are displayed
       await expect(page.locator('text=Configuration Summary')).toBeVisible();
       await expect(page.locator(`text=${config.project_prefix}`)).toBeVisible();
-      await expect(page.locator(`text=${config.pricing_tier}`)).toBeVisible();
       await expect(page.locator(`text=${config.project_id}`)).toBeVisible();
+      await expect(page.locator(`text=${config.google_service_account_email}`)).toBeVisible();
+      await expect(page.locator(`text=${config.subnet_cidr}`)).toBeVisible();
       
       // Verify region is displayed
       const regionElement = page.locator(`code:has-text("${config.region}")`).first();
@@ -186,22 +185,18 @@ test.describe('Summary Page Tests', () => {
 
     test('should display GCP-specific labels on summary page', async ({ page }) => {
       await FormHelpers.selectProvider(page, 'gcp');
-      await FormHelpers.fillBasicConfig(page, {
+      await FormHelpers.fillGcpConfig(page, {
         project_prefix: 'gcp-labels',
         region: 'us-east1',
-        pricing_tier: 'STANDARD',
         project_id: 'gcp-labels-project'
-      });
-      await FormHelpers.fillNetworkConfig(page, {
-        vpc_cidr: '10.0.0.0/20',
-        availability_zones: ['us-east1-a', 'us-east1-b']
       });
       await page.waitForTimeout(1000);
       await FormHelpers.submitConfigForm(page);
       await expect(page).toHaveURL(/.*#\/summary/, { timeout: 10000 });
       
       // Verify GCP-specific labels
-      await expect(page.locator('text=Project ID').first()).toBeVisible();
+      await expect(page.getByText('GCP Project ID:', { exact: true })).toBeVisible();
+      await expect(page.getByText('Cloud NAT:', { exact: true })).toBeVisible();
     });
   });
 });
@@ -221,7 +216,7 @@ test.describe('Download/Generate Tests', () => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'aws-confirm',
         region: 'us-east-1',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'PREMIUM'
       });
       await FormHelpers.fillNetworkConfig(page, {
         vpc_cidr: '10.0.0.0/20',
@@ -247,7 +242,7 @@ test.describe('Download/Generate Tests', () => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'aws-enable-gen',
         region: 'us-east-1',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'PREMIUM'
       });
       await FormHelpers.fillNetworkConfig(page, {
         vpc_cidr: '10.0.0.0/20',
@@ -305,15 +300,14 @@ test.describe('Download/Generate Tests', () => {
 
     test('should trigger download when generate is clicked for Azure', async ({ page }) => {
       await FormHelpers.selectProvider(page, 'azure');
-      await FormHelpers.fillBasicConfig(page, {
+      await FormHelpers.fillAzureConfig(page, {
         project_prefix: 'azure-download',
         region: 'eastus',
-        pricing_tier: 'PREMIUM',
-        resource_group_name: 'rg-download'
+        resource_group_name: 'rg-download',
+        azure_vnet_resource_group_name: 'rg-download-network'
       });
       await FormHelpers.fillNetworkConfig(page, {
         vpc_cidr: '10.0.0.0/20',
-        availability_zones: ['1', '2'],
         enable_private_link: true
       });
       await FormHelpers.submitConfigForm(page);
@@ -343,16 +337,10 @@ test.describe('Download/Generate Tests', () => {
 
     test('should trigger download when generate is clicked for GCP', async ({ page }) => {
       await FormHelpers.selectProvider(page, 'gcp');
-      await FormHelpers.fillBasicConfig(page, {
+      await FormHelpers.fillGcpConfig(page, {
         project_prefix: 'gcp-download',
         region: 'us-central1',
-        pricing_tier: 'PREMIUM',
         project_id: 'gcp-download-proj'
-      });
-      await FormHelpers.fillNetworkConfig(page, {
-        vpc_cidr: '10.0.0.0/20',
-        availability_zones: ['us-central1-a', 'us-central1-b'],
-        enable_private_link: true
       });
       await FormHelpers.submitConfigForm(page);
       await expect(page).toHaveURL(/.*#\/summary/, { timeout: 10000 });
@@ -386,7 +374,7 @@ test.describe('Download/Generate Tests', () => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'aws-instructions',
         region: 'us-east-1',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'PREMIUM'
       });
       await FormHelpers.fillNetworkConfig(page, {
         vpc_cidr: '10.0.0.0/20',
@@ -413,7 +401,7 @@ test.describe('Download/Generate Tests', () => {
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'aws-creds',
         region: 'us-east-1',
-        pricing_tier: 'STANDARD'
+        pricing_tier: 'PREMIUM'
       });
       await FormHelpers.fillNetworkConfig(page, {
         vpc_cidr: '10.0.0.0/20',
@@ -447,7 +435,7 @@ test.describe('Back Navigation from Summary', () => {
     await FormHelpers.fillBasicConfig(page, {
       project_prefix: 'nav-back',
       region: 'us-east-1',
-      pricing_tier: 'STANDARD'
+      pricing_tier: 'PREMIUM'
     });
     await FormHelpers.fillNetworkConfig(page, {
       vpc_cidr: '10.0.0.0/20',
@@ -467,4 +455,3 @@ test.describe('Back Navigation from Summary', () => {
     expect(projectPrefix).toBe('nav-back');
   });
 });
-

@@ -186,6 +186,28 @@ class App {
       ]
     };
 
+    if (provider?.toLowerCase() === 'azure') {
+      const supported = [
+        'australiacentral', 'australiacentral2', 'australiaeast', 'australiasoutheast',
+        'brazilsouth', 'canadacentral', 'canadaeast', 'centralindia', 'centralus',
+        'chinaeast2', 'chinaeast3', 'chinanorth2', 'chinanorth3', 'eastasia', 'eastus',
+        'eastus2', 'francecentral', 'germanywestcentral', 'japaneast', 'japanwest',
+        'koreacentral', 'mexicocentral', 'northcentralus', 'northeurope', 'norwayeast',
+        'qatarcentral', 'southafricanorth', 'southcentralus', 'southeastasia', 'southindia',
+        'swedencentral', 'switzerlandnorth', 'switzerlandwest', 'uaenorth', 'uksouth',
+        'ukwest', 'westcentralus', 'westeurope', 'westindia', 'westus', 'westus2', 'westus3'
+      ];
+      const supportedSet = new Set(supported);
+      const groups = regions.azure.map(group => ({
+        ...group,
+        regions: group.regions.filter(region => supportedSet.has(region.code))
+      })).filter(group => group.regions.length > 0);
+      const known = new Set(groups.flatMap(group => group.regions.map(region => region.code)));
+      const additional = supported.filter(code => !known.has(code)).map(code => ({ code, name: code }));
+      if (additional.length) groups.push({ group: 'Additional Supported Regions', regions: additional });
+      return groups;
+    }
+
     return regions[provider?.toLowerCase()] || [];
   }
 
@@ -222,10 +244,11 @@ class App {
   renderPricingTierOptions(provider, selectedTier) {
     const tiers = provider === 'aws' 
       ? [
-          { value: 'STANDARD', label: 'Standard' },
           { value: 'PREMIUM', label: 'Premium' },
           { value: 'ENTERPRISE', label: 'Enterprise' }
         ]
+      : provider === 'azure'
+        ? [{ value: 'PREMIUM', label: 'Premium' }]
       : [
           { value: 'STANDARD', label: 'Standard' },
           { value: 'PREMIUM', label: 'Premium' }
@@ -298,6 +321,7 @@ class App {
    * Get currently selected availability zones
    */
   getSelectedAvailabilityZones() {
+    if (this.currentProvider === 'azure') return ['1'];
     const azSelect = document.getElementById('availability-zones-select');
     if (!azSelect) return [];
     
@@ -1811,8 +1835,33 @@ class App {
     const providerName = Utils.getProviderName(this.currentProvider);
     const vpcLabel = this.currentProvider === 'azure' ? 'VNet CIDR Block' : 'VPC CIDR Block';
     const vpcDesc = this.currentProvider === 'azure' ? 
-      'CIDR block for the VNet (between /8 and /24)' :
+      'CIDR block for the VNet or subnet allocation (between /16 and /24)' :
       'CIDR block for the VPC (between /8 and /24)';
+    const configuredNatGatewayMode = this.currentProvider === 'azure'
+      ? this.currentConfig.azure_private_link_nat_gateway_mode
+      : this.currentConfig.nat_gateway_mode;
+    const supportedNatGatewayModes = this.currentProvider === 'azure'
+      ? ['single', 'none']
+      : ['single', 'per_az', 'none'];
+    const savedNatGatewayMode = supportedNatGatewayModes.includes(configuredNatGatewayMode)
+      ? configuredNatGatewayMode
+      : (this.currentConfig.enable_nat_gateway === false || this.currentConfig.enable_nat_gateway === 'false')
+        ? 'none'
+        : 'single';
+    const configuredAzureNatGatewayZone = Object.prototype.hasOwnProperty.call(
+      this.currentConfig,
+      'azure_nat_gateway_zone'
+    ) ? String(this.currentConfig.azure_nat_gateway_zone) : '1';
+    const savedAzureNatGatewayZone = ['', '1', '2', '3'].includes(configuredAzureNatGatewayZone)
+      ? configuredAzureNatGatewayZone
+      : '1';
+    const configuredAzurePrivateLinkNatGatewayZone = Object.prototype.hasOwnProperty.call(
+      this.currentConfig,
+      'azure_private_link_nat_gateway_zone'
+    ) ? String(this.currentConfig.azure_private_link_nat_gateway_zone) : '';
+    const savedAzurePrivateLinkNatGatewayZone = ['', '1', '2', '3'].includes(configuredAzurePrivateLinkNatGatewayZone)
+      ? configuredAzurePrivateLinkNatGatewayZone
+      : '';
     
     // Load configuration form based on provider
     const content = `
@@ -1825,8 +1874,9 @@ class App {
                 <span class="h2 fw-bold text-capitalize">${this.currentProvider} Configuration</span>
               </div>
               <p class="lead text-muted">
-                Configure your Databricks deployment settings for ${this.currentProvider.toUpperCase()}. 
-                All network calculations are handled automatically based on your selections.
+                ${this.currentProvider === 'gcp'
+                  ? 'Configure the inputs required by the Technical Services GCP BYOVPC standalone Terraform source.'
+                  : `Configure your Databricks deployment settings for ${this.currentProvider.toUpperCase()}. All network calculations are handled automatically based on your selections.`}
               </p>
             </div>
             
@@ -1842,13 +1892,17 @@ class App {
                   <div class="row g-3">
                     <div class="col-md-6">
                       <label class="form-label fw-semibold">
-                        Project Prefix
+                        ${this.currentProvider === 'gcp' ? 'Workspace Name' : 'Project Prefix'}
                         <span class="text-danger">*</span>
                       </label>
-                      <input type="text" class="form-control" name="project_prefix" 
+                      <input type="text" class="form-control" name="project_prefix"
                              value="${this.currentConfig.project_prefix || ''}" 
                              placeholder="e.g., my-databricks-project" required>
-                      <div class="form-text">Prefix for all resource names (2-20 characters, alphanumeric and hyphens only)</div>
+                      <div class="form-text">${this.currentProvider === 'gcp'
+                        ? 'Name for the new Databricks workspace (2-20 characters)'
+                        : this.currentProvider === 'aws'
+                        ? 'Prefix for all resource names (2-20 lowercase letters, numbers, hyphens, or periods)'
+                        : 'Prefix for all resource names (2-20 characters, alphanumeric and hyphens only)'}</div>
                     </div>
                     <div class="col-md-6">
                       <label class="form-label fw-semibold">
@@ -1860,6 +1914,7 @@ class App {
                       </select>
                       <div class="form-text">Cloud provider region for resource deployment</div>
                     </div>
+                    ${this.currentProvider !== 'gcp' ? `
                     <div class="col-md-6">
                       <label class="form-label fw-semibold">
                         Databricks Pricing Tier
@@ -1868,18 +1923,125 @@ class App {
                       <select class="form-select" name="pricing_tier" required>
                         ${this.renderPricingTierOptions(this.currentProvider, this.currentConfig.pricing_tier)}
                       </select>
-                      <div class="form-text">Databricks workspace pricing tier (affects available features)</div>
+                      <div class="form-text">${this.currentProvider === 'azure'
+                        ? 'The selected Technical Services Azure sources deploy Premium workspaces.'
+                        : 'Databricks workspace pricing tier (affects available features)'}</div>
                     </div>
+                    ` : ''}
                     ${this.currentProvider === 'azure' ? `
                       <div class="col-md-6">
-                        <label class="form-label fw-semibold">
-                          Resource Group Name
-                          <span class="text-danger">*</span>
-                        </label>
-                        <input type="text" class="form-control" name="resource_group_name" 
-                               value="${this.currentConfig.resource_group_name || ''}" 
-                               placeholder="e.g., rg-databricks-prod" required>
-                        <div class="form-text">Azure Resource Group name for all resources</div>
+                        <label class="form-label fw-semibold">Azure Subscription ID <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="azure_subscription_id"
+                               value="${this.currentConfig.azure_subscription_id || ''}"
+                               placeholder="00000000-0000-0000-0000-000000000000" required>
+                      </div>
+                    ` : ''}
+                    ${this.currentProvider === 'aws' || this.currentProvider === 'azure' ? `
+                      <div class="col-12" id="metastore-configuration" ${this.currentProvider === 'azure' && this.currentConfig.enable_private_link ? 'style="display: none;"' : ''}>
+                        <div class="row g-3 align-items-start">
+                          <div class="col-md-5">
+                            <label class="form-label fw-semibold">Unity Catalog Metastore <span class="text-danger">*</span></label>
+                            <div class="form-check">
+                              <input class="form-check-input" type="radio" name="metastore_mode" id="metastore_mode_create"
+                                     value="create" ${this.currentConfig.metastore_mode !== 'existing' ? 'checked' : ''}>
+                              <label class="form-check-label" for="metastore_mode_create">Create a new metastore</label>
+                            </div>
+                            <div class="form-check mt-2">
+                              <input class="form-check-input" type="radio" name="metastore_mode" id="metastore_mode_existing"
+                                     value="existing" ${this.currentConfig.metastore_mode === 'existing' ? 'checked' : ''}>
+                              <label class="form-check-label" for="metastore_mode_existing">Attach an existing metastore</label>
+                            </div>
+                          </div>
+                          <div class="col-md-7">
+                            <div id="new-metastore-section">
+                              <label class="form-label" for="metastore_name">Metastore Name</label>
+                              <input type="text" class="form-control" id="metastore_name" name="metastore_name"
+                                     value="${this.currentConfig.metastore_name || ''}"
+                                     placeholder="Defaults to &lt;project-prefix&gt;-metastore">
+                            </div>
+                            <div id="existing-metastore-section" style="display: none;">
+                              <label class="form-label" for="metastore_id">Existing Metastore ID <span class="text-danger">*</span></label>
+                              <input type="text" class="form-control" id="metastore_id" name="metastore_id"
+                                     value="${this.currentConfig.metastore_id || ''}"
+                                     placeholder="e.g., 12345678-1234-1234-1234-123456789abc">
+                            </div>
+                            <div class="form-text mt-2">The selected Technical Services Terraform requires a metastore assignment.</div>
+                          </div>
+                        </div>
+                      </div>
+                    ` : ''}
+                    ${this.currentProvider === 'azure' ? `
+                      <div id="azure-standard-fields" class="col-12">
+                        <div class="row g-3">
+                          <div class="col-md-6">
+                            <label class="form-label fw-semibold">Azure Tenant ID <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control azure-standard-required" name="azure_tenant_id"
+                                   value="${this.currentConfig.azure_tenant_id || ''}"
+                                   placeholder="00000000-0000-0000-0000-000000000000">
+                          </div>
+                          <div class="col-md-6">
+                            <label class="form-label fw-semibold">Workspace Resource Group <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control azure-standard-required" name="resource_group_name"
+                                   value="${this.currentConfig.resource_group_name || ''}"
+                                   placeholder="e.g., rg-databricks-workspace">
+                          </div>
+                          <div class="col-md-6">
+                            <label class="form-label fw-semibold">Workspace Admin User <span class="text-danger">*</span></label>
+                            <input type="email" class="form-control azure-standard-required" name="azure_admin_user"
+                                   value="${this.currentConfig.azure_admin_user || ''}"
+                                   placeholder="admin@example.com">
+                          </div>
+                          <div class="col-md-6">
+                            <label class="form-label fw-semibold">Workspace Root Storage Account <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control azure-standard-required" name="azure_root_storage_name"
+                                   value="${this.currentConfig.azure_root_storage_name || ''}"
+                                   placeholder="dbfsuniquename">
+                            <div class="form-text">Globally unique, 3-24 lowercase letters and numbers.</div>
+                          </div>
+                          <div class="col-md-6">
+                            <label class="form-label fw-semibold">UC Storage Account <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control azure-standard-required" name="azure_uc_storage_account_name"
+                                   value="${this.currentConfig.azure_uc_storage_account_name || ''}"
+                                   placeholder="ucuniquename">
+                            <div class="form-text">Globally unique, 3-24 lowercase letters and numbers.</div>
+                          </div>
+                          <div class="col-md-6">
+                            <label class="form-label fw-semibold">Catalog Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control azure-standard-required" name="azure_catalog_name"
+                                   value="${this.currentConfig.azure_catalog_name || ''}"
+                                   placeholder="my_catalog">
+                          </div>
+                          <div class="col-md-6">
+                            <label class="form-label fw-semibold">Storage Credential Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control azure-standard-required" name="azure_storage_credential_name"
+                                   value="${this.currentConfig.azure_storage_credential_name || ''}"
+                                   placeholder="my-storage-credential">
+                          </div>
+                          <div class="col-md-6">
+                            <label class="form-label fw-semibold">External Location Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control azure-standard-required" name="azure_external_location_name"
+                                   value="${this.currentConfig.azure_external_location_name || ''}"
+                                   placeholder="my-external-location">
+                          </div>
+                        </div>
+                      </div>
+                      <div id="azure-private-link-fields" class="col-12" style="display: none;">
+                        <div class="row g-3">
+                          <div class="col-md-6">
+                            <label class="form-label fw-semibold">Data Plane Resource Group</label>
+                            <select class="form-select" name="azure_resource_group_mode" id="azure_resource_group_mode">
+                              <option value="new" ${this.currentConfig.azure_resource_group_mode !== 'existing' ? 'selected' : ''}>Create a new resource group</option>
+                              <option value="existing" ${this.currentConfig.azure_resource_group_mode === 'existing' ? 'selected' : ''}>Use an existing resource group</option>
+                            </select>
+                            <div class="form-text">New resource group name: <code>rg-${this.currentConfig.project_prefix || '&lt;project-prefix&gt;'}-dp</code></div>
+                          </div>
+                          <div class="col-md-6" id="azure-existing-resource-group-field" style="display: none;">
+                            <label class="form-label fw-semibold">Existing Resource Group Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="azure_existing_resource_group_name"
+                                   value="${this.currentConfig.azure_existing_resource_group_name || ''}"
+                                   placeholder="e.g., rg-databricks-data-plane">
+                          </div>
+                        </div>
                       </div>
                     ` : ''}
                     ${this.currentProvider === 'gcp' ? `
@@ -1892,6 +2054,26 @@ class App {
                                value="${this.currentConfig.project_id || ''}" 
                                placeholder="e.g., my-gcp-project-123" required>
                         <div class="form-text">Google Cloud Project ID for resource deployment</div>
+                      </div>
+                      <div class="col-md-6">
+                        <label class="form-label fw-semibold">Google Service Account Email <span class="text-danger">*</span></label>
+                        <input type="email" class="form-control" name="google_service_account_email"
+                               value="${this.currentConfig.google_service_account_email || ''}"
+                               placeholder="workspace-creator@my-project.iam.gserviceaccount.com" required>
+                        <div class="form-text">Service account used by the Google and Databricks providers.</div>
+                      </div>
+                      <div class="col-md-6">
+                        <label class="form-label fw-semibold">Databricks Account ID <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="databricks_account_id"
+                               value="${this.currentConfig.databricks_account_id || ''}"
+                               placeholder="e.g., 00000000-0000-0000-0000-000000000000" required>
+                      </div>
+                      <div class="col-md-6">
+                        <label class="form-label fw-semibold">Workspace Admin User <span class="text-danger">*</span></label>
+                        <input type="email" class="form-control" name="databricks_admin_user"
+                               value="${this.currentConfig.databricks_admin_user || ''}"
+                               placeholder="admin@example.com" required>
+                        <div class="form-text">This user must already exist in the Databricks account.</div>
                       </div>
                     ` : ''}
                   </div>
@@ -1906,6 +2088,22 @@ class App {
                   </h5>
                 </div>
                 <div class="card-body">
+                  ${this.currentProvider === 'gcp' ? `
+                  <div class="alert alert-info mb-4">
+                    <i class="bi bi-info-circle me-2"></i>
+                    This source always creates a new VPC, one regional subnet with Private Google Access,
+                    a Cloud Router, and Cloud NAT for outbound connectivity.
+                  </div>
+                  <div class="mb-0">
+                    <label class="form-label fw-semibold" for="subnet_cidr">
+                      Databricks Subnet CIDR <span class="text-danger">*</span>
+                    </label>
+                    <input type="text" class="form-control" id="subnet_cidr" name="subnet_cidr"
+                           value="${this.currentConfig.subnet_cidr || '10.10.0.0/20'}"
+                           placeholder="e.g., 10.10.0.0/20" required>
+                    <div class="form-text">Primary IPv4 CIDR for the subnet created for Databricks compute.</div>
+                  </div>
+                  ` : `
                   <div class="mb-3">
                     <div class="form-check form-switch">
                       <input class="form-check-input" type="checkbox" id="create_new_vpc" name="create_new_vpc" checked>
@@ -1914,9 +2112,65 @@ class App {
                       </label>
                     </div>
                     <div class="form-text">${this.currentProvider === 'azure' ? 
-                      'Create a new Virtual Network or use an existing one' : 
+                      'The standard source can create a VNet or add new Databricks subnets to an existing VNet' :
                       'Create a new VPC or use an existing one'}</div>
                   </div>
+                  ${this.currentProvider === 'azure' ? `
+                  <div class="mb-3" id="azure-vnet-resource-group-field">
+                    <label class="form-label fw-semibold">VNet Resource Group Name <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" name="azure_vnet_resource_group_name"
+                           value="${this.currentConfig.azure_vnet_resource_group_name || ''}"
+                           placeholder="e.g., rg-databricks-network">
+                    <div class="form-text">Must differ from the workspace resource group.</div>
+                  </div>
+                  <div class="mb-3" id="azure-nat-gateway-zone-section"
+                       ${this.currentConfig.enable_private_link ? 'style="display: none;"' : ''}>
+                    <label class="form-label fw-semibold" for="azure_nat_gateway_zone">NAT Gateway Placement</label>
+                    <select class="form-select" id="azure_nat_gateway_zone" name="azure_nat_gateway_zone">
+                      <option value="1" ${savedAzureNatGatewayZone === '1' ? 'selected' : ''}>Availability Zone 1 (default)</option>
+                      <option value="2" ${savedAzureNatGatewayZone === '2' ? 'selected' : ''}>Availability Zone 2</option>
+                      <option value="3" ${savedAzureNatGatewayZone === '3' ? 'selected' : ''}>Availability Zone 3</option>
+                      <option value="" ${savedAzureNatGatewayZone === '' ? 'selected' : ''}>Regional / non-zonal</option>
+                    </select>
+                    <div class="form-text">The standard source deploys one NAT gateway and public IP in the selected zone. Use regional placement for regions without availability-zone support.</div>
+                  </div>
+                  ` : ''}
+                  ${this.currentProvider === 'aws' || this.currentProvider === 'azure' ? `
+                  <div class="mb-3" id="nat-gateway-section"
+                       ${this.currentProvider === 'azure' && !this.currentConfig.enable_private_link ? 'style="display: none;"' : ''}>
+                    <label class="form-label fw-semibold" for="nat_gateway_mode">NAT Gateway</label>
+                    <select class="form-select" id="nat_gateway_mode"
+                            name="${this.currentProvider === 'azure' ? 'azure_private_link_nat_gateway_mode' : 'nat_gateway_mode'}">
+                      <option value="single" ${savedNatGatewayMode === 'single' ? 'selected' : ''}>Single NAT gateway</option>
+                      ${this.currentProvider === 'aws' ? `
+                      <option value="per_az" ${savedNatGatewayMode === 'per_az' ? 'selected' : ''}>One NAT gateway per availability zone</option>
+                      ` : ''}
+                      <option value="none" ${savedNatGatewayMode === 'none' ? 'selected' : ''}>No NAT gateway</option>
+                    </select>
+                    <div class="form-text">${this.currentProvider === 'azure'
+                      ? 'Choose outbound internet access through one NAT gateway or a fully private deployment without NAT.'
+                      : 'Choose a shared NAT gateway, one per availability zone, or a fully private deployment without NAT.'}</div>
+                    ${this.currentProvider === 'azure' ? `
+                    <div class="mt-3" id="azure-private-link-nat-gateway-zone-section"
+                         ${savedNatGatewayMode === 'none' ? 'style="display: none;"' : ''}>
+                      <label class="form-label fw-semibold" for="azure_private_link_nat_gateway_zone">NAT Gateway Placement</label>
+                      <select class="form-select" id="azure_private_link_nat_gateway_zone" name="azure_private_link_nat_gateway_zone">
+                        <option value="" ${savedAzurePrivateLinkNatGatewayZone === '' ? 'selected' : ''}>Regional / non-zonal (recommended)</option>
+                        <option value="1" ${savedAzurePrivateLinkNatGatewayZone === '1' ? 'selected' : ''}>Availability Zone 1</option>
+                        <option value="2" ${savedAzurePrivateLinkNatGatewayZone === '2' ? 'selected' : ''}>Availability Zone 2</option>
+                        <option value="3" ${savedAzurePrivateLinkNatGatewayZone === '3' ? 'selected' : ''}>Availability Zone 3</option>
+                      </select>
+                      <div class="form-text">Regional placement is the upstream default and avoids making outbound traffic depend on one availability zone.</div>
+                    </div>
+                    ` : ''}
+                    <div id="nat-gateway-private-link-message" class="alert alert-warning mt-2 mb-0" style="display: none;">
+                      <i class="bi bi-exclamation-triangle me-2"></i>
+                      ${this.currentProvider === 'azure'
+                        ? 'Without a NAT gateway, cluster nodes have no general internet egress. Ensure required traffic is covered by the configured service endpoints or routed through a firewall/NVA.'
+                        : 'AWS PrivateLink is required to communicate with the control plane when no NAT gateway is selected.'}
+                    </div>
+                  </div>
+                  ` : ''}
                   <div class="collapse mb-3" id="existing-vpc-section" style="display: none;">
                     <div class="card border-secondary mb-3">
                       <div class="card-body">
@@ -1937,41 +2191,25 @@ class App {
                         </div>
                         
                         ${this.currentProvider === 'aws' ? `
-                        <div class="mb-3">
-                          <label class="form-label fw-semibold">Subnet Configuration</label>
-                          <div class="form-check">
-                            <input class="form-check-input" type="radio" name="subnet_mode" id="subnet_mode_create" value="create" checked>
-                            <label class="form-check-label" for="subnet_mode_create">
-                              <strong>Create New Subnets</strong>
-                              <span class="text-muted d-block small">Terraform will create new subnets in the existing VPC</span>
-                            </label>
-                          </div>
-                          <div class="form-check mt-2">
-                            <input class="form-check-input" type="radio" name="subnet_mode" id="subnet_mode_existing" value="existing">
-                            <label class="form-check-label" for="subnet_mode_existing">
-                              <strong>Use Existing Subnets</strong>
-                              <span class="text-muted d-block small">Provide IDs of existing subnets (minimum 2, in different AZs)</span>
-                            </label>
-                          </div>
-                        </div>
-                        
-                        <div id="existing-subnets-section" class="mt-3" style="display: none;">
+                        <div id="existing-subnets-section" class="mt-3">
                           <div class="alert alert-info">
                             <i class="bi bi-info-circle me-2"></i>
-                            <strong>Requirements:</strong> At least 2 private subnets in different Availability Zones are required for Databricks.
+                            <strong>Requirements:</strong> The upstream Terraform requires at least 2 existing private subnets in different Availability Zones and an existing security group.
                           </div>
                           <div id="existing-subnets-container">
                             <div class="row mb-2 existing-subnet-row">
                               <div class="col-md-10">
                                 <label class="form-label">Subnet ID 1 <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control existing-subnet-input" name="existing_subnet_ids[]" 
+                                <input type="text" class="form-control existing-subnet-input" name="existing_subnet_ids[]"
+                                       value="${this.currentConfig.existing_subnet_ids?.[0] || ''}"
                                        placeholder="e.g., subnet-0a1b2c3d4e5f67890">
                               </div>
                             </div>
                             <div class="row mb-2 existing-subnet-row">
                               <div class="col-md-10">
                                 <label class="form-label">Subnet ID 2 <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control existing-subnet-input" name="existing_subnet_ids[]" 
+                                <input type="text" class="form-control existing-subnet-input" name="existing_subnet_ids[]"
+                                       value="${this.currentConfig.existing_subnet_ids?.[1] || ''}"
                                        placeholder="e.g., subnet-1a2b3c4d5e6f78901">
                               </div>
                               <div class="col-md-2 d-flex align-items-end">
@@ -1989,9 +2227,29 @@ class App {
                                 <span class="text-danger">*</span>
                               </label>
                               <input type="text" class="form-control" name="existing_security_group_id" id="existing_security_group_id"
+                                     value="${this.currentConfig.existing_security_group_id || ''}"
                                      placeholder="e.g., sg-0123456789abcdef0">
                               <div class="form-text">Security group for Databricks workspace nodes</div>
                             </div>
+                          </div>
+                          <div id="existing-privatelink-endpoints-section" class="row mt-3" style="display: none;">
+                            <div class="col-md-6">
+                              <label class="form-label fw-semibold" for="backend_rest_aws_vpce_id">
+                                REST API VPC Endpoint ID <span class="text-danger">*</span>
+                              </label>
+                              <input type="text" class="form-control" id="backend_rest_aws_vpce_id" name="backend_rest_aws_vpce_id"
+                                     value="${this.currentConfig.backend_rest_aws_vpce_id || ''}"
+                                     placeholder="e.g., vpce-0123456789abcdef0">
+                            </div>
+                            <div class="col-md-6">
+                              <label class="form-label fw-semibold" for="backend_relay_aws_vpce_id">
+                                SCC Relay VPC Endpoint ID <span class="text-danger">*</span>
+                              </label>
+                              <input type="text" class="form-control" id="backend_relay_aws_vpce_id" name="backend_relay_aws_vpce_id"
+                                     value="${this.currentConfig.backend_relay_aws_vpce_id || ''}"
+                                     placeholder="e.g., vpce-1234567890abcdef0">
+                            </div>
+                            <div class="form-text">Required only when PrivateLink uses an existing VPC.</div>
                           </div>
                         </div>
                         ` : ''}
@@ -2000,28 +2258,8 @@ class App {
                         <div class="mb-3">
                           <div class="alert alert-info">
                             <i class="bi bi-info-circle me-2"></i>
-                            <strong>Requirements:</strong> The existing VNet must have two subnets with
-                            <code>Microsoft.Databricks/workspaces</code> delegation and an associated NSG.
-                          </div>
-                        </div>
-                        <div class="row mb-3">
-                          <div class="col-md-6">
-                            <label class="form-label fw-semibold">
-                              Public (Host) Subnet Name <span class="text-danger">*</span>
-                            </label>
-                            <input type="text" class="form-control" name="existing_public_subnet_name" id="existing_public_subnet_name"
-                                   placeholder="e.g., databricks-public-subnet"
-                                   value="${this.currentConfig.existing_public_subnet_name || ''}">
-                            <div class="form-text">Name of the subnet delegated for Databricks host nodes</div>
-                          </div>
-                          <div class="col-md-6">
-                            <label class="form-label fw-semibold">
-                              Private (Container) Subnet Name <span class="text-danger">*</span>
-                            </label>
-                            <input type="text" class="form-control" name="existing_private_subnet_name" id="existing_private_subnet_name"
-                                   placeholder="e.g., databricks-private-subnet"
-                                   value="${this.currentConfig.existing_private_subnet_name || ''}">
-                            <div class="form-text">Name of the subnet delegated for Databricks container nodes</div>
+                            <strong>Upstream behavior:</strong> Terraform creates two delegated Databricks subnets,
+                            their NSG, and a NAT gateway inside this existing VNet. Ensure the calculated CIDRs are unused.
                           </div>
                         </div>
                         ` : ''}
@@ -2075,10 +2313,11 @@ class App {
                       <span class="text-danger">*</span>
                     </label>
                     <input type="text" class="form-control" name="vpc_cidr" 
-                           value="${this.currentConfig.vpc_cidr || '10.0.0.0/22'}" 
-                           placeholder="e.g., 10.0.0.0/22" required>
+                           value="${this.currentConfig.vpc_cidr || (this.currentProvider === 'azure' ? '10.0.0.0/20' : '10.0.0.0/22')}"
+                           placeholder="e.g., ${this.currentProvider === 'azure' ? '10.0.0.0/20' : '10.0.0.0/22'}" required>
                     <div class="form-text">${vpcDesc}</div>
                   </div>
+                  ${this.currentProvider !== 'azure' ? `
                   <div class="mb-3">
                     <label class="form-label fw-semibold" for="availability-zones-select">
                       Availability Zones
@@ -2089,6 +2328,7 @@ class App {
                     </select>
                     <div class="form-text">Type to search and select availability zones. Selected zones will appear as tags.</div>
                   </div>
+                  ` : ''}
                   <div id="subnet-size-slider-container" class="mb-4" style="display: none;">
                     <label class="form-label fw-semibold">
                       <i class="bi bi-sliders me-2"></i>
@@ -2137,9 +2377,11 @@ class App {
                     <div id="subnets-container"></div>
                     <div id="network-summary" class="mt-3"></div>
                   </div>
+                  `}
                 </div>
               </div>
               
+              ${this.currentProvider !== 'gcp' ? `
               <div class="card mb-4">
                 <div class="card-header bg-warning text-dark">
                   <h5 class="card-title mb-0">
@@ -2149,7 +2391,8 @@ class App {
                 </div>
                 <div class="card-body">
                   <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="enable_private_link" name="enable_private_link">
+                    <input class="form-check-input" type="checkbox" id="enable_private_link" name="enable_private_link"
+                           ${this.currentProvider === 'aws' && (this.currentConfig.pricing_tier || 'ENTERPRISE') !== 'ENTERPRISE' ? 'disabled aria-disabled="true"' : ''}>
                     <label class="form-check-label fw-semibold" for="enable_private_link">
                       ${this.currentProvider === 'azure' ? 'Enable Private Link' : 
                         this.currentProvider === 'gcp' ? 'Enable Private Service Connect' : 
@@ -2159,7 +2402,7 @@ class App {
                   <div class="form-text">${this.currentProvider === 'aws' ? 
                     'Enable AWS PrivateLink (requires Enterprise tier)' :
                     this.currentProvider === 'azure' ?
-                    'Enable Azure Private Link (requires Premium tier)' :
+                    'Use the classic backend and DBFS Private Link source. The workspace UI remains public.' :
                     'Enable Private Service Connect (requires Premium tier)'}</div>
                   <div id="private-link-warning" class="alert alert-info mt-2" style="display: none;">
                     <i class="bi bi-info-circle me-2"></i>
@@ -2168,44 +2411,9 @@ class App {
                     pricing tier.
                   </div>
                   
-                  ${this.currentProvider === 'aws' ? `
-                  <!-- PrivateLink Subnet Mode Options (AWS only) -->
-                  <div id="privatelink-subnet-options" class="mt-3" style="display: none;">
-                    <label class="form-label fw-semibold">PrivateLink Subnet Configuration</label>
-                    <div class="form-text mb-2">Choose how to configure the subnet for PrivateLink VPC Endpoints.</div>
-                    
-                    <div class="form-check">
-                      <input class="form-check-input" type="radio" name="privatelink_subnet_mode" 
-                             id="privatelink_subnet_terraform" value="terraform_managed" checked>
-                      <label class="form-check-label" for="privatelink_subnet_terraform">
-                        <strong>New Subnet</strong>
-                        <span class="text-muted d-block small">Terraform will create and manage a new subnet for PrivateLink endpoints</span>
-                      </label>
-                    </div>
-                    <div class="form-check mt-2">
-                      <input class="form-check-input" type="radio" name="privatelink_subnet_mode" 
-                             id="privatelink_subnet_user" value="user_managed">
-                      <label class="form-check-label" for="privatelink_subnet_user">
-                        <strong>Existing Subnet</strong>
-                        <span class="text-muted d-block small">Provide an existing subnet ID for PrivateLink endpoints</span>
-                      </label>
-                    </div>
-                    
-                    <div id="existing-privatelink-subnet-section" class="mt-3" style="display: none;">
-                      <label class="form-label" for="existing_privatelink_subnet_id">
-                        Existing Subnet ID <span class="text-danger">*</span>
-                      </label>
-                      <input type="text" class="form-control" id="existing_privatelink_subnet_id" 
-                             name="existing_privatelink_subnet_id" 
-                             placeholder="e.g., subnet-0abc123def456789a">
-                      <div class="form-text">
-                        The subnet must be in the same VPC and have connectivity to AWS PrivateLink services.
-                      </div>
-                    </div>
-                  </div>
-                  ` : ''}
                 </div>
               </div>
+              ` : ''}
               
               <div class="d-flex justify-content-between">
                 <a href="#/select-provider" class="btn btn-outline-secondary btn-lg" data-navigate>
@@ -2231,6 +2439,11 @@ class App {
     const pricingTierSelect = document.querySelector('select[name="pricing_tier"]');
     const privateLinkCheckbox = document.getElementById('enable_private_link');
     const privateLinkWarning = document.getElementById('private-link-warning');
+    const natGatewaySelect = document.getElementById('nat_gateway_mode');
+    const natGatewaySection = document.getElementById('nat-gateway-section');
+    const natGatewayPrivateLinkMessage = document.getElementById('nat-gateway-private-link-message');
+    const azureNatGatewayZoneSection = document.getElementById('azure-nat-gateway-zone-section');
+    const azurePrivateLinkNatGatewayZoneSection = document.getElementById('azure-private-link-nat-gateway-zone-section');
     
     // Subnet size slider elements
     const subnetSizeSliderContainer = document.getElementById('subnet-size-slider-container');
@@ -2270,13 +2483,16 @@ class App {
       const createNewVpc = isCreateNewVpcActive();
       if (createNewVpc) return true;
       
-      // For AWS with existing VPC, check subnet mode
+      // The AWS upstream examples cannot create subnets inside an existing VPC.
       if (this.currentProvider === 'aws') {
-        const subnetModeCreate = document.getElementById('subnet_mode_create');
-        return subnetModeCreate?.checked === true;
+        return false;
       }
+
+      // The Azure standard source creates new workspace subnets even when it
+      // reuses an existing VNet.
+      if (this.currentProvider === 'azure') return true;
       
-      // Azure/GCP with existing VNet use pre-configured subnets — no subnet config needed
+      // GCP with an existing VPC uses pre-configured subnets.
       return false;
     };
     
@@ -2284,13 +2500,14 @@ class App {
     const updateSliderLimits = () => {
       const vpcCidr = vpcCidrInput?.value;
       const enablePrivateLink = privateLinkCheckbox?.checked || false;
+      const natGatewayChoiceApplies = this.currentProvider === 'aws' ||
+        (this.currentProvider === 'azure' && enablePrivateLink);
+      const enableNatGateway = !natGatewayChoiceApplies || natGatewaySelect?.value !== 'none';
       const zones = this.getSelectedAvailabilityZones();
       const showSubnetConfig = shouldShowSubnetConfig();
       
-      // Determine if we should create service subnet
-      // Only create if PrivateLink is enabled AND user chose "New Subnet" (terraform_managed)
-      const privatelinkTerraformManaged = document.getElementById('privatelink_subnet_terraform')?.checked ?? true;
-      const createServiceSubnet = enablePrivateLink && privatelinkTerraformManaged;
+      // Azure and GCP retain their existing private-connectivity service subnet.
+      const createServiceSubnet = this.currentProvider !== 'aws' && enablePrivateLink;
       
       // Always show slider container when subnet configuration is needed
       if (!showSubnetConfig) {
@@ -2328,7 +2545,13 @@ class App {
       
       try {
         const networkCalc = new NetworkCalculator(this.currentProvider);
-        const limits = networkCalc.calculateSubnetSizeLimits(vpcCidr, zones.length, enablePrivateLink, createServiceSubnet);
+        const limits = networkCalc.calculateSubnetSizeLimits(
+          vpcCidr,
+          zones.length,
+          enablePrivateLink,
+          createServiceSubnet,
+          enableNatGateway
+        );
         
         if (limits.error || !limits.valid) {
           if (subnetSizeSlider) {
@@ -2413,13 +2636,12 @@ class App {
       const vpcCidr = vpcCidrInput?.value;
       const pricingTier = pricingTierSelect?.value;
       const enablePrivateLink = privateLinkCheckbox?.checked || false;
+      const enableNatGateway = this.currentProvider !== 'aws' || natGatewaySelect?.value !== 'none';
       const zones = this.getSelectedAvailabilityZones();
       const showSubnetConfig = shouldShowSubnetConfig();
       
-      // Determine if we should create service subnet
-      // Only create if PrivateLink is enabled AND user chose "New Subnet" (terraform_managed)
-      const privatelinkTerraformManaged = document.getElementById('privatelink_subnet_terraform')?.checked ?? true;
-      const createServiceSubnet = enablePrivateLink && privatelinkTerraformManaged;
+      // Azure and GCP retain their existing private-connectivity service subnet.
+      const createServiceSubnet = this.currentProvider !== 'aws' && enablePrivateLink;
       
       // Update slider limits first
       updateSliderLimits();
@@ -2467,7 +2689,15 @@ class App {
           customSubnetSize = parseInt(subnetSizeSlider.value, 10);
         }
         
-        const subnets = networkCalc.allocateSubnets(vpcCidr, zones, pricingTier, enablePrivateLink, customSubnetSize, createServiceSubnet);
+        const subnets = networkCalc.allocateSubnets(
+          vpcCidr,
+          zones,
+          pricingTier,
+          enablePrivateLink,
+          customSubnetSize,
+          createServiceSubnet,
+          enableNatGateway
+        );
         const summary = networkCalc.calculateNetworkSummary(vpcCidr, subnets);
         
         // Validate allocation fits in VPC
@@ -2498,7 +2728,7 @@ class App {
                   <div class="text-muted small">
                     <div><strong>CIDR:</strong> ${subnet.cidr}</div>
                     <div><strong>Size:</strong> /${subnet.size}</div>
-                    <div><strong>Zone:</strong> ${subnet.availability_zone}</div>
+                    ${this.currentProvider === 'azure' ? '' : `<div><strong>Zone:</strong> ${subnet.availability_zone}</div>`}
                   </div>
                 </div>
               </div>
@@ -3176,67 +3406,106 @@ class App {
     const createNewVpcCheckbox = document.getElementById('create_new_vpc');
     const existingVpcSection = document.getElementById('existing-vpc-section');
     const existingSubnetsSection = document.getElementById('existing-subnets-section');
-    const subnetModeCreate = document.getElementById('subnet_mode_create');
-    const subnetModeExisting = document.getElementById('subnet_mode_existing');
+    const existingPrivatelinkEndpointsSection = document.getElementById('existing-privatelink-endpoints-section');
     const vpcCidrContainer = document.querySelector('input[name="vpc_cidr"]')?.closest('.mb-3');
     const azContainer = document.querySelector('#availability-zones-select')?.closest('.mb-3');
+    const azureVnetResourceGroupField = document.getElementById('azure-vnet-resource-group-field');
+    const azureVnetResourceGroupInput = document.querySelector('input[name="azure_vnet_resource_group_name"]');
     
-    // Helper function to update UI based on VPC and subnet mode
+    // Helper function to update UI based on VPC mode
     const updateNetworkConfigUI = () => {
       const isCreateNewVpc = createNewVpcCheckbox?.checked !== false;
-      const isUseExistingSubnets = subnetModeExisting?.checked === true;
+      const azurePrivateLink = this.currentProvider === 'azure' && privateLinkCheckbox?.checked === true;
       
       if (isCreateNewVpc) {
         // Creating new VPC - show VPC CIDR, AZs, subnet slider
         if (existingVpcSection) existingVpcSection.style.display = 'none';
         if (vpcCidrContainer) vpcCidrContainer.style.display = 'block';
         if (azContainer) azContainer.style.display = 'block';
+        if (natGatewaySection) {
+          natGatewaySection.style.display = this.currentProvider === 'aws' || azurePrivateLink ? 'block' : 'none';
+        }
       } else {
         // Using existing VPC
         if (existingVpcSection) existingVpcSection.style.display = 'block';
         
         if (this.currentProvider === 'aws') {
-          if (isUseExistingSubnets) {
-            // Using existing subnets - hide VPC CIDR, AZs, subnet slider
-            if (vpcCidrContainer) vpcCidrContainer.style.display = 'none';
-            if (azContainer) azContainer.style.display = 'none';
-            if (existingSubnetsSection) existingSubnetsSection.style.display = 'block';
-          } else {
-            // Creating new subnets in existing VPC - show VPC CIDR, AZs
-            if (vpcCidrContainer) vpcCidrContainer.style.display = 'block';
-            if (azContainer) azContainer.style.display = 'block';
-            if (existingSubnetsSection) existingSubnetsSection.style.display = 'none';
-          }
+          if (vpcCidrContainer) vpcCidrContainer.style.display = 'none';
+          if (azContainer) azContainer.style.display = 'none';
+          if (existingSubnetsSection) existingSubnetsSection.style.display = 'block';
+          if (natGatewaySection) natGatewaySection.style.display = 'none';
+        } else if (this.currentProvider === 'azure') {
+          // The Azure standard source creates the workspace subnets in the existing VNet.
+          if (vpcCidrContainer) vpcCidrContainer.style.display = 'block';
+          if (azContainer) azContainer.style.display = 'none';
+          if (natGatewaySection) natGatewaySection.style.display = 'none';
         } else {
-          // Azure/GCP - hide VPC CIDR, AZs, subnet slider (existing VNet uses pre-configured subnets)
           if (vpcCidrContainer) vpcCidrContainer.style.display = 'none';
           if (azContainer) azContainer.style.display = 'none';
         }
+      }
+
+      if (azureVnetResourceGroupField) {
+        azureVnetResourceGroupField.style.display = !azurePrivateLink && isCreateNewVpc ? 'block' : 'none';
+      }
+
+      if (natGatewayPrivateLinkMessage) {
+        const noAwsNat = this.currentProvider === 'aws' && isCreateNewVpc && natGatewaySelect?.value === 'none';
+        const noAzurePrivateLinkNat = azurePrivateLink && natGatewaySelect?.value === 'none';
+        natGatewayPrivateLinkMessage.style.display = noAwsNat || noAzurePrivateLinkNat ? 'block' : 'none';
+      }
+
+      if (azurePrivateLinkNatGatewayZoneSection) {
+        const showPlacement = azurePrivateLink && natGatewaySelect?.value !== 'none';
+        azurePrivateLinkNatGatewayZoneSection.style.display = showPlacement ? 'block' : 'none';
       }
       
       // Toggle required attributes based on what's visible
       const vpcCidrInput = document.querySelector('input[name="vpc_cidr"]');
       const existingVpcIdInput = document.getElementById('existing_vpc_id');
+      const azSelect = document.getElementById('availability-zones-select');
+      const awsExistingInputs = document.querySelectorAll('#existing-subnets-section input');
+      const restEndpointInput = document.getElementById('backend_rest_aws_vpce_id');
+      const relayEndpointInput = document.getElementById('backend_relay_aws_vpce_id');
 
       if (isCreateNewVpc) {
         // Creating new VPC — VPC CIDR required, existing fields not required
         if (vpcCidrInput) vpcCidrInput.setAttribute('required', '');
+        if (azSelect) azSelect.setAttribute('required', '');
         if (existingVpcIdInput) existingVpcIdInput.removeAttribute('required');
         document.querySelectorAll('#existing-vpc-section input').forEach(el => el.removeAttribute('required'));
+        if (existingPrivatelinkEndpointsSection) existingPrivatelinkEndpointsSection.style.display = 'none';
       } else {
         // Using existing VPC/VNet — existing ID required, VPC CIDR depends on provider
         if (existingVpcIdInput) existingVpcIdInput.setAttribute('required', '');
 
         if (this.currentProvider === 'aws') {
-          const isExistingSubnets = subnetModeExisting?.checked === true;
-          if (isExistingSubnets) {
-            if (vpcCidrInput) vpcCidrInput.removeAttribute('required');
-          } else {
-            if (vpcCidrInput) vpcCidrInput.setAttribute('required', '');
-          }
-        } else {
-          // Azure/GCP with existing VNet — no VPC CIDR needed
           if (vpcCidrInput) vpcCidrInput.removeAttribute('required');
+          if (azSelect) azSelect.removeAttribute('required');
+          awsExistingInputs.forEach(input => input.setAttribute('required', ''));
+          const needsEndpoints = privateLinkCheckbox?.checked === true;
+          if (existingPrivatelinkEndpointsSection) {
+            existingPrivatelinkEndpointsSection.style.display = needsEndpoints ? 'flex' : 'none';
+          }
+          for (const input of [restEndpointInput, relayEndpointInput]) {
+            if (!input) continue;
+            if (needsEndpoints) input.setAttribute('required', '');
+            else input.removeAttribute('required');
+          }
+        } else if (this.currentProvider === 'azure') {
+          if (vpcCidrInput) vpcCidrInput.setAttribute('required', '');
+          if (azSelect) azSelect.removeAttribute('required');
+        } else {
+          if (vpcCidrInput) vpcCidrInput.removeAttribute('required');
+          if (azSelect) azSelect.removeAttribute('required');
+        }
+      }
+
+      if (azureVnetResourceGroupInput) {
+        if (this.currentProvider === 'azure' && !azurePrivateLink && isCreateNewVpc) {
+          azureVnetResourceGroupInput.setAttribute('required', '');
+        } else {
+          azureVnetResourceGroupInput.removeAttribute('required');
         }
       }
 
@@ -3246,14 +3515,6 @@ class App {
 
     if (createNewVpcCheckbox) {
       createNewVpcCheckbox.addEventListener('change', updateNetworkConfigUI);
-    }
-    
-    // Setup subnet mode radio buttons (AWS only)
-    if (subnetModeCreate) {
-      subnetModeCreate.addEventListener('change', updateNetworkConfigUI);
-    }
-    if (subnetModeExisting) {
-      subnetModeExisting.addEventListener('change', updateNetworkConfigUI);
     }
     
     // Setup add subnet button
@@ -3297,11 +3558,56 @@ class App {
       });
     }
     
+    const azureResourceGroupMode = document.getElementById('azure_resource_group_mode');
+    const azureExistingResourceGroupField = document.getElementById('azure-existing-resource-group-field');
+    const azureExistingResourceGroupInput = document.querySelector('input[name="azure_existing_resource_group_name"]');
+    const updateAzureResourceGroupUI = () => {
+      if (this.currentProvider !== 'azure') return;
+      const useExisting = privateLinkCheckbox?.checked === true && azureResourceGroupMode?.value === 'existing';
+      if (azureExistingResourceGroupField) {
+        azureExistingResourceGroupField.style.display = useExisting ? 'block' : 'none';
+      }
+      if (azureExistingResourceGroupInput) {
+        if (useExisting) azureExistingResourceGroupInput.setAttribute('required', '');
+        else azureExistingResourceGroupInput.removeAttribute('required');
+      }
+    };
+
     // Setup private link validation
     const checkPrivateLinkRequirements = () => {
       const tier = pricingTierSelect?.value;
-      const privateLinkEnabled = privateLinkCheckbox?.checked || false;
       const requiredTier = this.currentProvider === 'aws' ? 'ENTERPRISE' : 'PREMIUM';
+
+      if (this.currentProvider === 'aws' && privateLinkCheckbox) {
+        const enterpriseSelected = tier === 'ENTERPRISE';
+        if (!enterpriseSelected) privateLinkCheckbox.checked = false;
+        privateLinkCheckbox.disabled = !enterpriseSelected;
+        privateLinkCheckbox.setAttribute('aria-disabled', String(!enterpriseSelected));
+      }
+
+      if (this.currentProvider === 'azure' && privateLinkCheckbox) {
+        const privateLinkEnabled = privateLinkCheckbox.checked;
+        const standardFields = document.getElementById('azure-standard-fields');
+        const privateLinkFields = document.getElementById('azure-private-link-fields');
+        const metastoreConfiguration = document.getElementById('metastore-configuration');
+        if (standardFields) standardFields.style.display = privateLinkEnabled ? 'none' : 'block';
+        if (privateLinkFields) privateLinkFields.style.display = privateLinkEnabled ? 'block' : 'none';
+        if (metastoreConfiguration) metastoreConfiguration.style.display = privateLinkEnabled ? 'none' : 'block';
+        if (azureNatGatewayZoneSection) azureNatGatewayZoneSection.style.display = privateLinkEnabled ? 'none' : 'block';
+        if (natGatewaySection) natGatewaySection.style.display = privateLinkEnabled ? 'block' : 'none';
+        document.querySelectorAll('.azure-standard-required').forEach(input => {
+          if (privateLinkEnabled) input.removeAttribute('required');
+          else input.setAttribute('required', '');
+        });
+        if (createNewVpcCheckbox) {
+          if (privateLinkEnabled) createNewVpcCheckbox.checked = true;
+          createNewVpcCheckbox.disabled = privateLinkEnabled;
+          createNewVpcCheckbox.setAttribute('aria-disabled', String(privateLinkEnabled));
+        }
+        updateAzureResourceGroupUI();
+      }
+
+      const privateLinkEnabled = privateLinkCheckbox?.checked || false;
       
       if (privateLinkEnabled && tier !== requiredTier && privateLinkWarning) {
         privateLinkWarning.style.display = 'block';
@@ -3310,56 +3616,63 @@ class App {
       }
     };
     
-    // Setup PrivateLink subnet mode options (AWS only)
-    const privatelinkSubnetOptions = document.getElementById('privatelink-subnet-options');
-    const privatelinkSubnetTerraform = document.getElementById('privatelink_subnet_terraform');
-    const privatelinkSubnetUser = document.getElementById('privatelink_subnet_user');
-    const existingPrivatelinkSubnetSection = document.getElementById('existing-privatelink-subnet-section');
-    
-    const updatePrivatelinkSubnetUI = () => {
-      const privateLinkEnabled = privateLinkCheckbox?.checked || false;
-      
-      // Show/hide the subnet mode options based on PrivateLink checkbox
-      if (privatelinkSubnetOptions) {
-        privatelinkSubnetOptions.style.display = privateLinkEnabled ? 'block' : 'none';
-      }
-      
-      // Show/hide the existing subnet ID input based on radio selection
-      if (existingPrivatelinkSubnetSection) {
-        const userManaged = privatelinkSubnetUser?.checked || false;
-        existingPrivatelinkSubnetSection.style.display = userManaged ? 'block' : 'none';
+    // The upstream AWS examples require exactly one metastore path.
+    const metastoreModeCreate = document.getElementById('metastore_mode_create');
+    const metastoreModeExisting = document.getElementById('metastore_mode_existing');
+    const newMetastoreSection = document.getElementById('new-metastore-section');
+    const existingMetastoreSection = document.getElementById('existing-metastore-section');
+    const metastoreIdInput = document.getElementById('metastore_id');
+    const updateMetastoreUI = () => {
+      const useExisting = metastoreModeExisting?.checked === true;
+      if (newMetastoreSection) newMetastoreSection.style.display = useExisting ? 'none' : 'block';
+      if (existingMetastoreSection) existingMetastoreSection.style.display = useExisting ? 'block' : 'none';
+      if (metastoreIdInput) {
+        const metastoreVisible = this.currentProvider !== 'azure' || privateLinkCheckbox?.checked !== true;
+        if (useExisting && metastoreVisible) metastoreIdInput.setAttribute('required', '');
+        else metastoreIdInput.removeAttribute('required');
       }
     };
-    
-    // Add event listeners for PrivateLink subnet mode
-    privatelinkSubnetTerraform?.addEventListener('change', () => {
-      updatePrivatelinkSubnetUI();
-      calculateSubnets(); // Recalculate subnets when subnet mode changes
-    });
-    privatelinkSubnetUser?.addEventListener('change', () => {
-      updatePrivatelinkSubnetUI();
-      calculateSubnets(); // Recalculate subnets when subnet mode changes
-    });
+    metastoreModeCreate?.addEventListener('change', updateMetastoreUI);
+    metastoreModeExisting?.addEventListener('change', updateMetastoreUI);
+    azureResourceGroupMode?.addEventListener('change', updateAzureResourceGroupUI);
     
     privateLinkCheckbox?.addEventListener('change', checkPrivateLinkRequirements);
     pricingTierSelect?.addEventListener('change', checkPrivateLinkRequirements);
+    natGatewaySelect?.addEventListener('change', () => {
+      updateNetworkConfigUI();
+      calculateSubnets();
+    });
     
     // Real-time subnet calculation event listeners
     // Note: calculateSubnets is already defined earlier in the function
     vpcCidrInput?.addEventListener('input', calculateSubnets);
     pricingTierSelect?.addEventListener('change', () => {
       checkPrivateLinkRequirements();
+      updateNetworkConfigUI();
       calculateSubnets();
     });
     privateLinkCheckbox?.addEventListener('change', () => {
       checkPrivateLinkRequirements();
-      updatePrivatelinkSubnetUI();
+      updateMetastoreUI();
+      updateNetworkConfigUI();
       calculateSubnets();
     });
     
     // Note: Change listeners for availability zone selects are added above in the initialization section
     // Note: Remove button handlers are added above in the addAvailabilityZoneRow function
     
+    if (createNewVpcCheckbox && this.currentConfig.create_new_vpc === false) {
+      createNewVpcCheckbox.checked = false;
+    }
+    if (privateLinkCheckbox && this.currentConfig.enable_private_link === true &&
+        (this.currentProvider !== 'aws' || pricingTierSelect?.value === 'ENTERPRISE')) {
+      privateLinkCheckbox.checked = true;
+    }
+    checkPrivateLinkRequirements();
+    updateMetastoreUI();
+    updateAzureResourceGroupUI();
+    updateNetworkConfigUI();
+
     // Trigger initial calculations - always call to show slider/preview when Create New VPC is active
     setTimeout(calculateSubnets, 500);
     
@@ -3371,40 +3684,93 @@ class App {
       config.provider = this.currentProvider;
       config.create_new_vpc = document.getElementById('create_new_vpc')?.checked !== false;
       config.enable_private_link = document.getElementById('enable_private_link')?.checked || false;
-      
-      // AWS-specific: Handle PrivateLink subnet mode
-      if (this.currentProvider === 'aws' && config.enable_private_link) {
-        config.privatelink_subnet_mode = document.querySelector('input[name="privatelink_subnet_mode"]:checked')?.value || 'terraform_managed';
-        if (config.privatelink_subnet_mode === 'user_managed') {
-          config.existing_privatelink_subnet_id = document.getElementById('existing_privatelink_subnet_id')?.value?.trim() || '';
+      if (this.currentProvider === 'gcp') {
+        config.create_new_vpc = true;
+        config.enable_private_link = false;
+        config.enable_nat_gateway = true;
+        config.nat_gateway_mode = 'single';
+        config.pricing_tier = '';
+        config.subnet_cidr = document.getElementById('subnet_cidr')?.value?.trim() || '';
+      }
+      if (this.currentProvider === 'azure') {
+        config.pricing_tier = 'PREMIUM';
+        const azureNatGatewayZone = document.getElementById('azure_nat_gateway_zone')?.value ?? '1';
+        config.azure_nat_gateway_zone = ['', '1', '2', '3'].includes(azureNatGatewayZone)
+          ? azureNatGatewayZone
+          : '1';
+        const azurePrivateLinkNatGatewayZone = document.getElementById('azure_private_link_nat_gateway_zone')?.value ?? '';
+        config.azure_private_link_nat_gateway_zone = ['', '1', '2', '3'].includes(azurePrivateLinkNatGatewayZone)
+          ? azurePrivateLinkNatGatewayZone
+          : '';
+      }
+      if (this.currentProvider === 'aws') {
+        config.nat_gateway_mode = document.getElementById('nat_gateway_mode')?.value || 'single';
+        config.enable_nat_gateway = !config.create_new_vpc || config.nat_gateway_mode !== 'none';
+      } else if (this.currentProvider === 'azure' && config.enable_private_link) {
+        config.azure_private_link_nat_gateway_mode = document.getElementById('nat_gateway_mode')?.value || 'single';
+        config.nat_gateway_mode = config.azure_private_link_nat_gateway_mode;
+        config.enable_nat_gateway = config.nat_gateway_mode !== 'none';
+      } else {
+        config.nat_gateway_mode = 'single';
+        config.enable_nat_gateway = true;
+      }
+
+      if (this.currentProvider === 'aws') {
+        config.metastore_mode = document.querySelector('input[name="metastore_mode"]:checked')?.value || 'create';
+        config.metastore_id = config.metastore_mode === 'existing'
+          ? (document.getElementById('metastore_id')?.value?.trim() || '')
+          : '';
+        config.metastore_name = config.metastore_mode === 'existing'
+          ? ''
+          : (document.getElementById('metastore_name')?.value?.trim() || `${config.project_prefix}-metastore`);
+      }
+
+      if (this.currentProvider === 'azure') {
+        config.azure_resource_group_mode = document.getElementById('azure_resource_group_mode')?.value || 'new';
+        if (config.enable_private_link) {
+          config.create_new_vpc = true;
+          config.metastore_mode = 'none';
+          config.metastore_id = '';
+          config.metastore_name = '';
         } else {
-          config.existing_privatelink_subnet_id = '';
+          config.metastore_mode = document.querySelector('input[name="metastore_mode"]:checked')?.value || 'create';
+          config.metastore_id = config.metastore_mode === 'existing'
+            ? (document.getElementById('metastore_id')?.value?.trim() || '')
+            : '';
+          config.metastore_name = config.metastore_mode === 'existing'
+            ? ''
+            : (document.getElementById('metastore_name')?.value?.trim() || `${config.project_prefix}-metastore`);
         }
       }
       
-      // AWS-specific: Handle subnet mode
+      // AWS existing-VPC mode uses only pre-existing network resources.
       if (this.currentProvider === 'aws' && !config.create_new_vpc) {
-        config.subnet_mode = document.querySelector('input[name="subnet_mode"]:checked')?.value || 'create';
-        config.create_new_subnets = config.subnet_mode === 'create';
-        
-        // If using existing subnets, collect the IDs
-        if (config.subnet_mode === 'existing') {
-          const subnetInputs = document.querySelectorAll('.existing-subnet-input');
-          config.existing_subnet_ids = Array.from(subnetInputs)
-            .map(input => input.value.trim())
-            .filter(val => val !== '');
-          config.existing_security_group_id = document.getElementById('existing_security_group_id')?.value?.trim() || '';
-        }
-        
-        // Get existing VPC ID
+        config.subnet_mode = 'existing';
+        config.create_new_subnets = false;
+        const subnetInputs = document.querySelectorAll('.existing-subnet-input');
+        config.existing_subnet_ids = Array.from(subnetInputs)
+          .map(input => input.value.trim())
+          .filter(val => val !== '');
+        config.existing_security_group_id = document.getElementById('existing_security_group_id')?.value?.trim() || '';
         config.existing_vpc_id = document.getElementById('existing_vpc_id')?.value?.trim() || '';
+        config.backend_rest_aws_vpce_id = config.enable_private_link
+          ? (document.getElementById('backend_rest_aws_vpce_id')?.value?.trim() || '')
+          : '';
+        config.backend_relay_aws_vpce_id = config.enable_private_link
+          ? (document.getElementById('backend_relay_aws_vpce_id')?.value?.trim() || '')
+          : '';
+      } else if (this.currentProvider === 'aws') {
+        config.create_new_subnets = true;
+        config.existing_subnet_ids = [];
+        config.existing_security_group_id = '';
+        config.existing_vpc_id = '';
       }
 
       // Azure-specific: Handle existing VNet
       if (this.currentProvider === 'azure' && !config.create_new_vpc) {
         config.existing_vpc_id = document.getElementById('existing_vpc_id')?.value?.trim() || '';
-        config.existing_public_subnet_name = document.getElementById('existing_public_subnet_name')?.value?.trim() || '';
-        config.existing_private_subnet_name = document.getElementById('existing_private_subnet_name')?.value?.trim() || '';
+      } else if (this.currentProvider === 'azure') {
+        config.existing_vpc_id = '';
       }
 
       // GCP-specific: Handle existing VPC
@@ -3419,9 +3785,8 @@ class App {
       this.clearAllFieldValidations();
       
       // Determine if we need subnet configuration (VPC CIDR, AZs, etc.)
-      // Azure/GCP with existing VNet use pre-configured subnets — no CIDR/AZ needed
-      const needsSubnetConfig = config.create_new_vpc ||
-        (this.currentProvider === 'aws' && config.create_new_subnets);
+      const needsSubnetConfig = this.currentProvider !== 'gcp' &&
+        (this.currentProvider === 'azure' || config.create_new_vpc);
       
       // Get availability zones from multiple select
       const zones = this.getSelectedAvailabilityZones();
@@ -3513,10 +3878,7 @@ class App {
         const networkCalc = new NetworkCalculator(this.currentProvider);
         try {
           if (config.vpc_cidr && zones.length > 0) {
-            // Determine if we should create service subnet
-            // Only create if PrivateLink is enabled AND user chose "New Subnet" (terraform_managed)
-            const createServiceSubnet = config.enable_private_link && 
-              (config.privatelink_subnet_mode === 'terraform_managed' || !config.privatelink_subnet_mode);
+            const createServiceSubnet = this.currentProvider !== 'aws' && config.enable_private_link;
             
             const subnets = networkCalc.allocateSubnets(
               config.vpc_cidr,
@@ -3524,7 +3886,8 @@ class App {
               config.pricing_tier,
               config.enable_private_link,
               null, // customSubnetSize
-              createServiceSubnet
+              createServiceSubnet,
+              config.enable_nat_gateway
             );
             
             // Validate subnet allocation
@@ -3615,6 +3978,17 @@ class App {
           config.provider = this.currentProvider;
           config.create_new_vpc = document.getElementById('create_new_vpc')?.checked !== false;
           config.enable_private_link = document.getElementById('enable_private_link')?.checked || false;
+          if (this.currentProvider === 'aws') {
+            config.nat_gateway_mode = document.getElementById('nat_gateway_mode')?.value || 'single';
+            config.enable_nat_gateway = !config.create_new_vpc || config.nat_gateway_mode !== 'none';
+          } else if (this.currentProvider === 'azure' && config.enable_private_link) {
+            config.azure_private_link_nat_gateway_mode = document.getElementById('nat_gateway_mode')?.value || 'single';
+            config.nat_gateway_mode = config.azure_private_link_nat_gateway_mode;
+            config.enable_nat_gateway = config.nat_gateway_mode !== 'none';
+          } else {
+            config.nat_gateway_mode = 'single';
+            config.enable_nat_gateway = true;
+          }
           
           // Get availability zones from multiple select
           config.availability_zones = this.getSelectedAvailabilityZones();
@@ -3643,6 +4017,36 @@ class App {
     }
     
     const config = this.currentConfig;
+    const configuredSummaryNatGatewayMode = config.provider === 'azure' && config.enable_private_link
+      ? (config.azure_private_link_nat_gateway_mode || config.nat_gateway_mode)
+      : config.nat_gateway_mode;
+    const natGatewayMode = ['single', 'per_az', 'none'].includes(configuredSummaryNatGatewayMode)
+      ? configuredSummaryNatGatewayMode
+      : config.enable_nat_gateway === false ? 'none' : 'single';
+    const natGatewayLabel = natGatewayMode === 'per_az'
+      ? 'One per availability zone'
+      : natGatewayMode === 'none' ? 'None' : 'Single';
+    const configuredAzureNatGatewayZone = Object.prototype.hasOwnProperty.call(config, 'azure_nat_gateway_zone')
+      ? String(config.azure_nat_gateway_zone)
+      : '1';
+    const azureNatGatewayZone = ['1', '2', '3'].includes(configuredAzureNatGatewayZone)
+      ? configuredAzureNatGatewayZone
+      : '';
+    const azureNatGatewayLabel = azureNatGatewayZone
+      ? `Availability Zone ${azureNatGatewayZone}`
+      : 'Regional / non-zonal';
+    const configuredAzurePrivateLinkNatGatewayZone = Object.prototype.hasOwnProperty.call(
+      config,
+      'azure_private_link_nat_gateway_zone'
+    ) ? String(config.azure_private_link_nat_gateway_zone) : '';
+    const azurePrivateLinkNatGatewayZone = ['1', '2', '3'].includes(configuredAzurePrivateLinkNatGatewayZone)
+      ? configuredAzurePrivateLinkNatGatewayZone
+      : '';
+    const azurePrivateLinkNatGatewayLabel = natGatewayMode === 'none'
+      ? 'None'
+      : `Single — ${azurePrivateLinkNatGatewayZone
+        ? `Availability Zone ${azurePrivateLinkNatGatewayZone}`
+        : 'Regional / non-zonal'}`;
     const providerIcon = config.provider === 'aws' ? 
       '<i class="bi bi-amazon text-warning me-2" style="font-size: 2rem;"></i>' :
       config.provider === 'azure' ?
@@ -3699,29 +4103,63 @@ class App {
                         <td>${providerName}</td>
                       </tr>
                       <tr>
-                        <td class="fw-semibold">Project Prefix:</td>
+                        <td class="fw-semibold">${config.provider === 'gcp' ? 'Workspace Name:' : 'Project Prefix:'}</td>
                         <td><code>${config.project_prefix}</code></td>
                       </tr>
                       <tr>
                         <td class="fw-semibold">Region:</td>
                         <td><code>${config.region}</code></td>
                       </tr>
+                      ${config.provider !== 'gcp' ? `
                       <tr>
                         <td class="fw-semibold">Pricing Tier:</td>
                         <td>
                           <span class="badge bg-${pricingBadgeClass}">${config.pricing_tier}</span>
                         </td>
                       </tr>
-                      ${config.provider === 'azure' && config.resource_group_name ? `
+                      ` : ''}
+                      ${config.provider === 'aws' || (config.provider === 'azure' && !config.enable_private_link) ? `
+                      <tr>
+                        <td class="fw-semibold">Metastore:</td>
+                        <td>${config.metastore_mode === 'existing'
+                          ? `Attach <code>${config.metastore_id}</code>`
+                          : `Create <code>${config.metastore_name}</code>`}</td>
+                      </tr>
+                      ` : ''}
+                      ${config.provider === 'azure' && !config.enable_private_link && config.resource_group_name ? `
                         <tr>
-                          <td class="fw-semibold">Resource Group:</td>
+                          <td class="fw-semibold">Workspace Resource Group:</td>
                           <td><code>${config.resource_group_name}</code></td>
+                        </tr>
+                        <tr>
+                          <td class="fw-semibold">Catalog:</td>
+                          <td><code>${config.azure_catalog_name}</code></td>
+                        </tr>
+                      ` : ''}
+                      ${config.provider === 'azure' && config.enable_private_link ? `
+                        <tr>
+                          <td class="fw-semibold">Data Plane Resource Group:</td>
+                          <td>${config.azure_resource_group_mode === 'existing'
+                            ? `Use <code>${config.azure_existing_resource_group_name}</code>`
+                            : `Create <code>rg-${config.project_prefix}-dp</code>`}</td>
                         </tr>
                       ` : ''}
                       ${config.provider === 'gcp' && config.project_id ? `
                         <tr>
                           <td class="fw-semibold">GCP Project ID:</td>
                           <td><code>${config.project_id}</code></td>
+                        </tr>
+                        <tr>
+                          <td class="fw-semibold">Google Service Account:</td>
+                          <td><code class="text-break">${config.google_service_account_email}</code></td>
+                        </tr>
+                        <tr>
+                          <td class="fw-semibold">Databricks Account ID:</td>
+                          <td><code class="text-break">${config.databricks_account_id}</code></td>
+                        </tr>
+                        <tr>
+                          <td class="fw-semibold">Workspace Admin:</td>
+                          <td><code class="text-break">${config.databricks_admin_user}</code></td>
                         </tr>
                       ` : ''}
                     </table>
@@ -3753,47 +4191,41 @@ class App {
                         <td><code class="text-break">${config.existing_vpc_id}</code></td>
                       </tr>
                       ` : ''}
-                      ${config.provider === 'aws' && !config.create_new_vpc ? `
+                      ${config.provider === 'aws' && config.create_new_vpc ? `
                       <tr>
-                        <td class="fw-semibold">Subnet Mode:</td>
-                        <td>
-                          <span class="badge bg-${config.create_new_subnets ? 'primary' : 'secondary'}">
-                            ${config.create_new_subnets ? 'Create New Subnets' : 'Use Existing Subnets'}
-                          </span>
-                        </td>
+                        <td class="fw-semibold">NAT Gateway:</td>
+                        <td><span class="badge bg-${natGatewayMode === 'none' ? 'secondary' : 'success'}">${natGatewayLabel}</span></td>
                       </tr>
                       ` : ''}
-                      ${config.provider === 'azure' && !config.create_new_vpc ? `
+                      ${config.provider === 'azure' && !config.enable_private_link ? `
                       <tr>
-                        <td class="fw-semibold">Public Subnet:</td>
-                        <td><code>${config.existing_public_subnet_name || 'N/A'}</code></td>
-                      </tr>
-                      <tr>
-                        <td class="fw-semibold">Private Subnet:</td>
-                        <td><code>${config.existing_private_subnet_name || 'N/A'}</code></td>
+                        <td class="fw-semibold">NAT Gateway:</td>
+                        <td><span class="badge bg-success">${azureNatGatewayLabel}</span></td>
                       </tr>
                       ` : ''}
-                      ${config.provider === 'gcp' && !config.create_new_vpc ? `
+                      ${config.provider === 'azure' && config.enable_private_link ? `
                       <tr>
-                        <td class="fw-semibold">Subnet Name:</td>
-                        <td><code>${config.existing_subnet_name || 'N/A'}</code></td>
-                      </tr>
-                      <tr>
-                        <td class="fw-semibold">Pod IP Range:</td>
-                        <td><code>${config.existing_pod_range_name || 'N/A'}</code></td>
-                      </tr>
-                      <tr>
-                        <td class="fw-semibold">Service IP Range:</td>
-                        <td><code>${config.existing_service_range_name || 'N/A'}</code></td>
+                        <td class="fw-semibold">NAT Gateway:</td>
+                        <td><span class="badge bg-${natGatewayMode === 'none' ? 'secondary' : 'success'}">${azurePrivateLinkNatGatewayLabel}</span></td>
                       </tr>
                       ` : ''}
-                      ${config.vpc_cidr && (config.create_new_vpc || config.create_new_subnets) ? `
+                      ${config.provider === 'gcp' ? `
+                      <tr>
+                        <td class="fw-semibold">Cloud NAT:</td>
+                        <td><span class="badge bg-success">Created</span></td>
+                      </tr>
+                      <tr>
+                        <td class="fw-semibold">Subnet CIDR:</td>
+                        <td><code>${config.subnet_cidr}</code></td>
+                      </tr>
+                      ` : ''}
+                      ${config.provider !== 'gcp' && config.vpc_cidr && (config.provider === 'azure' || config.create_new_vpc || config.create_new_subnets) ? `
                       <tr>
                         <td class="fw-semibold">${config.provider === 'azure' ? 'VNet CIDR:' : 'VPC CIDR:'}</td>
                         <td><code>${config.vpc_cidr}</code></td>
                       </tr>
                       ` : ''}
-                      ${(config.availability_zones && config.availability_zones.length > 0) ? `
+                      ${config.provider !== 'azure' && config.provider !== 'gcp' && (config.availability_zones && config.availability_zones.length > 0) ? `
                       <tr>
                         <td class="fw-semibold">Availability Zones:</td>
                         <td>
@@ -3817,6 +4249,16 @@ class App {
                       <tr>
                         <td class="fw-semibold">Security Group ID:</td>
                         <td><code class="text-break">${config.existing_security_group_id}</code></td>
+                      </tr>
+                      ` : ''}
+                      ${config.backend_rest_aws_vpce_id ? `
+                      <tr>
+                        <td class="fw-semibold">REST API VPC Endpoint:</td>
+                        <td><code class="text-break">${config.backend_rest_aws_vpce_id}</code></td>
+                      </tr>
+                      <tr>
+                        <td class="fw-semibold">SCC Relay VPC Endpoint:</td>
+                        <td><code class="text-break">${config.backend_relay_aws_vpce_id}</code></td>
                       </tr>
                       ` : ''}
                       ${(config.create_new_vpc || config.create_new_subnets) && config.calculated_subnets && config.calculated_subnets.length > 0 ? `
@@ -3884,11 +4326,11 @@ class App {
                     ${config.calculated_subnets.map(subnet => {
                       const typeColor = subnet.subnet_type === 'private' ? 'primary' :
                         subnet.subnet_type === 'public' ? 'success' :
-                        subnet.subnet_type === 'service' ? 'warning' :
+                        (subnet.subnet_type === 'service' || subnet.subnet_type === 'intra') ? 'warning' :
                         subnet.subnet_type === 'host' ? 'info' : 'secondary';
                       return `
                         <div class="col-md-6 col-lg-4">
-                          <div class="card border-start border-4 border-${typeColor}">
+                          <div class="card subnet-allocation-card border-start border-4 border-${typeColor}">
                             <div class="card-body p-3">
                               <div class="d-flex justify-content-between align-items-start mb-2">
                                 <h6 class="card-title mb-0 text-capitalize">${subnet.name}</h6>
@@ -3996,11 +4438,11 @@ class App {
     // Check vault status
     const vaultExists = Utils.hasCredentialsVault();
     const vaultUnlocked = Utils.isVaultUnlocked();
-    const vaultLockedWithCredentials = vaultExists && !vaultUnlocked;
+    const vaultLockedWithCredentials = config.provider !== 'gcp' && vaultExists && !vaultUnlocked;
     
     // Get stored credentials for the current provider (async)
     let credentials = {};
-    if (vaultUnlocked) {
+    if (config.provider !== 'gcp' && vaultUnlocked) {
       credentials = await Utils.getProviderCredentials(config.provider) || {};
     }
     
@@ -4019,18 +4461,24 @@ class App {
     const clientSecretDisplay = credentials.clientSecret ? Utils.maskSensitiveValue(credentials.clientSecret) : '&lt;client-secret&gt;';
     
     // Build the actual export command for clipboard
-    const exportCmd = config.provider === 'azure'
-      ? `export DATABRICKS_CLIENT_ID="${clientIdValue}"
-export DATABRICKS_CLIENT_SECRET="${clientSecretValue}"`
-      : `export TF_VAR_databricks_account_id="${accountIdValue}"
+    const exportCmd = config.provider === 'gcp'
+      ? `gcloud config set project ${config.project_id}
+gcloud config set auth/impersonate_service_account ${config.google_service_account_email}
+export GOOGLE_OAUTH_ACCESS_TOKEN="$(gcloud auth print-access-token)"`
+      : config.provider === 'azure'
+        ? `export TF_VAR_databricks_account_id="${accountIdValue}"`
+        : `export TF_VAR_databricks_account_id="${accountIdValue}"
 export DATABRICKS_CLIENT_ID="${clientIdValue}"
 export DATABRICKS_CLIENT_SECRET="${clientSecretValue}"`;
     
     // Build the masked display version
-    const exportCmdDisplay = config.provider === 'azure'
-      ? `export DATABRICKS_CLIENT_ID="${clientIdDisplay}"
-export DATABRICKS_CLIENT_SECRET="${clientSecretDisplay}"`
-      : `export TF_VAR_databricks_account_id="${accountIdDisplay}"
+    const exportCmdDisplay = config.provider === 'gcp'
+      ? `gcloud config set project ${config.project_id}
+gcloud config set auth/impersonate_service_account ${config.google_service_account_email}
+export GOOGLE_OAUTH_ACCESS_TOKEN="$(gcloud auth print-access-token)"`
+      : config.provider === 'azure'
+        ? `export TF_VAR_databricks_account_id="${accountIdDisplay}"`
+        : `export TF_VAR_databricks_account_id="${accountIdDisplay}"
 export DATABRICKS_CLIENT_ID="${clientIdDisplay}"
 export DATABRICKS_CLIENT_SECRET="${clientSecretDisplay}"`;
     
@@ -4054,11 +4502,13 @@ export DATABRICKS_CLIENT_SECRET="${clientSecretDisplay}"`;
     ` : '';
     
     // Credentials status indicator
-    const credentialsStatus = hasCredentials 
-      ? '<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Using saved credentials</span>'
-      : vaultLockedWithCredentials
-        ? '<span class="badge bg-warning text-dark"><i class="bi bi-lock me-1"></i>Vault locked - unlock to use credentials</span>'
-        : '<span class="badge bg-secondary"><i class="bi bi-info-circle me-1"></i>Replace placeholders with your credentials</span>';
+    const credentialsStatus = config.provider === 'gcp'
+      ? '<span class="badge bg-info"><i class="bi bi-google me-1"></i>Service account impersonation</span>'
+      : hasCredentials
+        ? '<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Using saved credentials</span>'
+        : vaultLockedWithCredentials
+          ? '<span class="badge bg-warning text-dark"><i class="bi bi-lock me-1"></i>Vault locked - unlock to use credentials</span>'
+          : '<span class="badge bg-secondary"><i class="bi bi-info-circle me-1"></i>Replace placeholders with your credentials</span>';
     
     const content = `
       <div class="container my-5">
@@ -4093,7 +4543,7 @@ export DATABRICKS_CLIENT_SECRET="${clientSecretDisplay}"`;
                         <td>${providerIcon}</td>
                       </tr>
                       <tr>
-                        <td class="fw-semibold">Project Prefix:</td>
+                        <td class="fw-semibold">${config.provider === 'gcp' ? 'Workspace Name:' : 'Project Prefix:'}</td>
                         <td><code>${config.project_prefix || 'databricks'}</code></td>
                       </tr>
                       <tr>
@@ -4135,8 +4585,8 @@ export DATABRICKS_CLIENT_SECRET="${clientSecretDisplay}"`;
                   <span class="download-filename">${config.project_prefix || 'databricks'}-${config.provider}-terraform.zip</span>
                 </button>
                 <p class="text-muted mb-4">
-                  Complete Terraform project with all configuration files, 
-                  modules, documentation, and deployment instructions.
+                  Complete Terraform project with the upstream source files, your generated
+                  configuration, documentation, and deployment instructions.
                 </p>
                 <div class="text-muted small">
                   <i class="bi bi-info-circle me-1"></i>
@@ -4154,6 +4604,26 @@ export DATABRICKS_CLIENT_SECRET="${clientSecretDisplay}"`;
               </div>
               <div class="card-body">
                 <div class="row">
+                  ${config.provider === 'gcp' ? `
+                  <div class="col-md-6">
+                    <h6 class="fw-bold text-primary mb-3">Upstream Terraform</h6>
+                    <ul class="list-unstyled">
+                      <li class="mb-2"><i class="bi bi-diagram-3 text-success me-2"></i><strong>network.tf</strong> - VPC, subnet, router, and NAT</li>
+                      <li class="mb-2"><i class="bi bi-server text-warning me-2"></i><strong>databricks.tf</strong> - Workspace and admin setup</li>
+                      <li class="mb-2"><i class="bi bi-file-earmark-text text-info me-2"></i><strong>variables.tf</strong> - Upstream input contract</li>
+                      <li class="mb-2"><i class="bi bi-file-earmark-code text-primary me-2"></i><strong>providers.tf</strong> - Provider configuration</li>
+                      <li class="mb-2"><i class="bi bi-file-earmark-code text-secondary me-2"></i><strong>outputs.tf</strong> and <strong>versions.tf</strong></li>
+                    </ul>
+                  </div>
+                  <div class="col-md-6">
+                    <h6 class="fw-bold text-primary mb-3">Generated & Documentation</h6>
+                    <ul class="list-unstyled">
+                      <li class="mb-2"><i class="bi bi-file-earmark-text text-warning me-2"></i><strong>terraform.tfvars</strong> - Your configuration values</li>
+                      <li class="mb-2"><i class="bi bi-file-earmark-text text-primary me-2"></i><strong>README.md</strong> - Authentication and deployment guide</li>
+                      <li class="mb-2"><i class="bi bi-shield-check text-success me-2"></i><strong>Source notices</strong> - Upstream license and notice</li>
+                    </ul>
+                  </div>
+                  ` : `
                   <div class="col-md-6">
                     <h6 class="fw-bold text-primary mb-3">Core Files</h6>
                     <ul class="list-unstyled">
@@ -4212,6 +4682,7 @@ export DATABRICKS_CLIENT_SECRET="${clientSecretDisplay}"`;
                       </li>
                     </ul>
                   </div>
+                  `}
                 </div>
               </div>
             </div>
@@ -4296,7 +4767,9 @@ export DATABRICKS_CLIENT_SECRET="${clientSecretDisplay}"`;
                     <div class="step-content">
                       <h6 class="fw-bold mb-2">Prepare Deployment ${credentialsStatus}</h6>
                       ${vaultUnlockBanner}
-                      <p class="mb-2">Export sensitive variables as environment variables to avoid storing them in <code>terraform.tfvars</code>. See the README for instructions on creating a Service Principal.</p>
+                      <p class="mb-2">${config.provider === 'gcp'
+                        ? 'Impersonate the configured Google service account and export a short-lived access token. The non-secret identifiers are already in <code>terraform.tfvars</code>.'
+                        : 'Export sensitive variables as environment variables to avoid storing them in <code>terraform.tfvars</code>. See the README for provider-specific instructions.'}</p>
                       <div class="command-block sensitive-command ${hasCredentials ? 'has-credentials' : ''}" data-sensitive-cmd="${exportCmdObfuscated}">
                         <code class="sensitive-display">${exportCmdDisplay}</code>
                         <button class="command-copy-btn" type="button" aria-label="Copy command" title="Copy to clipboard">
@@ -4488,4 +4961,3 @@ document.addEventListener('DOMContentLoaded', () => {
   // Make app globally available for modal buttons
   window.app = app;
 });
-

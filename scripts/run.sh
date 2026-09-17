@@ -5,10 +5,12 @@ set -euo pipefail
 # Usage: bash scripts/run.sh [port]
 
 PORT="${1:-8000}"
-DEPLOY_DIR="deploy"
+DEPLOY_DIR="dist"
+
+npm run build
 
 if [ ! -d "$DEPLOY_DIR" ]; then
-  echo "Error: $DEPLOY_DIR directory not found"
+  echo "Error: build did not create $DEPLOY_DIR"
   exit 1
 fi
 

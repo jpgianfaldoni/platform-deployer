@@ -1,6 +1,6 @@
 # One Click Databricks Deployer - PWA
 
-A Progressive Web App (PWA) that simplifies Databricks infrastructure deployment by automatically generating production-ready Terraform configurations for AWS, Azure, and Google Cloud Platform.
+A Progressive Web App (PWA) that assembles deployable Databricks Terraform projects for AWS, Azure, and Google Cloud Platform. The `.tf` files are fetched from the Databricks Technical Services Solutions repository during each build; the app generates only the matching `terraform.tfvars` and deployment guide.
 
 ## 🎯 About the Project
 
@@ -50,7 +50,7 @@ The application guides users through a simple three-step process:
 
 This project is organized into three main folders:
 
-### 🚀 `deploy/` - Deployment Artifacts
+### 🚀 `deploy/` - Application Source
 
 Contains all files necessary to deploy the PWA to production:
 
@@ -61,7 +61,7 @@ Contains all files necessary to deploy the PWA to production:
 - `js/` - JavaScript application scripts
 - `icons/` - PWA icons in multiple sizes
 
-**To deploy**, copy the contents of the `deploy/` folder to your web server or configure GitHub Pages to serve from this folder.
+Run `npm run build` to produce `dist/`, the deployable artifact. The build resolves the configured upstream `main` ref to an exact commit, vendors the AWS, Azure, and GCP Terraform files, and records file hashes and source metadata.
 
 ### 📚 `docs/` - Documentation
 
@@ -110,33 +110,33 @@ Contains test and debug files:
 
 ### Generated Terraform Structure
 
-Each generated project includes:
+AWS downloads contain the selected upstream Terraform root, the generated tfvars, source notices, and deployment instructions:
 
 ```
-project-name-provider-terraform/
-├── main.tf                 # Main resource definitions
-├── variables.tf            # Input variable definitions
-├── terraform.tfvars        # Configuration values
-├── outputs.tf              # Output value definitions
-├── provider.tf             # Provider configuration
-├── versions.tf             # Version constraints
-├── README.md               # Deployment guide
-└── modules/
-    ├── network/            # VPC/VNet configuration module
-    ├── databricks/         # Databricks workspace module
-    └── security/           # Private connectivity module (if enabled)
+project-name-aws-terraform/
+├── *.tf                    # Unchanged Technical Services source files
+├── .terraform.lock.hcl     # Unchanged upstream provider lock
+├── terraform.tfvars        # Values generated from the UI
+├── UPSTREAM_LICENSE.md
+├── UPSTREAM_NOTICE.md
+└── README.md               # Deployment and source instructions
 ```
+
+Azure and GCP downloads follow the same model: unchanged files from the selected Technical Services example plus a generated `terraform.tfvars` and README. The GCP flow uses only the `gcp-byovpc-standalone` source.
 
 ## 🚀 Quick Start
 
 ### For Development
 
 ```bash
-# Navigate to the deploy folder
-cd deploy
+# Install dependencies (first time)
+npm install
 
-# Start a local HTTP server
-python3 -m http.server 8000
+# Build once, watch deploy/ changes, and refresh the browser automatically
+npm run dev
+
+# Or run a production-like build without watching for changes
+npm start
 
 # Access http://localhost:8000
 ```
@@ -167,10 +167,7 @@ npm run test:coverage
 
 Deployment is done automatically via GitHub Actions when a release/tag is created in the repository.
 
-**Manual Deployment:**
-1. **GitHub Pages**: Configure to serve from the `pwa/deploy/` folder
-2. **Web Server**: Copy all contents of `deploy/` to your server root
-3. **CDN**: Upload files from `deploy/` to your CDN
+**Manual Deployment:** run `npm run build`, then publish the generated `dist/` directory. The build intentionally fails if the upstream source cannot be resolved or fetched.
 
 **Automatic Deployment via GitHub Actions:**
 - Deployment is triggered automatically when a release or tag is created
@@ -191,9 +188,10 @@ See the `docs/` folder for detailed documentation:
 
 #### AWS (Amazon Web Services)
 - Complete VPC management with subnets and security groups
+- Single, per-availability-zone, or no-NAT deployment options
 - AWS PrivateLink support (Enterprise tier)
 - Cross-account IAM role-based access control
-- Support for Standard, Premium, and Enterprise pricing tiers
+- Support for Premium and Enterprise pricing tiers
 - Multi-AZ deployment with automatic subnet distribution
 
 #### Azure (Microsoft Azure)
@@ -430,4 +428,3 @@ This project is part of the One Click Databricks Deployer ecosystem.
 **Developed with ❤️ to simplify Databricks deployments**
 
 *Making infrastructure-as-code accessible to everyone, one click at a time.*
-

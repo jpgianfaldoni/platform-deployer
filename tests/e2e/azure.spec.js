@@ -1,770 +1,277 @@
+const fs = require('fs');
+const JSZip = require('jszip');
 const { test, expect } = require('../helpers/coverage-fixture');
 const FormHelpers = require('../helpers/form-helpers');
-const NavigationHelpers = require('../helpers/navigation-helpers');
 const ValidationHelpers = require('../helpers/validation-helpers');
+
+const EXISTING_VNET_ID = '/subscriptions/11111111-1111-4111-8111-111111111111/resourceGroups/rg-existing-network/providers/Microsoft.Network/virtualNetworks/existing-vnet';
+
+async function enablePrivateLink(page, resourceGroupMode = 'new') {
+  await FormHelpers.fillNetworkConfig(page, { enable_private_link: true });
+  await page.locator('#azure_resource_group_mode').selectOption(resourceGroupMode);
+  if (resourceGroupMode === 'existing') {
+    await page.locator('[name="azure_existing_resource_group_name"]').fill('rg-existing-data-plane');
+  }
+}
+
+async function downloadTerraformProject(page) {
+  const downloadPromise = page.waitForEvent('download', { timeout: 15000 });
+  await FormHelpers.confirmAndGenerate(page);
+  const download = await downloadPromise;
+  const downloadPath = await download.path();
+  const archive = await JSZip.loadAsync(await fs.promises.readFile(downloadPath));
+  return { download, archive };
+}
 
 test.describe('Azure Provider Tests', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
-    await page.evaluate(() => {
-      localStorage.clear();
-    });
+    await page.waitForLoadState('domcontentloaded');
+    await page.evaluate(() => localStorage.clear());
+    await FormHelpers.selectProvider(page, 'azure');
   });
 
-  test.describe('Complete Flow', () => {
-    test('should complete full Azure deployment flow with Premium tier and Private Link', async ({ page }) => {
-      // Step 1: Select Azure provider
-      await FormHelpers.selectProvider(page, 'azure');
-      await expect(page).toHaveURL(/.*#\/configure/);
-
-      // Step 2: Fill basic configuration (including Resource Group)
-      await FormHelpers.fillBasicConfig(page, {
-        project_prefix: 'test-azure',
-        region: 'eastus',
-        pricing_tier: 'PREMIUM',
-        resource_group_name: 'rg-databricks-test'
-      });
-      await page.waitForTimeout(500);
-
-      // Step 3: Fill network configuration
-      await FormHelpers.fillNetworkConfig(page, {
-        create_new_vpc: true,
-        vpc_cidr: '10.0.0.0/12',
-        availability_zones: ['1', '2'],
-        enable_private_link: true
-      });
-
-      // Verify subnet calculation appears
-      await expect(page.locator('#subnets-preview')).toBeVisible({ timeout: 5000 });
-      await page.waitForTimeout(1000);
-
-      // Step 4: Submit configuration
-      await FormHelpers.submitConfigForm(page);
-      await page.waitForTimeout(1000);
-      await expect(page).toHaveURL(/.*#\/summary/, { timeout: 10000 });
-
-      // Step 5: Verify summary page
-      await expect(page.locator('text=Configuration Summary')).toBeVisible();
-      await expect(page.locator('text=test-azure')).toBeVisible();
-      await expect(page.locator('code:has-text("eastus")').first()).toBeVisible();
-      await expect(page.locator('text=PREMIUM')).toBeVisible();
-      await expect(page.locator('text=rg-databricks-test')).toBeVisible();
-      
-      // Step 6: Confirm and generate
-      await FormHelpers.confirmAndGenerate(page);
-      
-      // Should navigate to download page or stay on summary
-      await page.waitForTimeout(2000);
-      const currentRoute = await NavigationHelpers.getCurrentRoute(page);
-      expect(['/download', '/summary']).toContain(currentRoute);
+  test('completes the standard Azure flow with a new VNet', async ({ page }) => {
+    await FormHelpers.fillAzureConfig(page, {
+      project_prefix: 'azure-standard',
+      resource_group_name: 'rg-azure-workspace',
+      azure_vnet_resource_group_name: 'rg-azure-network'
+    });
+    await FormHelpers.fillNetworkConfig(page, {
+      create_new_vpc: true,
+      vpc_cidr: '10.16.0.0/20',
+      enable_private_link: false
     });
 
-    test('should complete Azure flow with Standard tier without Private Link', async ({ page }) => {
-      await FormHelpers.selectProvider(page, 'azure');
-      
-      await FormHelpers.fillBasicConfig(page, {
-        project_prefix: 'azure-standard',
-        region: 'westus2',
-        pricing_tier: 'STANDARD',
-        resource_group_name: 'rg-standard'
-      });
-      await page.waitForTimeout(500);
+    await expect(page.locator('#subnets-preview')).toBeVisible();
+    const subnets = await FormHelpers.getSubnetPreview(page);
+    expect(subnets).toHaveLength(2);
+    expect(subnets.map(subnet => subnet.type).sort()).toEqual(['private', 'public']);
 
-      await FormHelpers.fillNetworkConfig(page, {
-        create_new_vpc: true,
-        vpc_cidr: '10.16.0.0/12',
-        availability_zones: ['1', '2', '3'],
-        enable_private_link: false
-      });
-
-      await expect(page.locator('#subnets-preview')).toBeVisible({ timeout: 5000 });
-      await page.waitForTimeout(1000);
-      await FormHelpers.submitConfigForm(page);
-      await page.waitForTimeout(1000);
-      await expect(page).toHaveURL(/.*#\/summary/, { timeout: 10000 });
-    });
-
-    test('should complete Azure flow using existing VNet', async ({ page }) => {
-      await FormHelpers.selectProvider(page, 'azure');
-
-      await FormHelpers.fillBasicConfig(page, {
-        project_prefix: 'azure-existing',
-        region: 'centralus',
-        pricing_tier: 'PREMIUM',
-        resource_group_name: 'rg-existing'
-      });
-
-      // Uncheck Create New VNet
-      const createNewVpc = page.locator('#create_new_vpc');
-      if (await createNewVpc.isChecked()) {
-        await createNewVpc.click();
-        await page.waitForTimeout(500);
-      }
-
-      // Fill existing VNet Resource ID
-      const existingVnetId = page.locator('#existing_vpc_id');
-      await existingVnetId.waitFor({ state: 'visible', timeout: 5000 });
-      await existingVnetId.fill('/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-existing/providers/Microsoft.Network/virtualNetworks/my-existing-vnet');
-
-      // Fill existing subnet names
-      const publicSubnet = page.locator('#existing_public_subnet_name');
-      await publicSubnet.waitFor({ state: 'visible', timeout: 5000 });
-      await publicSubnet.fill('databricks-public-subnet');
-
-      const privateSubnet = page.locator('#existing_private_subnet_name');
-      await privateSubnet.fill('databricks-private-subnet');
-
-      await page.waitForTimeout(500);
-      await FormHelpers.submitConfigForm(page);
-      await expect(page).toHaveURL(/.*#\/summary/, { timeout: 10000 });
-    });
+    await FormHelpers.submitConfigForm(page);
+    await expect(page).toHaveURL(/.*#\/summary/);
+    await expect(page.getByText('azure-standard', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('rg-azure-workspace', { exact: true })).toBeVisible();
+    await expect(page.getByText('oneclick_catalog', { exact: true })).toBeVisible();
+    await expect(page.getByText('PREMIUM', { exact: true })).toBeVisible();
   });
 
-  test.describe('Field Validations', () => {
-    test.beforeEach(async ({ page }) => {
-      await FormHelpers.selectProvider(page, 'azure');
+  test('completes the standard Azure flow with an existing VNet', async ({ page }) => {
+    await FormHelpers.fillAzureConfig(page, {
+      project_prefix: 'azure-existing',
+      resource_group_name: 'rg-azure-workspace'
+    });
+    await FormHelpers.fillNetworkConfig(page, {
+      create_new_vpc: false,
+      existing_vpc_id: EXISTING_VNET_ID,
+      vpc_cidr: '10.32.0.0/20'
     });
 
-    test('should require resource group name', async ({ page }) => {
-      await FormHelpers.fillBasicConfig(page, {
-        project_prefix: 'test',
-        region: 'eastus',
-        pricing_tier: 'STANDARD'
-      });
-      
-      await FormHelpers.fillNetworkConfig(page, {
-        vpc_cidr: '10.0.0.0/20',
-        availability_zones: ['1']
-      });
+    await expect(page.locator('#existing-vpc-section')).toBeVisible();
+    await expect(page.locator('[name="azure_vnet_resource_group_name"]')).not.toBeVisible();
+    await expect(page.getByText('Terraform creates two delegated Databricks subnets', { exact: false })).toBeVisible();
 
-      const resourceGroupField = page.locator('input[name="resource_group_name"]');
-      await resourceGroupField.clear();
-      
-      await FormHelpers.submitConfigForm(page, true); // allowInvalid = true for validation tests
-      const validity = await ValidationHelpers.getFieldValidationMessage(page, 'resource_group_name');
-      expect(validity.valueMissing).toBeTruthy();
-    });
-
-    test('should require project prefix', async ({ page }) => {
-      await FormHelpers.fillBasicConfig(page, {
-        region: 'eastus',
-        pricing_tier: 'STANDARD',
-        resource_group_name: 'rg-test'
-      });
-      
-      const projectPrefixField = page.locator('input[name="project_prefix"]');
-      await projectPrefixField.clear();
-      
-      await FormHelpers.submitConfigForm(page, true); // allowInvalid = true for validation tests
-      const validity = await ValidationHelpers.getFieldValidationMessage(page, 'project_prefix');
-      expect(validity.valueMissing).toBeTruthy();
-    });
-
-    test('should require pricing tier', async ({ page }) => {
-      await FormHelpers.fillBasicConfig(page, {
-        project_prefix: 'test',
-        region: 'eastus',
-        resource_group_name: 'rg-test'
-      });
-      
-      // Clear the select value using JavaScript since it always has a default selection
-      await page.evaluate(() => {
-        const select = document.querySelector('select[name="pricing_tier"]');
-        if (select) {
-          select.value = '';
-          select.selectedIndex = -1;
-          select.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-      });
-      
-      await FormHelpers.submitConfigForm(page, true); // allowInvalid = true for validation tests
-      const validity = await ValidationHelpers.getFieldValidationMessage(page, 'pricing_tier');
-      expect(validity.valueMissing).toBeTruthy();
-    });
-
-    test('should require VNet CIDR', async ({ page }) => {
-      await FormHelpers.fillBasicConfig(page, {
-        project_prefix: 'test',
-        region: 'eastus',
-        pricing_tier: 'STANDARD',
-        resource_group_name: 'rg-test'
-      });
-      
-      // Fill availability zones first to avoid that validation blocking
-      await FormHelpers.fillNetworkConfig(page, {
-        availability_zones: ['1']
-      });
-      
-      const vpcCidrField = page.locator('input[name="vpc_cidr"]');
-      await vpcCidrField.waitFor({ state: 'visible', timeout: 5000 });
-      
-      // Clear the field and ensure it's empty
-      await vpcCidrField.fill('');
-      await vpcCidrField.blur(); // Trigger validation
-      await page.waitForTimeout(300);
-      
-      // Verify field is empty
-      const fieldValue = await vpcCidrField.inputValue();
-      expect(fieldValue).toBe('');
-      
-      await FormHelpers.submitConfigForm(page, true); // allowInvalid = true for validation tests
-      await page.waitForTimeout(1000); // Wait for validation to be applied
-      
-      // Check if we're still on configure page (validation should prevent navigation)
-      const currentUrl = page.url();
-      if (currentUrl.includes('#/summary')) {
-        // If navigated to summary, validation didn't work - go back and check
-        await page.goBack();
-        await page.waitForTimeout(1000);
-        await page.waitForSelector('input[name="vpc_cidr"]', { timeout: 5000 });
-      }
-      
-      // Check both HTML5 validation and custom validation
-      const validity = await ValidationHelpers.getFieldValidationMessage(page, 'vpc_cidr').catch(() => null);
-      const hasCustomError = await ValidationHelpers.hasFieldValidationError(page, 'vpc_cidr');
-      
-      // Either HTML5 validation or custom validation should catch this
-      expect(validity?.valueMissing || hasCustomError).toBeTruthy();
-    });
-
-    test('should require at least one availability zone', async ({ page }) => {
-      await FormHelpers.fillBasicConfig(page, {
-        project_prefix: 'test',
-        region: 'eastus',
-        pricing_tier: 'STANDARD',
-        resource_group_name: 'rg-test'
-      });
-      
-      await FormHelpers.fillNetworkConfig(page, {
-        vpc_cidr: '10.0.0.0/22'
-      });
-      
-      // Clear all selected zones using helper
-      await FormHelpers.selectAvailabilityZones(page, []);
-      
-      await FormHelpers.submitConfigForm(page, true); // allowInvalid=true for validation tests
-      await page.waitForTimeout(1000); // Wait for validation to be applied
-      const hasError = await ValidationHelpers.hasAvailabilityZoneError(page, 'availability zone');
-      expect(hasError).toBeTruthy();
-    });
+    await FormHelpers.submitConfigForm(page);
+    await expect(page).toHaveURL(/.*#\/summary/);
+    await expect(page.getByText(EXISTING_VNET_ID, { exact: true })).toBeVisible();
+    await expect(page.getByText('Use Existing', { exact: true })).toBeVisible();
   });
 
-  test.describe('Format Validations', () => {
-    test.beforeEach(async ({ page }) => {
-      await FormHelpers.selectProvider(page, 'azure');
-    });
+  test('switches to the Private Link source and enforces its topology', async ({ page }) => {
+    await FormHelpers.fillAzureConfig(page, { project_prefix: 'azure-private' });
+    await enablePrivateLink(page, 'existing');
 
-    test('should validate availability zones as numeric', async ({ page }) => {
-      await FormHelpers.fillBasicConfig(page, {
-        project_prefix: 'test',
-        region: 'eastus',
-        pricing_tier: 'STANDARD',
-        resource_group_name: 'rg-test'
-      });
-      
-      await FormHelpers.fillNetworkConfig(page, {
-        vpc_cidr: '10.0.0.0/22',
-        availability_zones: ['invalid-zone']
-      });
-      
-      await FormHelpers.submitConfigForm(page, true); // allowInvalid=true for validation tests
-      await page.waitForTimeout(500); // Wait for validation to be applied
-      const hasError = await ValidationHelpers.hasFieldValidationError(page, 'availability_zones', 'numeric');
-      expect(hasError).toBeTruthy();
-    });
+    await expect(page.locator('#azure-standard-fields')).not.toBeVisible();
+    await expect(page.locator('#azure-private-link-fields')).toBeVisible();
+    await expect(page.locator('#metastore-configuration')).not.toBeVisible();
+    await expect(page.locator('#create_new_vpc')).toBeChecked();
+    await expect(page.locator('#create_new_vpc')).toBeDisabled();
+    await expect(page.locator('#availability-zones-select')).toHaveCount(0);
+    await expect(page.locator('#azure-nat-gateway-zone-section')).not.toBeVisible();
+    await expect(page.locator('#nat-gateway-section')).toBeVisible();
+    await expect(page.locator('#nat_gateway_mode')).toHaveValue('single');
+    await expect(page.locator('#nat_gateway_mode option')).toHaveCount(2);
+    await expect(page.locator('#azure-private-link-nat-gateway-zone-section')).toBeVisible();
+    await expect(page.locator('#azure_private_link_nat_gateway_zone')).toHaveValue('');
 
-    test('should validate VNet CIDR format', async ({ page }) => {
-      await FormHelpers.fillBasicConfig(page, {
-        project_prefix: 'test',
-        region: 'eastus',
-        pricing_tier: 'STANDARD',
-        resource_group_name: 'rg-test'
-      });
-      
-      await FormHelpers.fillNetworkConfig(page, {
-        vpc_cidr: 'invalid-cidr',
-        availability_zones: ['1']
-      });
-      
-      await FormHelpers.submitConfigForm(page, true); // allowInvalid=true for validation tests
-      await page.waitForTimeout(500); // Wait for validation to be applied
-      const hasError = await ValidationHelpers.hasFieldValidationError(page, 'vpc_cidr', 'CIDR');
-      expect(hasError).toBeTruthy();
-    });
+    await page.locator('#nat_gateway_mode').selectOption('none');
+    await expect(page.locator('#azure-private-link-nat-gateway-zone-section')).not.toBeVisible();
+    await expect(page.locator('#nat-gateway-private-link-message')).toBeVisible();
+    await page.locator('#nat_gateway_mode').selectOption('single');
+    await expect(page.locator('#azure-private-link-nat-gateway-zone-section')).toBeVisible();
+
+    const subnets = await FormHelpers.getSubnetPreview(page);
+    expect(subnets).toHaveLength(3);
+    expect(subnets.map(subnet => subnet.type).sort()).toEqual(['private', 'public', 'service']);
+
+    await FormHelpers.submitConfigForm(page);
+    await expect(page).toHaveURL(/.*#\/summary/);
+    await expect(page.getByText('rg-existing-data-plane', { exact: true })).toBeVisible();
+    await expect(page.getByText('Create New', { exact: true })).toBeVisible();
   });
 
-  test.describe('Dependency Validations', () => {
-    test.beforeEach(async ({ page }) => {
-      await FormHelpers.selectProvider(page, 'azure');
-      await FormHelpers.fillBasicConfig(page, {
-        project_prefix: 'test',
-        region: 'eastus',
-        resource_group_name: 'rg-test'
-      });
-    });
+  test('shows the supported Azure tier and NAT gateway placements', async ({ page }) => {
+    const pricingValues = await page.locator('[name="pricing_tier"] option').evaluateAll(options =>
+      options.map(option => option.value).filter(Boolean)
+    );
+    const natGatewayZoneValues = await page.locator('#azure_nat_gateway_zone option').evaluateAll(options =>
+      options.map(option => option.value)
+    );
 
-    test('should show warning when Private Link enabled with Standard tier', async ({ page }) => {
-      await FormHelpers.fillBasicConfig(page, {
-        project_prefix: 'test',
-        region: 'eastus',
-        pricing_tier: 'STANDARD',
-        resource_group_name: 'rg-test'
-      });
-      
-      await FormHelpers.fillNetworkConfig(page, {
-        vpc_cidr: '10.0.0.0/20',
-        availability_zones: ['1'],
-        enable_private_link: true
-      });
-      
-      const hasWarning = await ValidationHelpers.hasPrivateLinkWarning(page);
-      expect(hasWarning).toBeTruthy();
-    });
-
-    test('should allow Private Link with Premium tier', async ({ page }) => {
-      await FormHelpers.fillBasicConfig(page, {
-        project_prefix: 'test',
-        region: 'eastus',
-        pricing_tier: 'PREMIUM',
-        resource_group_name: 'rg-test'
-      });
-      await page.waitForTimeout(500);
-      
-      await FormHelpers.fillNetworkConfig(page, {
-        vpc_cidr: '10.0.0.0/20',
-        availability_zones: ['1'],
-        enable_private_link: true
-      });
-      
-      await page.waitForTimeout(1000);
-      const hasWarning = await ValidationHelpers.hasPrivateLinkWarning(page);
-      expect(hasWarning).toBeFalsy();
-      
-      // Should calculate service subnet
-      await page.waitForTimeout(2000);
-      const subnets = await FormHelpers.getSubnetPreview(page);
-      expect(subnets).not.toBeNull();
-      expect(subnets.length).toBeGreaterThan(0);
-      const serviceSubnet = subnets.find(s => s.type === 'service');
-      expect(serviceSubnet).toBeDefined();
-    });
-
-    test('should prevent submission with Private Link and Standard tier', async ({ page }) => {
-      await FormHelpers.fillBasicConfig(page, {
-        project_prefix: 'test',
-        region: 'eastus',
-        pricing_tier: 'STANDARD',
-        resource_group_name: 'rg-test'
-      });
-      
-      await FormHelpers.fillNetworkConfig(page, {
-        vpc_cidr: '10.0.0.0/20',
-        availability_zones: ['1'],
-        enable_private_link: true
-      });
-      
-      await FormHelpers.submitConfigForm(page, true); // allowInvalid=true for validation tests
-      await page.waitForTimeout(500); // Wait for validation to be applied
-      const hasError = await ValidationHelpers.hasFieldValidationError(page, 'enable_private_link', 'Premium');
-      expect(hasError).toBeTruthy();
-    });
+    expect(pricingValues).toEqual(['PREMIUM']);
+    await expect(page.locator('[name="pricing_tier"]')).toHaveValue('PREMIUM');
+    await expect(page.locator('#availability-zones-select')).toHaveCount(0);
+    await expect(page.locator('#azure-nat-gateway-zone-section')).toBeVisible();
+    await expect(page.locator('#nat-gateway-section')).not.toBeVisible();
+    await expect(page.locator('#azure_nat_gateway_zone')).toHaveValue('1');
+    expect(natGatewayZoneValues).toEqual(['1', '2', '3', '']);
   });
 
-  test.describe('Dynamic Interactions', () => {
-    test.beforeEach(async ({ page }) => {
-      await FormHelpers.selectProvider(page, 'azure');
-      await FormHelpers.fillBasicConfig(page, {
-        project_prefix: 'test',
-        region: 'eastus',
-        pricing_tier: 'STANDARD',
-        resource_group_name: 'rg-test'
-      });
+  test('validates Azure source-specific required fields', async ({ page }) => {
+    await FormHelpers.fillAzureConfig(page, {
+      azure_subscription_id: '',
+      azure_tenant_id: '',
+      resource_group_name: '',
+      azure_admin_user: '',
+      azure_root_storage_name: '',
+      azure_uc_storage_account_name: '',
+      azure_catalog_name: '',
+      azure_storage_credential_name: '',
+      azure_external_location_name: '',
+      azure_vnet_resource_group_name: ''
     });
 
-    test('should recalculate subnets when VNet CIDR changes', async ({ page }) => {
-      await FormHelpers.fillNetworkConfig(page, {
-        vpc_cidr: '10.0.0.0/20',
-        availability_zones: ['1', '2']
-      });
-      
-      await page.waitForTimeout(2000);
-      const subnets1 = await FormHelpers.getSubnetPreview(page);
-      expect(subnets1).not.toBeNull();
-      expect(subnets1.length).toBeGreaterThan(0);
-      
-      // Change VNet CIDR
-      await page.fill('input[name="vpc_cidr"]', '10.1.0.0/20');
-      await page.waitForTimeout(2000);
-      
-      const subnets2 = await FormHelpers.getSubnetPreview(page);
-      expect(subnets2).not.toBeNull();
-      expect(subnets2.length).toBeGreaterThan(0);
-      
-      // Subnets should be different
-      expect(subnets1[0].cidr).not.toBe(subnets2[0].cidr);
-    });
+    await FormHelpers.submitConfigForm(page, true);
 
-    test('should toggle existing VNet section', async ({ page }) => {
-      const createNewVpc = page.locator('#create_new_vpc');
-      const existingVpcSection = page.locator('#existing-vpc-section');
-      
-      // Initially should be creating new VNet
-      expect(await createNewVpc.isChecked()).toBeTruthy();
-      expect(await existingVpcSection.isVisible()).toBeFalsy();
-      
-      // Uncheck to use existing VNet
-      await createNewVpc.click();
-      await page.waitForTimeout(300);
-      expect(await existingVpcSection.isVisible()).toBeTruthy();
-      
-      // Check again to create new
-      await createNewVpc.click();
-      await page.waitForTimeout(300);
-      expect(await existingVpcSection.isVisible()).toBeFalsy();
-    });
-
-    test('should recalculate subnets when availability zones change', async ({ page }) => {
-      await FormHelpers.fillNetworkConfig(page, {
-        vpc_cidr: '10.0.0.0/20',
-        availability_zones: ['1']
-      });
-      
-      await page.waitForTimeout(2000);
-      const subnets1 = await FormHelpers.getSubnetPreview(page);
-      const count1 = subnets1 ? subnets1.length : 0;
-      expect(count1).toBeGreaterThan(0);
-      
-      // Add another zone using multiple select
-      await FormHelpers.selectAvailabilityZones(page, ['1', '2']);
-      await page.waitForTimeout(2000);
-      
-      const subnets2 = await FormHelpers.getSubnetPreview(page);
-      const count2 = subnets2 ? subnets2.length : 0;
-      
-      // Should have more subnets with 2 zones
-      expect(count2).toBeGreaterThan(count1);
-    });
-
-    test('should recalculate subnets when pricing tier changes', async ({ page }) => {
-      await FormHelpers.fillNetworkConfig(page, {
-        vpc_cidr: '10.0.0.0/20',
-        availability_zones: ['1'],
-        enable_private_link: true
-      });
-      
-      await page.waitForTimeout(2000);
-      
-      // Change to Premium tier
-      await FormHelpers.fillBasicConfig(page, {
-        project_prefix: 'test',
-        region: 'eastus',
-        pricing_tier: 'PREMIUM',
-        resource_group_name: 'rg-test'
-      });
-      await page.waitForTimeout(2000);
-      
-      const subnets = await FormHelpers.getSubnetPreview(page);
-      expect(subnets).not.toBeNull();
-      expect(subnets.length).toBeGreaterThan(0);
-      
-      // Should now have service subnet
-      const serviceSubnet = subnets.find(s => s.type === 'service');
-      expect(serviceSubnet).toBeDefined();
-    });
+    for (const fieldName of [
+      'azure_subscription_id',
+      'azure_tenant_id',
+      'resource_group_name',
+      'azure_admin_user',
+      'azure_root_storage_name',
+      'azure_uc_storage_account_name',
+      'azure_catalog_name',
+      'azure_storage_credential_name',
+      'azure_external_location_name',
+      'azure_vnet_resource_group_name'
+    ]) {
+      const validation = await ValidationHelpers.getFieldValidationMessage(page, fieldName);
+      expect(validation.valueMissing, `${fieldName} should be required`).toBeTruthy();
+    }
+    await expect(page).toHaveURL(/.*#\/configure/);
   });
 
-  test.describe('Network Calculations', () => {
-    test.beforeEach(async ({ page }) => {
-      await FormHelpers.selectProvider(page, 'azure');
-      await FormHelpers.fillBasicConfig(page, {
-        project_prefix: 'test',
-        region: 'eastus',
-        pricing_tier: 'STANDARD',
-        resource_group_name: 'rg-test'
-      });
-    });
+  test('validates VNet CIDR and existing VNet resource IDs', async ({ page }) => {
+    await FormHelpers.fillAzureConfig(page);
+    await page.locator('[name="vpc_cidr"]').fill('invalid-cidr');
+    await FormHelpers.submitConfigForm(page, true);
+    expect(await ValidationHelpers.hasFieldValidationError(page, 'vpc_cidr', 'CIDR')).toBeTruthy();
 
-    test('should calculate subnets correctly for Azure', async ({ page }) => {
-      await FormHelpers.fillNetworkConfig(page, {
-        vpc_cidr: '10.0.0.0/20',
-        availability_zones: ['1', '2']
-      });
-      
-      await page.waitForTimeout(2000);
-      
-      const subnets = await FormHelpers.getSubnetPreview(page);
-      expect(subnets).not.toBeNull();
-      expect(subnets.length).toBeGreaterThan(0);
-      
-      // Should have private and public subnets for each AZ
-      const privateSubnets = subnets.filter(s => s.type === 'private');
-      const publicSubnets = subnets.filter(s => s.type === 'public');
-      
-      expect(privateSubnets.length).toBeGreaterThanOrEqual(2);
-      expect(publicSubnets.length).toBeGreaterThanOrEqual(2);
+    await page.locator('[name="vpc_cidr"]').fill('10.0.0.0/20');
+    await FormHelpers.fillNetworkConfig(page, {
+      create_new_vpc: false,
+      existing_vpc_id: 'not-an-azure-resource-id'
     });
-
-    test('should display network utilization summary', async ({ page }) => {
-      await FormHelpers.fillNetworkConfig(page, {
-        vpc_cidr: '10.0.0.0/20',
-        availability_zones: ['1', '2']
-      });
-      
-      await page.waitForTimeout(2000);
-      
-      const summary = await FormHelpers.getNetworkSummary(page);
-      expect(summary).not.toBeNull();
-      expect(summary.total_ips).toBeTruthy();
-      expect(summary.used_ips).toBeTruthy();
-      expect(summary.utilization_percent).toBeTruthy();
-    });
-
-    test('should calculate service subnet for Premium tier with Private Link', async ({ page }) => {
-      await FormHelpers.fillBasicConfig(page, {
-        project_prefix: 'test',
-        region: 'eastus',
-        pricing_tier: 'PREMIUM',
-        resource_group_name: 'rg-test'
-      });
-      await page.waitForTimeout(500);
-      
-      await FormHelpers.fillNetworkConfig(page, {
-        vpc_cidr: '10.0.0.0/20',
-        availability_zones: ['1'],
-        enable_private_link: true
-      });
-      
-      await page.waitForTimeout(3000);
-      
-      const subnets = await FormHelpers.getSubnetPreview(page);
-      expect(subnets).not.toBeNull();
-      expect(subnets.length).toBeGreaterThan(0);
-      const serviceSubnet = subnets.find(s => s.type === 'service');
-      expect(serviceSubnet).toBeDefined();
-      expect(serviceSubnet.name).toContain('service');
-    });
+    await FormHelpers.submitConfigForm(page, true);
+    expect(await ValidationHelpers.hasFieldValidationError(page, 'existing_vpc_id', 'VNet Resource ID')).toBeTruthy();
   });
 
-  test.describe('Azure-Specific Features', () => {
-    test('should display VNet label instead of VPC', async ({ page }) => {
-      await FormHelpers.selectProvider(page, 'azure');
-      
-      const vpcLabel = page.locator('label:has-text("VNet CIDR Block")');
-      await expect(vpcLabel).toBeVisible();
+  test('downloads the standard upstream Terraform plus generated tfvars', async ({ page }) => {
+    await FormHelpers.fillAzureConfig(page, {
+      project_prefix: 'azure-download',
+      resource_group_name: 'rg-download-workspace',
+      azure_vnet_resource_group_name: 'rg-download-network'
     });
+    await FormHelpers.fillNetworkConfig(page, {
+      vpc_cidr: '10.48.0.0/20',
+      azure_nat_gateway_zone: '2'
+    });
+    await FormHelpers.submitConfigForm(page);
 
-    test('should require Resource Group Name field', async ({ page }) => {
-      await FormHelpers.selectProvider(page, 'azure');
-      
-      const resourceGroupField = page.locator('input[name="resource_group_name"]');
-      await expect(resourceGroupField).toBeVisible();
-      const isRequired = await ValidationHelpers.isFieldRequired(page, 'resource_group_name');
-      expect(isRequired).toBeTruthy();
-    });
+    const { download, archive } = await downloadTerraformProject(page);
+    expect(download.suggestedFilename()).toBe('azure-download-azure-terraform.zip');
+    expect(Object.keys(archive.files)).toEqual(expect.arrayContaining([
+      'azure.tf',
+      'cluster.tf',
+      'databricks.tf',
+      'network.tf',
+      'providers.tf',
+      'unity_catalog.tf',
+      'variables.tf',
+      'versions.tf',
+      'terraform.tfvars',
+      'README.md'
+    ]));
 
-    test('should only show Standard and Premium pricing tiers', async ({ page }) => {
-      await FormHelpers.selectProvider(page, 'azure');
-      
-      const pricingTierSelect = page.locator('select[name="pricing_tier"]');
-      const options = await pricingTierSelect.locator('option').allTextContents();
-      
-      expect(options).toContain('Standard');
-      expect(options).toContain('Premium');
-      expect(options).not.toContain('Enterprise');
-    });
+    const tfvars = await archive.file('terraform.tfvars').async('string');
+    expect(tfvars).toContain('azure_subscription_id = "11111111-1111-4111-8111-111111111111"');
+    expect(tfvars).toContain('resource_group_name   = "rg-download-workspace"');
+    expect(tfvars).toContain('create_new_vnet          = true');
+    expect(tfvars).toContain('nat_gateway_zones        = ["2"]');
+    expect(tfvars).toContain('create_cluster = false');
+    expect(tfvars).not.toContain('databricks_account_id =');
+
+    const networkTf = await archive.file('network.tf').async('string');
+    expect(networkTf).toContain('zones               = var.nat_gateway_zones');
+
+    const unityCatalogTf = await archive.file('unity_catalog.tf').async('string');
+    expect(unityCatalogTf).toContain('min_tls_version                   = "TLS1_2"');
+    expect(unityCatalogTf).toContain('infrastructure_encryption_enabled = true');
   });
 
-  test.describe('Navigation', () => {
-    test('should navigate back from configure to provider selection', async ({ page }) => {
-      await FormHelpers.selectProvider(page, 'azure');
-      await expect(page).toHaveURL(/.*#\/configure/);
-      
-      await NavigationHelpers.navigateBack(page);
-      await expect(page).toHaveURL(/.*#\/select-provider/);
-    });
+  test('downloads the Private Link upstream Terraform plus compatible tfvars', async ({ page }) => {
+    await FormHelpers.fillAzureConfig(page, { project_prefix: 'azure-pl-download' });
+    await enablePrivateLink(page, 'existing');
+    await page.locator('#nat_gateway_mode').selectOption('single');
+    await page.locator('#azure_private_link_nat_gateway_zone').selectOption('3');
+    await FormHelpers.fillNetworkConfig(page, { vpc_cidr: '10.64.0.0/20' });
+    await FormHelpers.submitConfigForm(page);
 
-    test('should persist data when navigating between steps', async ({ page }) => {
-      await FormHelpers.selectProvider(page, 'azure');
-      await FormHelpers.fillBasicConfig(page, {
-        project_prefix: 'persist-test',
-        region: 'eastus',
-        pricing_tier: 'STANDARD',
-        resource_group_name: 'rg-persist'
-      });
-      await page.waitForTimeout(500);
-      
-      // Submit form to save to localStorage
-      await FormHelpers.fillNetworkConfig(page, {
-        vpc_cidr: '10.0.0.0/12',
-        availability_zones: ['1']
-      });
-      await FormHelpers.submitConfigForm(page);
-      await page.waitForTimeout(500);
-      
-      // Navigate back to configure
-      await NavigationHelpers.navigateBack(page);
-      await expect(page).toHaveURL(/.*#\/configure/);
-      await page.waitForTimeout(1000);
-      
-      // Data should be persisted (check form fields)
-      const projectPrefix = await page.locator('input[name="project_prefix"]').inputValue();
-      expect(projectPrefix).toBe('persist-test');
-      
-      const resourceGroup = await page.locator('input[name="resource_group_name"]').inputValue();
-      expect(resourceGroup).toBe('rg-persist');
-    });
+    const { archive } = await downloadTerraformProject(page);
+    expect(Object.keys(archive.files)).toEqual(expect.arrayContaining([
+      'dns_zones.tf',
+      'ncc.tf',
+      'pe_backend.tf',
+      'pe_dbfs.tf',
+      'service_endpoint_policy.tf',
+      '.terraform.lock.hcl',
+      'terraform.tfvars',
+      'README.md'
+    ]));
+    expect(archive.file('unity_catalog.tf')).toBeNull();
+
+    const tfvars = await archive.file('terraform.tfvars').async('string');
+    expect(tfvars).toContain('az_subscription = "11111111-1111-4111-8111-111111111111"');
+    expect(tfvars).toContain('create_data_plane_resource_group        = false');
+    expect(tfvars).toContain('existing_data_plane_resource_group_name = "rg-existing-data-plane"');
+    expect(tfvars).toContain('create_nat_gateway = true');
+    expect(tfvars).toContain('nat_gateway_zones = ["3"]');
+    expect(tfvars).toContain('service_endpoint_policy_storage_accounts = []');
+    expect(tfvars).toContain('metastore_id = ""');
+    expect(tfvars).not.toContain('\nprefix =');
+    expect(tfvars).not.toContain('subnets_service_endpoints');
+    expect(tfvars).toMatch(/subnet_workspace_cidrs\s+= \["[^"]+", "[^"]+"\]/);
+    expect(tfvars).toMatch(/subnet_private_endpoint_cidr = "[^"]+"/);
+
+    const networkTf = await archive.file('network.tf').async('string');
+    expect(networkTf).toContain('count               = var.create_nat_gateway ? 1 : 0');
+    expect(networkTf).toContain('zones = var.nat_gateway_zones');
   });
 
-  test.describe('Availability Zone Combobox Tests', () => {
-    test.beforeEach(async ({ page }) => {
-      await FormHelpers.selectProvider(page, 'azure');
-      await FormHelpers.fillBasicConfig(page, {
-        project_prefix: 'test-azure',
-        region: 'eastus',
-        pricing_tier: 'PREMIUM',
-        resource_group_name: 'rg-test'
-      });
-    });
+  test('downloads the Private Link topology without a NAT gateway', async ({ page }) => {
+    await FormHelpers.fillAzureConfig(page, { project_prefix: 'azure-pl-no-nat' });
+    await enablePrivateLink(page);
+    await page.locator('#nat_gateway_mode').selectOption('none');
+    await FormHelpers.fillNetworkConfig(page, { vpc_cidr: '10.80.0.0/20' });
+    await FormHelpers.submitConfigForm(page);
 
-    test('should use multiple select for availability zones', async ({ page }) => {
-      // Verify Choices.js component exists (select is hidden, container is visible)
-      const choicesContainer = page.locator('.choices:has(#availability-zones-select)');
-      await expect(choicesContainer).toBeVisible();
-      
-      // Verify select has multiple attribute
-      const azSelect = page.locator('#availability-zones-select');
-      const isMultiple = await azSelect.getAttribute('multiple');
-      expect(isMultiple).not.toBeNull();
-      
-      // Verify select has options (even though hidden)
-      const options = await azSelect.locator('option').count();
-      expect(options).toBeGreaterThan(1); // At least one option + placeholder
-      
-      // Verify options contain Azure zone format (numeric) - read from select element
-      const optionText = await azSelect.locator('option').nth(1).textContent();
-      expect(optionText).toMatch(/Zone [1-3]/);
-    });
+    await expect(page.getByText('None', { exact: true })).toBeVisible();
+    const { archive } = await downloadTerraformProject(page);
+    const tfvars = await archive.file('terraform.tfvars').async('string');
+    const readme = await archive.file('README.md').async('string');
 
-    test('should allow selecting and deselecting multiple availability zones', async ({ page }) => {
-      // Use helper function to select zones (works with Choices.js)
-      await FormHelpers.selectAvailabilityZones(page, ['1', '2']);
-      
-      const selectedCount = await page.evaluate(() => {
-        const select = document.getElementById('availability-zones-select');
-        if (!select) return 0;
-        const choicesInstance = select._choicesjs || select.choicesjs;
-        if (choicesInstance && choicesInstance.getValue) {
-          const values = choicesInstance.getValue(true);
-          return Array.isArray(values) ? values.length : 0;
-        }
-        return Array.from(select.selectedOptions).length;
-      });
-      expect(selectedCount).toBe(2);
-      
-      // Deselect one zone
-      await FormHelpers.selectAvailabilityZones(page, ['1']);
-      
-      const afterDeselectCount = await page.evaluate(() => {
-        const select = document.getElementById('availability-zones-select');
-        if (!select) return 0;
-        const choicesInstance = select._choicesjs || select.choicesjs;
-        if (choicesInstance && choicesInstance.getValue) {
-          const values = choicesInstance.getValue(true);
-          return Array.isArray(values) ? values.length : 0;
-        }
-        return Array.from(select.selectedOptions).length;
-      });
-      expect(afterDeselectCount).toBe(1);
-    });
-
-    test('should enforce minimum availability zones for Azure (1)', async ({ page }) => {
-      // Deselect all zones using helper
-      await FormHelpers.selectAvailabilityZones(page, []);
-      
-      // Try to submit with no zones selected
-      await FormHelpers.submitConfigForm(page, true);
-      await page.waitForTimeout(500);
-      
-      // Should show error about minimum availability zones
-      const hasError = await ValidationHelpers.hasAvailabilityZoneError(page, 'availability zone');
-      expect(hasError).toBeTruthy();
-    });
-
-    test('should allow selecting multiple different availability zones', async ({ page }) => {
-      // Select multiple different zones
-      await FormHelpers.selectAvailabilityZones(page, ['1', '2', '3']);
-      
-      const selectedCount = await page.evaluate(() => {
-        const select = document.getElementById('availability-zones-select');
-        if (!select) return 0;
-        const choicesInstance = select.choicesInstance;
-        if (choicesInstance && choicesInstance.getValue) {
-          const values = choicesInstance.getValue(true);
-          return Array.isArray(values) ? values.length : 0;
-        }
-        return Array.from(select.selectedOptions).length;
-      });
-      expect(selectedCount).toBe(3);
-      
-      // Verify all selected zones are different
-      const selectedValues = await page.evaluate(() => {
-        const select = document.getElementById('availability-zones-select');
-        if (!select) return [];
-        const choicesInstance = select.choicesInstance;
-        if (choicesInstance && choicesInstance.getValue) {
-          return choicesInstance.getValue(true) || [];
-        }
-        return Array.from(select.selectedOptions).map(opt => opt.value);
-      });
-      const uniqueValues = [...new Set(selectedValues)];
-      expect(uniqueValues.length).toBe(selectedValues.length);
-    });
-
-    test('should enforce minimum availability zones for Azure (1) on submit', async ({ page }) => {
-      // Deselect all zones using helper
-      await FormHelpers.selectAvailabilityZones(page, []);
-      
-      // Try to submit - should fail validation
-      await FormHelpers.submitConfigForm(page, true);
-      await page.waitForTimeout(500);
-      
-      const hasError = await ValidationHelpers.hasAvailabilityZoneError(page, 'availability zone');
-      expect(hasError).toBeTruthy();
-    });
-
-    test('should enforce maximum availability zones for Azure (3)', async ({ page }) => {
-      // Select all 3 zones (maximum)
-      await FormHelpers.selectAvailabilityZones(page, ['1', '2', '3']);
-      
-      const selectedCount = await page.evaluate(() => {
-        const select = document.getElementById('availability-zones-select');
-        if (!select) return 0;
-        const choicesInstance = select.choicesInstance;
-        if (choicesInstance && choicesInstance.getValue) {
-          const values = choicesInstance.getValue(true);
-          return Array.isArray(values) ? values.length : 0;
-        }
-        return Array.from(select.selectedOptions).length;
-      });
-      expect(selectedCount).toBeLessThanOrEqual(3);
-      
-      // Verify we can select exactly 3 zones
-      expect(selectedCount).toBe(3);
-    });
-
-    test('should only show valid availability zones for Azure (1, 2, 3)', async ({ page }) => {
-      const azSelect = page.locator('#availability-zones-select');
-      // Read option labels from the select element (even though it's hidden)
-      const options = await azSelect.locator('option').allTextContents();
-      
-      // All options should be valid Azure zones (Zone 1, Zone 2, or Zone 3)
-      const validOptions = options.filter(opt => opt !== 'Select one or more availability zones' && opt !== '' && opt.trim() !== '');
-      expect(validOptions.length).toBeGreaterThan(0);
-      validOptions.forEach(opt => {
-        expect(opt.trim()).toMatch(/^Zone [1-3]$/);
-      });
-    });
+    expect(tfvars).toContain('create_nat_gateway = false');
+    expect(tfvars).toContain('nat_gateway_zones = []');
+    expect(readme).toContain('classic cluster nodes have no general internet egress by default');
   });
 });
-
