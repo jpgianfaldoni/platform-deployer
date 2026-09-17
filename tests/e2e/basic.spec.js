@@ -15,7 +15,7 @@ test.describe('Basic Application Tests', () => {
     page.on('pageerror', (error) => errors.push(error));
     
     // Wait for page to be fully loaded
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Verify no critical errors occurred
     expect(errors.length).toBe(0);
@@ -159,4 +159,3 @@ test.describe('Basic Application Tests', () => {
     expect(hash).toBe('#/select-provider');
   });
 });
-

@@ -11,7 +11,7 @@ const NavigationHelpers = require('../helpers/navigation-helpers');
 test.describe('Summary Page Tests', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await page.evaluate(() => {
       localStorage.clear();
     });
@@ -174,7 +174,7 @@ test.describe('Summary Page Tests', () => {
       // Verify all configuration values are displayed
       await expect(page.locator('text=Configuration Summary')).toBeVisible();
       await expect(page.locator(`text=${config.project_prefix}`)).toBeVisible();
-      await expect(page.locator(`text=${config.project_id}`)).toBeVisible();
+      await expect(page.getByText(config.project_id, { exact: true })).toBeVisible();
       await expect(page.locator(`text=${config.google_service_account_email}`)).toBeVisible();
       await expect(page.locator(`text=${config.subnet_cidr}`)).toBeVisible();
       
@@ -204,7 +204,7 @@ test.describe('Summary Page Tests', () => {
 test.describe('Download/Generate Tests', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await page.evaluate(() => {
       localStorage.clear();
     });
@@ -424,7 +424,7 @@ test.describe('Download/Generate Tests', () => {
 test.describe('Back Navigation from Summary', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await page.evaluate(() => {
       localStorage.clear();
     });

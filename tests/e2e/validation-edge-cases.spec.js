@@ -11,7 +11,7 @@ const NavigationHelpers = require('../helpers/navigation-helpers');
 test.describe('Project Prefix Validation Edge Cases', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await page.evaluate(() => {
       localStorage.clear();
     });
@@ -173,7 +173,7 @@ test.describe('Project Prefix Validation Edge Cases', () => {
 test.describe('Provider Switch Tests', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await page.evaluate(() => {
       localStorage.clear();
     });
@@ -316,7 +316,7 @@ test.describe('Provider Switch Tests', () => {
 test.describe('VPC CIDR Validation Edge Cases', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await page.evaluate(() => {
       localStorage.clear();
     });
@@ -411,7 +411,7 @@ test.describe('VPC CIDR Validation Edge Cases', () => {
 test.describe('Existing VPC/VNet Tests', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await page.evaluate(() => {
       localStorage.clear();
     });
@@ -496,7 +496,7 @@ test.describe('Existing VPC/VNet Tests', () => {
 test.describe('Form Persistence Tests', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await page.evaluate(() => {
       localStorage.clear();
     });
@@ -524,7 +524,7 @@ test.describe('Form Persistence Tests', () => {
     
     // Refresh the page
     await page.reload();
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Verify data is preserved
     const projectPrefix = await page.locator('input[name="project_prefix"]').inputValue();

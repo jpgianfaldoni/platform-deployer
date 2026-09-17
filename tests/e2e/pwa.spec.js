@@ -5,7 +5,7 @@ test.describe('PWA Functionality Tests', () => {
     // Navigate to the home page before each test
     await page.goto('/');
     // Wait for page to fully load
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
   });
 
   test('should have manifest.json accessible', async ({ page }) => {
@@ -168,7 +168,7 @@ test.describe('PWA Functionality Tests', () => {
     await expect(bootstrapLink).toHaveCount(1);
     
     // Wait for CSS to load
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Verify Bootstrap CSS is loaded by checking for Bootstrap CSS variables
     const bootstrapLoaded = await page.evaluate(() => {
@@ -185,7 +185,7 @@ test.describe('PWA Functionality Tests', () => {
     await expect(bootstrapIconsLink).toHaveCount(1);
     
     // Wait for CSS to load
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
   });
 
   test('should load JSZip library from local files', async ({ page }) => {
@@ -252,4 +252,3 @@ test.describe('PWA Functionality Tests', () => {
     expect(jszipLoaded).toBeTruthy();
   });
 });
-

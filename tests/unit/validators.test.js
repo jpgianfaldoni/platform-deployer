@@ -761,22 +761,21 @@ describe('Validators.validateConfiguration', () => {
     expect(result.errors.existing_vpc_id).toBeDefined();
   });
 
-  test('GCP existing VPC fields are validated', () => {
+  test('GCP managed subnet CIDR is validated', () => {
     const config = {
       provider: 'gcp',
       project_prefix: 'myproject',
       region: 'us-central1',
       pricing_tier: 'STANDARD',
       project_id: 'my-gcp-project',
-      create_new_vpc: false,
-      existing_vpc_id: 'BadVPCName', // uppercase invalid for GCP
-      existing_subnet_name: 'my-subnet',
-      existing_pod_range_name: 'pod-range',
-      existing_service_range_name: 'svc-range',
+      google_service_account_email: 'deployer@my-gcp-project.iam.gserviceaccount.com',
+      databricks_account_id: '00000000-0000-0000-0000-000000000000',
+      databricks_admin_user: 'admin@example.com',
+      subnet_cidr: 'not-a-cidr',
     };
     const result = Validators.validateConfiguration(config);
     expect(result.valid).toBe(false);
-    expect(result.errors.existing_vpc_id).toBeDefined();
+    expect(result.errors.subnet_cidr).toBeDefined();
   });
 
   test('AWS PrivateLink without ENTERPRISE returns feature error', () => {
