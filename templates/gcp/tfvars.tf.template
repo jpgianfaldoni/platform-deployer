@@ -1,0 +1,12 @@
+# Generated variables for the Databricks GCP deployment.
+# Authentication tokens remain outside this file.
+
+google_service_account_email = {{{google_service_account_email_hcl}}}
+google_project_name          = {{{google_project_name_hcl}}}
+google_region                = {{{google_region_hcl}}}
+
+databricks_account_id     = {{{databricks_account_id_hcl}}}
+databricks_workspace_name = {{{databricks_workspace_name_hcl}}}
+databricks_admin_user     = {{{databricks_admin_user_hcl}}}
+
+subnet_cidr = {{{subnet_cidr_hcl}}}
