@@ -1,7 +1,7 @@
 {
-  "name": "Platform Deployer - Databricks AWS Terraform",
-  "short_name": "Platform Deployer",
-  "description": "Generate deployable Databricks AWS Terraform projects from pinned Technical Services examples.",
+  "name": "One-Click Deployer - Databricks Infrastructure Generator",
+  "short_name": "One-Click Deployer",
+  "description": "Simplify Databricks infrastructure deployment across AWS, Azure, and GCP. Generate production-ready Terraform configurations instantly.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
@@ -59,3 +59,4 @@
     }
   ]
 }
+

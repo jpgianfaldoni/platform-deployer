@@ -5,7 +5,7 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 
 const repoRoot = path.resolve(__dirname, '..');
-const configPath = path.join(repoRoot, 'config', 'upstreams.json');
+const defaultConfigPath = path.join(repoRoot, 'config', 'upstreams.json');
 
 function runGit(args, cwd, encoding = 'utf8') {
   return execFileSync('git', args, {
@@ -21,31 +21,31 @@ function sha256(content) {
 }
 
 function safeRelativePath(value) {
-  if (!value || path.isAbsolute(value) || value.split('/').includes('..')) {
+  if (typeof value !== 'string' || !value || path.isAbsolute(value)) {
     throw new Error(`Unsafe upstream path: ${value}`);
   }
-  return value.replaceAll('\\', '/');
+
+  const normalized = value.replaceAll('\\', '/');
+  if (normalized.startsWith('/') || normalized.split('/').some(part => part === '..' || part === '')) {
+    throw new Error(`Unsafe upstream path: ${value}`);
+  }
+  return normalized;
 }
 
 function prepareRepository(config) {
-  if (process.env.TERRAFORM_SOURCE_DIR) {
-    const sourceDir = path.resolve(process.env.TERRAFORM_SOURCE_DIR);
-    const actual = runGit(['rev-parse', 'HEAD'], sourceDir).trim();
-    if (actual !== config.commit) {
-      throw new Error(`TERRAFORM_SOURCE_DIR is at ${actual}; expected ${config.commit}`);
-    }
-    return { sourceDir, cleanup: false };
+  const sourceOverride = process.env.TERRAFORM_SOURCE_DIR;
+  if (sourceOverride) {
+    const sourceDir = path.resolve(sourceOverride);
+    const commit = runGit(['rev-parse', config.ref], sourceDir).trim();
+    return { sourceDir, commit, cleanup: false };
   }
 
-  const sourceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'platform-deployer-upstream-'));
+  const sourceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oneclick-terraform-upstream-'));
   runGit(['init', '--quiet'], sourceDir);
   runGit(['remote', 'add', 'origin', config.repository], sourceDir);
-  runGit(['fetch', '--quiet', '--depth=1', '--filter=blob:none', 'origin', config.commit], sourceDir);
-  const actual = runGit(['rev-parse', 'FETCH_HEAD'], sourceDir).trim();
-  if (actual !== config.commit) {
-    throw new Error(`Fetched ${actual}; expected pinned commit ${config.commit}`);
-  }
-  return { sourceDir, cleanup: true };
+  runGit(['fetch', '--quiet', '--depth=1', '--filter=blob:none', 'origin', config.ref], sourceDir);
+  const commit = runGit(['rev-parse', 'FETCH_HEAD'], sourceDir).trim();
+  return { sourceDir, commit, cleanup: true };
 }
 
 function listTrackedFiles(sourceDir, commit, sourcePath) {
@@ -57,53 +57,85 @@ function readTrackedFile(sourceDir, commit, filePath) {
   return runGit(['show', `${commit}:${filePath}`], sourceDir, null);
 }
 
-function writeTrackedFile(sourceDir, commit, upstreamPath, outputPath) {
-  const content = readTrackedFile(sourceDir, commit, upstreamPath);
-  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-  fs.writeFileSync(outputPath, content);
-  return { content, hash: sha256(content) };
+function writeFile(outputRoot, relativePath, content) {
+  const safePath = safeRelativePath(relativePath);
+  const destination = path.resolve(outputRoot, safePath);
+  const resolvedRoot = `${path.resolve(outputRoot)}${path.sep}`;
+  if (!destination.startsWith(resolvedRoot)) {
+    throw new Error(`Unsafe output path: ${relativePath}`);
+  }
+  fs.mkdirSync(path.dirname(destination), { recursive: true });
+  fs.writeFileSync(destination, content);
+  return sha256(content);
 }
 
-function vendorTerraform(outputRoot = path.join(repoRoot, 'dist', 'terraform-sources')) {
+function vendorTerraform(options = {}) {
+  const configPath = options.configPath || defaultConfigPath;
+  const outputRoot = options.outputRoot || path.join(repoRoot, 'dist', 'terraform-sources');
   const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-  if (!/^[0-9a-f]{40}$/.test(config.commit)) {
-    throw new Error('The Technical Services source must be pinned to a full 40-character commit SHA.');
+
+  safeRelativePath(config.ref);
+  const { sourceDir, commit, cleanup } = prepareRepository(config);
+  if (!/^[0-9a-f]{40}$/.test(commit)) {
+    throw new Error(`Unable to resolve ${config.ref} to a full commit SHA.`);
   }
 
-  const { sourceDir, cleanup } = prepareRepository(config);
-  const commitRoot = path.join(outputRoot, config.commit);
   fs.rmSync(outputRoot, { recursive: true, force: true });
-  fs.mkdirSync(commitRoot, { recursive: true });
+  fs.mkdirSync(outputRoot, { recursive: true });
 
   try {
     const commonFiles = [];
-    for (const licensePath of config.licenseFiles) {
-      const cleanPath = safeRelativePath(licensePath);
-      const outputPath = path.join(commitRoot, cleanPath);
-      const { hash } = writeTrackedFile(sourceDir, config.commit, cleanPath, outputPath);
-      commonFiles.push({ path: cleanPath, sha256: hash });
+    for (const licenseFile of config.licenseFiles || []) {
+      const upstreamPath = safeRelativePath(licenseFile);
+      const content = readTrackedFile(sourceDir, commit, upstreamPath);
+      const outputName = path.posix.basename(upstreamPath);
+      const artifactPath = `${commit}/common/${outputName}`;
+      commonFiles.push({
+        name: outputName,
+        upstreamPath,
+        artifactPath,
+        sha256: writeFile(outputRoot, artifactPath, content)
+      });
     }
 
     const variants = {};
-    for (const [id, variant] of Object.entries(config.variants)) {
-      const sourcePath = safeRelativePath(variant.path).replace(/\/$/, '');
-      const trackedFiles = listTrackedFiles(sourceDir, config.commit, sourcePath);
-      if (!trackedFiles.some(file => file === `${sourcePath}/README.md`) ||
-          !trackedFiles.some(file => file === `${sourcePath}/tf/variables.tf`)) {
-        throw new Error(`Variant ${id} is missing its expected README.md or tf/variables.tf.`);
+    for (const [id, variant] of Object.entries(config.variants || {})) {
+      const variantPath = safeRelativePath(variant.path).replace(/\/$/, '');
+      const terraformSubdirectory = safeRelativePath(variant.terraformSubdirectory || 'tf');
+      const tfPath = terraformSubdirectory === '.'
+        ? variantPath
+        : `${variantPath}/${terraformSubdirectory}`;
+      const trackedFiles = listTrackedFiles(sourceDir, commit, tfPath);
+      const selectedFiles = trackedFiles.filter(file => {
+        const relative = file.slice(tfPath.length + 1);
+        return !relative.includes('/') && (relative.endsWith('.tf') || relative === '.terraform.lock.hcl');
+      });
+
+      if (!selectedFiles.some(file => file.endsWith('/variables.tf'))) {
+        throw new Error(`Variant ${id} is missing variables.tf.`);
       }
 
-      const files = [];
-      for (const upstreamPath of trackedFiles) {
-        const relative = safeRelativePath(upstreamPath.slice(sourcePath.length + 1));
-        const outputPath = path.join(commitRoot, id, relative);
-        const { hash } = writeTrackedFile(sourceDir, config.commit, upstreamPath, outputPath);
-        files.push({ path: relative, sha256: hash });
-      }
+      const names = new Set();
+      const files = selectedFiles.sort().map(upstreamPath => {
+        const name = safeRelativePath(upstreamPath.slice(tfPath.length + 1));
+        if (names.has(name)) throw new Error(`Variant ${id} contains duplicate output path ${name}.`);
+        names.add(name);
+        const content = readTrackedFile(sourceDir, commit, upstreamPath);
+        const artifactPath = `${commit}/${id}/${name}`;
+        return {
+          name,
+          upstreamPath,
+          artifactPath,
+          sha256: writeFile(outputRoot, artifactPath, content)
+        };
+      });
+
       variants[id] = {
         label: variant.label,
-        privateLink: variant.privateLink,
-        upstreamPath: sourcePath,
+        provider: variant.provider,
+        privateLink: Boolean(variant.privateLink),
+        upstreamPath: variantPath,
+        sourceUrl: `${config.repository.replace(/\.git$/, '')}/tree/${commit}/${variantPath}`,
         files
       };
     }
@@ -111,8 +143,10 @@ function vendorTerraform(outputRoot = path.join(repoRoot, 'dist', 'terraform-sou
     const manifest = {
       schemaVersion: config.schemaVersion,
       repository: config.repository.replace(/\.git$/, ''),
-      commit: config.commit,
-      sourceUrl: `${config.repository.replace(/\.git$/, '')}/tree/${config.commit}`,
+      ref: config.ref,
+      commit,
+      resolvedAt: new Date().toISOString(),
+      sourceUrl: `${config.repository.replace(/\.git$/, '')}/tree/${commit}`,
       commonFiles,
       variants
     };
@@ -124,10 +158,10 @@ function vendorTerraform(outputRoot = path.join(repoRoot, 'dist', 'terraform-sou
 }
 
 if (require.main === module) {
-  const outputArg = process.argv.indexOf('--output');
-  const outputRoot = outputArg >= 0 ? path.resolve(process.argv[outputArg + 1]) : undefined;
-  const manifest = vendorTerraform(outputRoot);
-  process.stdout.write(`Vendored ${Object.keys(manifest.variants).length} Terraform variants at ${manifest.commit}.\n`);
+  const outputIndex = process.argv.indexOf('--output');
+  const outputRoot = outputIndex >= 0 ? path.resolve(process.argv[outputIndex + 1]) : undefined;
+  const manifest = vendorTerraform({ outputRoot });
+  process.stdout.write(`Vendored ${Object.keys(manifest.variants).length} Terraform variants from ${manifest.commit}.\n`);
 }
 
-module.exports = { vendorTerraform, safeRelativePath, sha256 };
+module.exports = { listTrackedFiles, safeRelativePath, sha256, vendorTerraform };

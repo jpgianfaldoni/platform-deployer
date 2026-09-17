@@ -1,19 +1,20 @@
 {
-  "name": "platform-deployer",
+  "name": "oneclick-databricks-deployer-pwa",
   "version": "1.0.0",
-  "description": "Static PWA that packages pinned Databricks AWS Terraform examples with generated tfvars",
+  "description": "Progressive Web App for generating Terraform configurations for Databricks",
   "private": true,
   "scripts": {
-    "build": "node scripts/build.js",
-    "build:libs": "node scripts/copy-libs.js",
-    "vendor": "node scripts/vendor-terraform.js",
-    "start": "npm run build && python3 -m http.server 8000 -d dist",
-    "test": "npm run test:unit && npm run build && npm run test:terraform && npm run test:e2e",
-    "test:terraform": "node scripts/validate-terraform.js",
-    "test:e2e": "playwright test",
+    "test": "playwright test",
     "test:ui": "playwright test --ui",
     "test:debug": "playwright test --debug",
     "test:headed": "playwright test --headed",
+    "test:coverage": "COVERAGE=true playwright test --config=playwright.coverage.config.js",
+    "coverage": "npm run test:coverage",
+    "start": "bash scripts/run.sh",
+    "dev": "node scripts/dev.js",
+    "build": "node scripts/build.js",
+    "build:libs": "node scripts/copy-libs.js",
+    "deploy": "bash scripts/deploy.sh",
     "postinstall": "npm run build:libs",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest"
@@ -24,14 +25,16 @@
     "terraform",
     "progressive-web-app"
   ],
-  "author": "Joao Gianfaldoni",
+  "author": "",
   "license": "MIT",
   "devDependencies": {
     "@playwright/test": "^1.57.0",
+    "@vitest/coverage-v8": "^4.1.2",
+    "v8-to-istanbul": "^9.3.0",
     "vitest": "^4.1.2"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=18.0.0"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "^5.2.8",
@@ -39,7 +42,9 @@
     "@fontsource/jetbrains-mono": "^5.2.8",
     "bootstrap": "5.3.2",
     "bootstrap-icons": "1.11.1",
-    "choices.js": "10.2.0",
-    "jszip": "3.10.1"
+    "choices.js": "^10.2.0",
+    "handlebars": "^4.7.8",
+    "jszip": "3.10.1",
+    "playwright": "^1.57.0"
   }
 }

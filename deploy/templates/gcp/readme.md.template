@@ -1,0 +1,75 @@
+# Databricks GCP BYOVPC Standalone Deployment
+
+This ready-to-deploy Terraform project was generated from your selections.
+
+## Configuration
+
+| Setting | Value |
+|---|---|
+| GCP project | `{{project_id}}` |
+| Region | `{{region}}` |
+| Workspace | `{{project_prefix}}` |
+| Google service account | `{{google_service_account_email}}` |
+| Workspace admin | `{{databricks_admin_user}}` |
+| Subnet CIDR | `{{subnet_cidr}}` |
+| Network | New VPC, one regional subnet, Cloud Router, and Cloud NAT |
+
+## Prerequisites
+
+- Terraform 1.3 or newer
+- Google Cloud CLI (`gcloud`)
+- The Compute Engine API enabled in `{{project_id}}`
+- `{{google_service_account_email}}` with the permissions required to create the GCP network and Databricks workspace
+- The same service account added to the Databricks account and assigned the Account Admin role
+- `{{databricks_admin_user}}` already present as a Databricks account user
+
+Enable the required GCP API:
+
+```bash
+gcloud services enable compute.googleapis.com --project {{project_id}}
+```
+
+## Authenticate
+
+Configure the project and impersonate the service account used by both Terraform providers:
+
+```bash
+gcloud config set project {{project_id}}
+gcloud config set auth/impersonate_service_account {{google_service_account_email}}
+export GOOGLE_OAUTH_ACCESS_TOKEN="$(gcloud auth print-access-token)"
+```
+
+The access token is intentionally not stored in `terraform.tfvars`. Refresh it if Terraform reports that it has expired.
+
+## Deploy
+
+```bash
+terraform init
+terraform validate
+terraform plan
+terraform apply
+```
+
+After deployment:
+
+```bash
+terraform output -raw workspace_url
+```
+
+## Resources created
+
+The deployment creates a VPC, a subnet with Private Google Access, Cloud Router, Cloud NAT, a Databricks MWS network, a workspace, and workspace admin membership. Databricks creates the workspace cloud-storage buckets.
+
+This deployment does not configure Private Service Connect or Unity Catalog.
+
+## Destroy
+
+```bash
+terraform destroy
+```
+
+If the VPC remains in use by Databricks-managed firewall rules, complete the Databricks workspace teardown before retrying.
+
+---
+
+Generated: {{generated_date}}
