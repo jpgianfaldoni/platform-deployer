@@ -65,7 +65,7 @@ class FormHelpers {
   }
 
   /**
-   * Fill the fields required by the upstream Azure sources.
+   * Fill the fields required by the Azure deployment.
    * Individual tests can override any default while keeping the fixtures valid.
    */
   static async fillAzureConfig(page, config = {}) {
@@ -110,7 +110,7 @@ class FormHelpers {
   }
 
   /**
-   * Fill the seven inputs required by the upstream GCP BYOVPC
+   * Fill the seven inputs required by the GCP BYOVPC
    * standalone source.
    */
   static async fillGcpConfig(page, config = {}) {

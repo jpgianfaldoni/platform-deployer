@@ -176,7 +176,7 @@ test.describe('Azure Provider Tests', () => {
     expect(await ValidationHelpers.hasFieldValidationError(page, 'existing_vpc_id', 'VNet Resource ID')).toBeTruthy();
   });
 
-  test('downloads the standard upstream Terraform plus generated tfvars', async ({ page }) => {
+  test('downloads the standard Terraform project with generated tfvars', async ({ page }) => {
     await FormHelpers.fillAzureConfig(page, {
       project_prefix: 'azure-download',
       resource_group_name: 'rg-download-workspace',
@@ -219,7 +219,7 @@ test.describe('Azure Provider Tests', () => {
     expect(unityCatalogTf).toContain('infrastructure_encryption_enabled = true');
   });
 
-  test('downloads the Private Link upstream Terraform plus compatible tfvars', async ({ page }) => {
+  test('downloads the Private Link Terraform project with compatible tfvars', async ({ page }) => {
     await FormHelpers.fillAzureConfig(page, { project_prefix: 'azure-pl-download' });
     await enablePrivateLink(page, 'existing');
     await page.locator('#nat_gateway_mode').selectOption('single');

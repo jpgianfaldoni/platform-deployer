@@ -6,7 +6,7 @@ globalThis.TemplateEngine = require('../../deploy/js/template-engine.js');
 const TerraformGenerator = require('../../deploy/js/terraform-generator.js');
 
 describe('TerraformGenerator AWS external source', () => {
-  it('packages the complete upstream source with generated tfvars and README', async () => {
+  it('packages the complete Terraform project with generated tfvars and README', async () => {
     const generator = new TerraformGenerator();
     generator.loader.loadExternalTerraformFiles = async () => [
       { name: 'network.tf', content: 'module "vpc" {}\n' },

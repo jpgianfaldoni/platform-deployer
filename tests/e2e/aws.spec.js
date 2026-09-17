@@ -100,7 +100,7 @@ test.describe('AWS Provider Tests', () => {
         await page.waitForTimeout(500);
       }
 
-      // The upstream source reuses the VPC, private subnets, and security group.
+      // This configuration reuses the VPC, private subnets, and security group.
       await FormHelpers.fillNetworkConfig(page, {
         create_new_vpc: false,
         existing_vpc_id: 'vpc-0123456789abcdef0',
@@ -330,7 +330,7 @@ test.describe('AWS Provider Tests', () => {
       const hasWarning = await ValidationHelpers.hasPrivateLinkWarning(page);
       expect(hasWarning).toBeFalsy();
       
-      // The upstream PrivateLink source uses the workspace subnets
+      // The PrivateLink configuration uses the workspace subnets
       // and does not use the legacy generated service-subnet input.
       await page.waitForTimeout(2000);
       const subnets = await FormHelpers.getSubnetPreview(page);
@@ -506,7 +506,7 @@ test.describe('AWS Provider Tests', () => {
       await createNewVpc.uncheck();
       await page.waitForTimeout(500);
 
-      // The upstream source requires existing subnets in existing-VPC mode.
+      // Existing-VPC mode requires existing subnets.
       const sliderContainer = page.locator('#subnet-size-slider-container');
       await expect(sliderContainer).not.toBeVisible();
 

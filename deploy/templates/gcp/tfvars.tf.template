@@ -1,4 +1,4 @@
-# Generated variables for the Databricks upstream GCP BYOVPC standalone example.
+# Generated variables for the Databricks GCP deployment.
 # Authentication tokens remain outside this file.
 
 google_service_account_email = {{{google_service_account_email_hcl}}}

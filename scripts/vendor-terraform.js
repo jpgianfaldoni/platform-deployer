@@ -88,7 +88,7 @@ function vendorTerraform(options = {}) {
     for (const licenseFile of config.licenseFiles || []) {
       const upstreamPath = safeRelativePath(licenseFile);
       const content = readTrackedFile(sourceDir, commit, upstreamPath);
-      const outputName = `UPSTREAM_${path.posix.basename(upstreamPath)}`;
+      const outputName = path.posix.basename(upstreamPath);
       const artifactPath = `${commit}/common/${outputName}`;
       commonFiles.push({
         name: outputName,

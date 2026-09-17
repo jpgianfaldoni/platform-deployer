@@ -1,6 +1,6 @@
 # Databricks Deployment on AWS
 
-This ready-to-deploy Terraform project combines the upstream Databricks source files with the `terraform.tfvars` generated from your selections.
+This ready-to-deploy Terraform project was generated from your selections.
 
 ## Configuration Summary
 
@@ -16,16 +16,6 @@ This ready-to-deploy Terraform project combines the upstream Databricks source f
 {{/if}}
 | PrivateLink | {{private_link_status}} |
 | Metastore | {{#if metastore_id}}Attach `{{metastore_id}}`{{else}}Create `{{metastore_name}}`{{/if}} |
-
-## Terraform Source
-
-The `.tf` files and provider lock file are unchanged copies fetched from the upstream repository during the app build.
-
-- Tracked ref: `{{terraform_source_ref}}`
-- Resolved commit: `{{terraform_source_commit}}`
-- Source: {{terraform_source_url}}
-
-The source commit is recorded so this generated deployment remains auditable even though future app builds follow the upstream `main` branch.
 
 ## Prerequisites
 
@@ -56,19 +46,19 @@ Do not commit these values.
 
 ## Metastore
 
-The upstream examples require a Unity Catalog metastore assignment for the workspace to deploy successfully. This project only creates or attaches that required metastore. Optional catalog and cluster creation are disabled where the source exposes those options.
+This deployment requires a Unity Catalog metastore assignment for the workspace. It creates or attaches the selected metastore. Optional catalog and cluster creation are disabled.
 
 {{#if enable_private_link}}
 ## PrivateLink Networking
 
 {{#if create_new_vpc}}
 {{#if is_fully_private}}
-The upstream `fully_private` network topology creates no NAT gateway or internet gateway. PrivateLink and the S3, STS, and Kinesis endpoints provide the required private paths for control-plane and AWS service communication.
+The fully private network topology creates no NAT gateway or internet gateway. PrivateLink and the S3, STS, and Kinesis endpoints provide the required private paths for control-plane and AWS service communication.
 {{else}}
-The upstream `standard` network topology creates the VPC, {{#if (eq nat_gateway_mode "per_az")}}one NAT gateway per availability zone{{else}}one shared NAT gateway{{/if}}, an internet gateway, workspace subnets, and the required endpoints. This generator does not change that topology.
+The standard network topology creates the VPC, {{#if (eq nat_gateway_mode "per_az")}}one NAT gateway per availability zone{{else}}one shared NAT gateway{{/if}}, an internet gateway, workspace subnets, and the required endpoints.
 {{/if}}
 {{else}}
-The upstream `custom` topology uses the existing VPC, subnet, security group, REST VPC endpoint, and SCC relay VPC endpoint IDs in `terraform.tfvars`. The Terraform source does not create or modify those existing network resources.
+The custom topology uses the existing VPC, subnet, security group, REST VPC endpoint, and SCC relay VPC endpoint IDs in `terraform.tfvars`. Terraform does not create or modify those existing network resources.
 {{/if}}
 {{/if}}
 

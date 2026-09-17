@@ -1,4 +1,4 @@
-# Generated variables for the Databricks upstream Terraform example.
+# Generated variables for the Databricks AWS deployment.
 # Databricks account ID remains outside this file:
 # export TF_VAR_databricks_account_id="<your-account-id>"
 
@@ -8,7 +8,7 @@ resource_prefix = "{{project_prefix}}"
 region          = "{{region}}"
 tags = {{{common_tags}}}
 
-# Unity Catalog metastore (required by the upstream workspace example)
+# Unity Catalog metastore required by the workspace deployment
 metastore_id   = "{{metastore_id}}"
 metastore_name = "{{metastore_name}}"
 
@@ -44,7 +44,7 @@ security_group_ids      = {{{aws_security_group_ids}}}
 new_security_group_name = ""
 sg_egress_ports         = [443, 3306, 2443, 5432, 8443, 8444, 8445, 8446, 8447, 8448, 8449, 8450, 8451]
 
-# Required by the upstream input schema but unused while new_catalog is false.
+# Required input, unused while new_catalog is false.
 aws_account_id = ""
 new_catalog    = false
 new_cluster    = false

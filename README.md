@@ -1,6 +1,6 @@
 # One Click Databricks Deployer - PWA
 
-A Progressive Web App (PWA) that assembles deployable Databricks Terraform projects for AWS, Azure, and Google Cloud Platform. The `.tf` files are fetched from the configured upstream repository during each build; the app generates only the matching `terraform.tfvars` and deployment guide.
+A Progressive Web App (PWA) that generates deployable Databricks Terraform projects for AWS, Azure, and Google Cloud Platform based on the user-selected configuration.
 
 ## 🎯 About the Project
 
@@ -61,7 +61,7 @@ Contains all files necessary to deploy the PWA to production:
 - `js/` - JavaScript application scripts
 - `icons/` - PWA icons in multiple sizes
 
-Run `npm run build` to produce `dist/`, the deployable artifact. The build resolves the configured upstream `main` ref to an exact commit, vendors the AWS, Azure, and GCP Terraform files, and records file hashes and source metadata.
+Run `npm run build` to produce `dist/`, the deployable artifact with the Terraform files required for AWS, Azure, and GCP downloads.
 
 ### 📚 `docs/` - Documentation
 
@@ -110,19 +110,19 @@ Contains test and debug files:
 
 ### Generated Terraform Structure
 
-AWS downloads contain the selected upstream Terraform root, the generated tfvars, source notices, and deployment instructions:
+Each download contains a complete generated Terraform project:
 
 ```
-project-name-aws-terraform/
-├── *.tf                    # Unchanged upstream source files
-├── .terraform.lock.hcl     # Unchanged upstream provider lock
+project-name-provider-terraform/
+├── *.tf                    # Terraform resource definitions
+├── .terraform.lock.hcl     # Provider lock file, when applicable
 ├── terraform.tfvars        # Values generated from the UI
-├── UPSTREAM_LICENSE.md
-├── UPSTREAM_NOTICE.md
-└── README.md               # Deployment and source instructions
+├── LICENSE.md
+├── NOTICE.md
+└── README.md               # Deployment instructions
 ```
 
-Azure and GCP downloads follow the same model: unchanged files from the selected upstream example plus a generated `terraform.tfvars` and README. The GCP flow uses only the `gcp-byovpc-standalone` source.
+The exact Terraform files vary according to the selected cloud and network configuration.
 
 ## 🚀 Quick Start
 
@@ -167,7 +167,7 @@ npm run test:coverage
 
 Deployment is done automatically via GitHub Actions when a release/tag is created in the repository.
 
-**Manual Deployment:** run `npm run build`, then publish the generated `dist/` directory. The build intentionally fails if the upstream source cannot be resolved or fetched.
+**Manual Deployment:** run `npm run build`, then publish the generated `dist/` directory. The build fails if the required Terraform files cannot be prepared.
 
 **Automatic Deployment via GitHub Actions:**
 - Deployment is triggered automatically when a release or tag is created

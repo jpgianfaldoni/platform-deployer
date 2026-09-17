@@ -30,7 +30,7 @@ test.describe('GCP Provider Tests', () => {
     await expect(page.locator('[name="databricks_admin_user"]')).toBeVisible();
     await expect(page.locator('[name="subnet_cidr"]')).toBeVisible();
 
-    await expect(page.getByText('This source always creates a new VPC', { exact: false })).toBeVisible();
+    await expect(page.getByText('This deployment creates a new VPC', { exact: false })).toBeVisible();
     await expect(page.locator('[name="pricing_tier"]')).toHaveCount(0);
     await expect(page.locator('#create_new_vpc')).toHaveCount(0);
     await expect(page.locator('#availability-zones-select')).toHaveCount(0);
@@ -75,7 +75,7 @@ test.describe('GCP Provider Tests', () => {
     await expect(page.getByText('Pricing Tier:', { exact: true })).toHaveCount(0);
   });
 
-  test('downloads only the upstream GCP Terraform with generated tfvars', async ({ page }) => {
+  test('downloads the generated GCP Terraform project', async ({ page }) => {
     await FormHelpers.fillGcpConfig(page, {
       project_prefix: 'gcp-download',
       region: 'us-east1',
@@ -98,8 +98,8 @@ test.describe('GCP Provider Tests', () => {
       'versions.tf',
       'terraform.tfvars',
       'README.md',
-      'UPSTREAM_LICENSE.md',
-      'UPSTREAM_NOTICE.md'
+      'LICENSE.md',
+      'NOTICE.md'
     ]));
     expect(archive.file('main.tf')).toBeNull();
     expect(archive.file('modules/')).toBeNull();

@@ -206,7 +206,7 @@ test.describe('Provider Switch Tests', () => {
     const resourceGroupField = page.locator('input[name="resource_group_name"]');
     await expect(resourceGroupField).toBeVisible();
     
-    // Both upstream Azure sources deploy Premium workspaces.
+    // Both Azure configurations deploy Premium workspaces.
     const pricingOptions = await page.locator('select[name="pricing_tier"] option').evaluateAll(options =>
       options.map(option => option.value).filter(Boolean)
     );
@@ -305,7 +305,7 @@ test.describe('Provider Switch Tests', () => {
       azure_vnet_resource_group_name: 'rg-az-network'
     });
     
-    // The upstream Azure sources require exactly two workspace subnets and do
+    // The Azure configurations require exactly two workspace subnets and do
     // not accept availability-zone inputs.
     await expect(page.locator('#availability-zones-select')).toHaveCount(0);
     const azureSubnets = await FormHelpers.getSubnetPreview(page);

@@ -1875,7 +1875,7 @@ class App {
               </div>
               <p class="lead text-muted">
                 ${this.currentProvider === 'gcp'
-                  ? 'Configure the inputs required by the upstream GCP BYOVPC standalone Terraform source.'
+                  ? 'Configure the inputs required for your GCP deployment.'
                   : `Configure your Databricks deployment settings for ${this.currentProvider.toUpperCase()}. All network calculations are handled automatically based on your selections.`}
               </p>
             </div>
@@ -1924,7 +1924,7 @@ class App {
                         ${this.renderPricingTierOptions(this.currentProvider, this.currentConfig.pricing_tier)}
                       </select>
                       <div class="form-text">${this.currentProvider === 'azure'
-                        ? 'The selected upstream Azure sources deploy Premium workspaces.'
+                        ? 'This Azure deployment uses a Premium workspace.'
                         : 'Databricks workspace pricing tier (affects available features)'}</div>
                     </div>
                     ` : ''}
@@ -1965,7 +1965,7 @@ class App {
                                      value="${this.currentConfig.metastore_id || ''}"
                                      placeholder="e.g., 12345678-1234-1234-1234-123456789abc">
                             </div>
-                            <div class="form-text mt-2">The selected upstream Terraform requires a metastore assignment.</div>
+                            <div class="form-text mt-2">This deployment requires a metastore assignment.</div>
                           </div>
                         </div>
                       </div>
@@ -2091,7 +2091,7 @@ class App {
                   ${this.currentProvider === 'gcp' ? `
                   <div class="alert alert-info mb-4">
                     <i class="bi bi-info-circle me-2"></i>
-                    This source always creates a new VPC, one regional subnet with Private Google Access,
+                    This deployment creates a new VPC, one regional subnet with Private Google Access,
                     a Cloud Router, and Cloud NAT for outbound connectivity.
                   </div>
                   <div class="mb-0">
@@ -2112,7 +2112,7 @@ class App {
                       </label>
                     </div>
                     <div class="form-text">${this.currentProvider === 'azure' ? 
-                      'The standard source can create a VNet or add new Databricks subnets to an existing VNet' :
+                      'The standard deployment can create a VNet or add new Databricks subnets to an existing VNet' :
                       'Create a new VPC or use an existing one'}</div>
                   </div>
                   ${this.currentProvider === 'azure' ? `
@@ -2132,7 +2132,7 @@ class App {
                       <option value="3" ${savedAzureNatGatewayZone === '3' ? 'selected' : ''}>Availability Zone 3</option>
                       <option value="" ${savedAzureNatGatewayZone === '' ? 'selected' : ''}>Regional / non-zonal</option>
                     </select>
-                    <div class="form-text">The standard source deploys one NAT gateway and public IP in the selected zone. Use regional placement for regions without availability-zone support.</div>
+                    <div class="form-text">The standard deployment creates one NAT gateway and public IP in the selected zone. Use regional placement for regions without availability-zone support.</div>
                   </div>
                   ` : ''}
                   ${this.currentProvider === 'aws' || this.currentProvider === 'azure' ? `
@@ -2160,7 +2160,7 @@ class App {
                         <option value="2" ${savedAzurePrivateLinkNatGatewayZone === '2' ? 'selected' : ''}>Availability Zone 2</option>
                         <option value="3" ${savedAzurePrivateLinkNatGatewayZone === '3' ? 'selected' : ''}>Availability Zone 3</option>
                       </select>
-                      <div class="form-text">Regional placement is the upstream default and avoids making outbound traffic depend on one availability zone.</div>
+                      <div class="form-text">Regional placement avoids making outbound traffic depend on one availability zone.</div>
                     </div>
                     ` : ''}
                     <div id="nat-gateway-private-link-message" class="alert alert-warning mt-2 mb-0" style="display: none;">
@@ -2194,7 +2194,7 @@ class App {
                         <div id="existing-subnets-section" class="mt-3">
                           <div class="alert alert-info">
                             <i class="bi bi-info-circle me-2"></i>
-                            <strong>Requirements:</strong> The upstream Terraform requires at least 2 existing private subnets in different Availability Zones and an existing security group.
+                            <strong>Requirements:</strong> Provide at least 2 existing private subnets in different Availability Zones and an existing security group.
                           </div>
                           <div id="existing-subnets-container">
                             <div class="row mb-2 existing-subnet-row">
@@ -2258,7 +2258,7 @@ class App {
                         <div class="mb-3">
                           <div class="alert alert-info">
                             <i class="bi bi-info-circle me-2"></i>
-                            <strong>Upstream behavior:</strong> Terraform creates two delegated Databricks subnets,
+                            <strong>Deployment behavior:</strong> Terraform creates two delegated Databricks subnets,
                             their NSG, and a NAT gateway inside this existing VNet. Ensure the calculated CIDRs are unused.
                           </div>
                         </div>
@@ -2402,7 +2402,7 @@ class App {
                   <div class="form-text">${this.currentProvider === 'aws' ? 
                     'Enable AWS PrivateLink (requires Enterprise tier)' :
                     this.currentProvider === 'azure' ?
-                    'Use the classic backend and DBFS Private Link source. The workspace UI remains public.' :
+                    'Use classic backend and DBFS Private Link. The workspace UI remains public.' :
                     'Enable Private Service Connect (requires Premium tier)'}</div>
                   <div id="private-link-warning" class="alert alert-info mt-2" style="display: none;">
                     <i class="bi bi-info-circle me-2"></i>
@@ -2483,7 +2483,7 @@ class App {
       const createNewVpc = isCreateNewVpcActive();
       if (createNewVpc) return true;
       
-      // The AWS upstream examples cannot create subnets inside an existing VPC.
+      // The AWS configurations cannot create subnets inside an existing VPC.
       if (this.currentProvider === 'aws') {
         return false;
       }
@@ -3616,7 +3616,7 @@ class App {
       }
     };
     
-    // The upstream AWS examples require exactly one metastore path.
+    // The AWS deployments require exactly one metastore path.
     const metastoreModeCreate = document.getElementById('metastore_mode_create');
     const metastoreModeExisting = document.getElementById('metastore_mode_existing');
     const newMetastoreSection = document.getElementById('new-metastore-section');
@@ -4585,8 +4585,8 @@ export DATABRICKS_CLIENT_SECRET="${clientSecretDisplay}"`;
                   <span class="download-filename">${config.project_prefix || 'databricks'}-${config.provider}-terraform.zip</span>
                 </button>
                 <p class="text-muted mb-4">
-                  Complete Terraform project with the upstream source files, your generated
-                  configuration, documentation, and deployment instructions.
+                  Complete generated Terraform project with your configuration, documentation,
+                  and deployment instructions.
                 </p>
                 <div class="text-muted small">
                   <i class="bi bi-info-circle me-1"></i>
@@ -4606,11 +4606,11 @@ export DATABRICKS_CLIENT_SECRET="${clientSecretDisplay}"`;
                 <div class="row">
                   ${config.provider === 'gcp' ? `
                   <div class="col-md-6">
-                    <h6 class="fw-bold text-primary mb-3">Upstream Terraform</h6>
+                    <h6 class="fw-bold text-primary mb-3">Terraform Files</h6>
                     <ul class="list-unstyled">
                       <li class="mb-2"><i class="bi bi-diagram-3 text-success me-2"></i><strong>network.tf</strong> - VPC, subnet, router, and NAT</li>
                       <li class="mb-2"><i class="bi bi-server text-warning me-2"></i><strong>databricks.tf</strong> - Workspace and admin setup</li>
-                      <li class="mb-2"><i class="bi bi-file-earmark-text text-info me-2"></i><strong>variables.tf</strong> - Upstream input contract</li>
+                      <li class="mb-2"><i class="bi bi-file-earmark-text text-info me-2"></i><strong>variables.tf</strong> - Input variable definitions</li>
                       <li class="mb-2"><i class="bi bi-file-earmark-code text-primary me-2"></i><strong>providers.tf</strong> - Provider configuration</li>
                       <li class="mb-2"><i class="bi bi-file-earmark-code text-secondary me-2"></i><strong>outputs.tf</strong> and <strong>versions.tf</strong></li>
                     </ul>
@@ -4620,7 +4620,7 @@ export DATABRICKS_CLIENT_SECRET="${clientSecretDisplay}"`;
                     <ul class="list-unstyled">
                       <li class="mb-2"><i class="bi bi-file-earmark-text text-warning me-2"></i><strong>terraform.tfvars</strong> - Your configuration values</li>
                       <li class="mb-2"><i class="bi bi-file-earmark-text text-primary me-2"></i><strong>README.md</strong> - Authentication and deployment guide</li>
-                      <li class="mb-2"><i class="bi bi-shield-check text-success me-2"></i><strong>Source notices</strong> - Upstream license and notice</li>
+                      <li class="mb-2"><i class="bi bi-shield-check text-success me-2"></i><strong>License files</strong> - License and notice information</li>
                     </ul>
                   </div>
                   ` : `

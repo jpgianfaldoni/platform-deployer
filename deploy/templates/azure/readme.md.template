@@ -1,6 +1,6 @@
 # Databricks Deployment on Azure
 
-This ready-to-deploy Terraform project combines unchanged upstream Databricks source files with the `terraform.tfvars` generated from your selections.
+This ready-to-deploy Terraform project was generated from your selections.
 
 ## Configuration Summary
 
@@ -17,14 +17,6 @@ This ready-to-deploy Terraform project combines unchanged upstream Databricks so
 | Catalog | `{{azure_catalog_name}}` |
 {{/unless}}
 | NAT Gateway | {{#if enable_private_link}}{{azure_private_link_nat_gateway_summary}}{{else}}{{azure_nat_gateway_summary}}{{/if}} |
-
-## Terraform Source
-
-The `.tf` files are unchanged copies fetched from the upstream repository during the application build.
-
-- Tracked ref: `{{terraform_source_ref}}`
-- Resolved commit: `{{terraform_source_commit}}`
-- Source: {{terraform_source_url}}
 
 ## Prerequisites
 
@@ -49,12 +41,12 @@ az account set --subscription "{{azure_subscription_id}}"
 export TF_VAR_databricks_account_id="<your-databricks-account-id>"
 ```
 
-For CI/CD, the fetched Terraform also auto-detects service-principal credentials from `ARM_CLIENT_ID`, `ARM_CLIENT_SECRET`, and `ARM_TENANT_ID`. Do not commit credentials.
+For CI/CD, Terraform also auto-detects service-principal credentials from `ARM_CLIENT_ID`, `ARM_CLIENT_SECRET`, and `ARM_TENANT_ID`. Do not commit credentials.
 
 {{#if enable_private_link}}
 ## Private Link Topology
 
-This is the upstream Azure Private Link (classic) topology. It creates a dedicated VNet, {{#if enable_nat_gateway}}a NAT gateway, {{/if}}backend and DBFS private endpoints, private DNS zones, storage service endpoints with an endpoint policy, and an account-level NCC for serverless DBFS access. The workspace UI remains available over the public network; front-end Private Link is not configured. Metastore assignment is deliberately disabled.
+This Azure Private Link topology creates a dedicated VNet, {{#if enable_nat_gateway}}a NAT gateway, {{/if}}backend and DBFS private endpoints, private DNS zones, storage service endpoints with an endpoint policy, and an account-level NCC for serverless DBFS access. The workspace UI remains available over the public network; front-end Private Link is not configured. Metastore assignment is deliberately disabled.
 
 {{#unless enable_nat_gateway}}
 The deployment does not create a NAT gateway, so classic cluster nodes have no general internet egress by default. Ensure all required traffic is covered by the built-in Microsoft.Storage and Microsoft.EventHub service endpoints or routed through your own firewall/network virtual appliance (NVA). If clusters need customer-managed storage through the storage service endpoint, add its full Azure resource ID to `service_endpoint_policy_storage_accounts` before applying.
@@ -62,7 +54,7 @@ The deployment does not create a NAT gateway, so classic cluster nodes have no g
 {{else}}
 ## Unity Catalog
 
-The canonical upstream VNet-injection source creates or attaches a metastore and provisions the selected UC storage account, storage credential, external location, and catalog. The storage account enforces TLS 1.2, infrastructure encryption, and disabled public blob access. Optional cluster creation is disabled.
+This VNet-injection deployment creates or attaches a metastore and provisions the selected UC storage account, storage credential, external location, and catalog. The storage account enforces TLS 1.2, infrastructure encryption, and disabled public blob access. Optional cluster creation is disabled.
 {{/if}}
 
 ## Deploy

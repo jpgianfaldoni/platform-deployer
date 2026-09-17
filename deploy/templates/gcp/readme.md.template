@@ -1,6 +1,6 @@
 # Databricks GCP BYOVPC Standalone Deployment
 
-This project combines unmodified Terraform from the upstream repository with a generated `terraform.tfvars` file.
+This ready-to-deploy Terraform project was generated from your selections.
 
 ## Configuration
 
@@ -13,14 +13,6 @@ This project combines unmodified Terraform from the upstream repository with a g
 | Workspace admin | `{{databricks_admin_user}}` |
 | Subnet CIDR | `{{subnet_cidr}}` |
 | Network | New VPC, one regional subnet, Cloud Router, and Cloud NAT |
-
-## Terraform source
-
-- Repository ref: `{{terraform_source_ref}}`
-- Resolved commit: `{{terraform_source_commit}}`
-- Source: {{terraform_source_url}}
-
-The upstream `.tf` files are included without modification. This application generates only `terraform.tfvars` and this deployment guide.
 
 ## Prerequisites
 
@@ -66,9 +58,9 @@ terraform output -raw workspace_url
 
 ## Resources created
 
-The upstream source creates a VPC, a subnet with Private Google Access, Cloud Router, Cloud NAT, a Databricks MWS network, a workspace, and workspace admin membership. Databricks creates the workspace cloud-storage buckets.
+The deployment creates a VPC, a subnet with Private Google Access, Cloud Router, Cloud NAT, a Databricks MWS network, a workspace, and workspace admin membership. Databricks creates the workspace cloud-storage buckets.
 
-This source does not configure Private Service Connect or Unity Catalog.
+This deployment does not configure Private Service Connect or Unity Catalog.
 
 ## Destroy
 
@@ -76,7 +68,7 @@ This source does not configure Private Service Connect or Unity Catalog.
 terraform destroy
 ```
 
-If the VPC remains in use by Databricks-managed firewall rules, follow the teardown guidance in the pinned upstream source.
+If the VPC remains in use by Databricks-managed firewall rules, complete the Databricks workspace teardown before retrying.
 
 ---
 
