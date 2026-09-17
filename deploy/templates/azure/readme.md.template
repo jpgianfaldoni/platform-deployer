@@ -1,6 +1,6 @@
 # Databricks Deployment on Azure
 
-This ready-to-deploy Terraform project combines unchanged Databricks Technical Services source files with the `terraform.tfvars` generated from your selections.
+This ready-to-deploy Terraform project combines unchanged upstream Databricks source files with the `terraform.tfvars` generated from your selections.
 
 ## Configuration Summary
 
@@ -20,7 +20,7 @@ This ready-to-deploy Terraform project combines unchanged Databricks Technical S
 
 ## Terraform Source
 
-The `.tf` files are unchanged copies fetched from Technical Services Solutions during the application build.
+The `.tf` files are unchanged copies fetched from the upstream repository during the application build.
 
 - Tracked ref: `{{terraform_source_ref}}`
 - Resolved commit: `{{terraform_source_commit}}`

@@ -1,6 +1,6 @@
 # One Click Databricks Deployer - PWA
 
-A Progressive Web App (PWA) that assembles deployable Databricks Terraform projects for AWS, Azure, and Google Cloud Platform. The `.tf` files are fetched from the Databricks Technical Services Solutions repository during each build; the app generates only the matching `terraform.tfvars` and deployment guide.
+A Progressive Web App (PWA) that assembles deployable Databricks Terraform projects for AWS, Azure, and Google Cloud Platform. The `.tf` files are fetched from the configured upstream repository during each build; the app generates only the matching `terraform.tfvars` and deployment guide.
 
 ## 🎯 About the Project
 
@@ -114,7 +114,7 @@ AWS downloads contain the selected upstream Terraform root, the generated tfvars
 
 ```
 project-name-aws-terraform/
-├── *.tf                    # Unchanged Technical Services source files
+├── *.tf                    # Unchanged upstream source files
 ├── .terraform.lock.hcl     # Unchanged upstream provider lock
 ├── terraform.tfvars        # Values generated from the UI
 ├── UPSTREAM_LICENSE.md
@@ -122,7 +122,7 @@ project-name-aws-terraform/
 └── README.md               # Deployment and source instructions
 ```
 
-Azure and GCP downloads follow the same model: unchanged files from the selected Technical Services example plus a generated `terraform.tfvars` and README. The GCP flow uses only the `gcp-byovpc-standalone` source.
+Azure and GCP downloads follow the same model: unchanged files from the selected upstream example plus a generated `terraform.tfvars` and README. The GCP flow uses only the `gcp-byovpc-standalone` source.
 
 ## 🚀 Quick Start
 

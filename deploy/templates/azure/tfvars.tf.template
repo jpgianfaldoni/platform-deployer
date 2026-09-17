@@ -1,4 +1,4 @@
-# Generated for the Databricks Technical Services Azure Terraform example.
+# Generated variables for the Databricks upstream Azure Terraform example.
 # Keep the Databricks account ID outside this file:
 # export TF_VAR_databricks_account_id="<your-account-id>"
 

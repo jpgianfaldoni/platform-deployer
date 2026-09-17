@@ -190,7 +190,7 @@ class TemplateEngine {
     vars.generated_date = new Date().toLocaleString();
     vars.provider_upper = (config.provider || '').toUpperCase();
 
-    // AWS Technical Services Terraform input mappings. The upstream .tf files
+    // AWS upstream Terraform input mappings. The upstream .tf files
     // remain byte-for-byte unchanged; only these tfvars values are generated.
     if (config.provider === 'aws') {
       const formatStringList = values => `[${values.map(value => JSON.stringify(String(value))).join(', ')}]`;
@@ -245,7 +245,7 @@ class TemplateEngine {
       vars.terraform_source_url = config.terraform_source_url || '';
     }
 
-    // Azure Technical Services Terraform input mappings. As with AWS, the
+    // Azure upstream Terraform input mappings. As with AWS, the
     // upstream .tf files stay unchanged and this app only renders tfvars.
     if (config.provider === 'azure') {
       const formatStringList = values => `[${values.map(value => JSON.stringify(String(value))).join(', ')}]`;
@@ -326,7 +326,7 @@ class TemplateEngine {
       vars.terraform_source_url = config.terraform_source_url || '';
     }
 
-    // GCP Technical Services Terraform input mappings. The upstream source
+    // GCP upstream Terraform input mappings. The upstream source
     // creates the complete standalone BYOVPC topology; this app only supplies
     // its seven required variables.
     if (config.provider === 'gcp') {

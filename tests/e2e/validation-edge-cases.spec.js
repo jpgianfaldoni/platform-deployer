@@ -206,7 +206,7 @@ test.describe('Provider Switch Tests', () => {
     const resourceGroupField = page.locator('input[name="resource_group_name"]');
     await expect(resourceGroupField).toBeVisible();
     
-    // Both Technical Services Azure sources deploy Premium workspaces.
+    // Both upstream Azure sources deploy Premium workspaces.
     const pricingOptions = await page.locator('select[name="pricing_tier"] option').evaluateAll(options =>
       options.map(option => option.value).filter(Boolean)
     );

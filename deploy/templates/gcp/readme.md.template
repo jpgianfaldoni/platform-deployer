@@ -1,6 +1,6 @@
 # Databricks GCP BYOVPC Standalone Deployment
 
-This project combines unmodified Terraform from the Databricks Technical Services Solutions repository with a generated `terraform.tfvars` file.
+This project combines unmodified Terraform from the upstream repository with a generated `terraform.tfvars` file.
 
 ## Configuration
 

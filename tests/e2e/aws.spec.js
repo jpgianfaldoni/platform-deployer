@@ -330,7 +330,7 @@ test.describe('AWS Provider Tests', () => {
       const hasWarning = await ValidationHelpers.hasPrivateLinkWarning(page);
       expect(hasWarning).toBeFalsy();
       
-      // The Technical Services PrivateLink source uses the workspace subnets
+      // The upstream PrivateLink source uses the workspace subnets
       // and does not use the legacy generated service-subnet input.
       await page.waitForTimeout(2000);
       const subnets = await FormHelpers.getSubnetPreview(page);

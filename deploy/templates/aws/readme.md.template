@@ -1,6 +1,6 @@
 # Databricks Deployment on AWS
 
-This ready-to-deploy Terraform project combines the Databricks Technical Services source files with the `terraform.tfvars` generated from your selections.
+This ready-to-deploy Terraform project combines the upstream Databricks source files with the `terraform.tfvars` generated from your selections.
 
 ## Configuration Summary
 
@@ -19,7 +19,7 @@ This ready-to-deploy Terraform project combines the Databricks Technical Service
 
 ## Terraform Source
 
-The `.tf` files and provider lock file are unchanged copies of the Technical Services Solutions repository fetched during the app build.
+The `.tf` files and provider lock file are unchanged copies fetched from the upstream repository during the app build.
 
 - Tracked ref: `{{terraform_source_ref}}`
 - Resolved commit: `{{terraform_source_commit}}`

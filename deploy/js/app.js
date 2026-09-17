@@ -1875,7 +1875,7 @@ class App {
               </div>
               <p class="lead text-muted">
                 ${this.currentProvider === 'gcp'
-                  ? 'Configure the inputs required by the Technical Services GCP BYOVPC standalone Terraform source.'
+                  ? 'Configure the inputs required by the upstream GCP BYOVPC standalone Terraform source.'
                   : `Configure your Databricks deployment settings for ${this.currentProvider.toUpperCase()}. All network calculations are handled automatically based on your selections.`}
               </p>
             </div>
@@ -1924,7 +1924,7 @@ class App {
                         ${this.renderPricingTierOptions(this.currentProvider, this.currentConfig.pricing_tier)}
                       </select>
                       <div class="form-text">${this.currentProvider === 'azure'
-                        ? 'The selected Technical Services Azure sources deploy Premium workspaces.'
+                        ? 'The selected upstream Azure sources deploy Premium workspaces.'
                         : 'Databricks workspace pricing tier (affects available features)'}</div>
                     </div>
                     ` : ''}
@@ -1965,7 +1965,7 @@ class App {
                                      value="${this.currentConfig.metastore_id || ''}"
                                      placeholder="e.g., 12345678-1234-1234-1234-123456789abc">
                             </div>
-                            <div class="form-text mt-2">The selected Technical Services Terraform requires a metastore assignment.</div>
+                            <div class="form-text mt-2">The selected upstream Terraform requires a metastore assignment.</div>
                           </div>
                         </div>
                       </div>
