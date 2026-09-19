@@ -21,19 +21,10 @@
     
     <title>One-Click Deployer - Databricks Infrastructure Generator</title>
     
-    <!-- PWA Manifest -->
-    <link rel="manifest" href="./manifest.json?v=2.0.0">
-    <meta name="theme-color" content="#0a0e1a" id="theme-color-meta">
-    <!-- iOS Safari meta tags -->
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="One-Click Deployer">
+    <meta name="theme-color" content="#0B2026" id="theme-color-meta">
     
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="./icons/favicon.svg">
-    <link rel="icon" type="image/png" sizes="32x32" href="./icons/icon-128x128.png">
-    <link rel="apple-touch-icon" href="./icons/icon-192x192.png">
     
     <!-- Theme detection script - must run before body renders to prevent flash -->
     <script>
@@ -41,7 +32,7 @@
             const savedTheme = localStorage.getItem('theme');
             const theme = savedTheme || 'dark';
             document.documentElement.setAttribute('data-theme', theme);
-            document.getElementById('theme-color-meta')?.setAttribute('content', theme === 'dark' ? '#0a0e1a' : '#f8fafc');
+            document.getElementById('theme-color-meta')?.setAttribute('content', theme === 'dark' ? '#0B2026' : '#F9F7F4');
         })();
     </script>
     
@@ -84,12 +75,6 @@
                             <a class="nav-link" href="#/reset" data-navigate>
                                 <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Start Over
                             </a>
-                        </li>
-                        <!-- PWA Install Button -->
-                        <li class="nav-item" id="pwa-install-nav-item" style="display: none;">
-                            <button class="btn btn-sm" id="pwa-install-btn-nav" type="button" title="Install application on your device" aria-label="Install One-Click Deployer">
-                                <i class="bi bi-download" aria-hidden="true"></i>
-                            </button>
                         </li>
                         <!-- Theme Toggle - Desktop -->
                         <li class="nav-item d-none d-lg-block">
@@ -167,30 +152,6 @@
             </div>
             <h5 id="loading-message">Generating your Terraform project...</h5>
             <p>This may take a few seconds</p>
-        </div>
-    </div>
-
-    <!-- Install PWA Banner (top of page) -->
-    <div id="install-banner" class="bg-primary text-white py-2" style="display: none; z-index: 1050;" role="banner" aria-label="Install app banner">
-        <div class="container">
-            <div class="d-flex justify-content-between align-items-center">
-                <div class="d-flex align-items-center">
-                    <i class="bi bi-download me-2" aria-hidden="true"></i>
-                    <span>Install this app for a better experience and offline access</span>
-                </div>
-                <div>
-                    <button id="install-btn-banner" class="btn btn-light btn-sm me-2" aria-label="Install One-Click Deployer">Install Now</button>
-                    <button id="dismiss-install-banner" class="btn btn-outline-light btn-sm" aria-label="Dismiss install banner">Not Now</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Offline Indicator -->
-    <div id="offline-indicator" class="bg-warning text-dark py-2 text-center" style="display: none; z-index: 1051;">
-        <div class="container">
-            <i class="bi bi-wifi-off me-2"></i>
-            <strong>Offline Mode:</strong> You are using a cached version. Some features may be limited.
         </div>
     </div>
 
@@ -399,6 +360,11 @@
                         <!-- AWS Panel -->
                         <div class="tab-pane fade show active" id="aws-creds-panel" role="tabpanel" aria-labelledby="aws-creds-tab">
                             <form id="aws-credentials-form" class="credentials-form">
+                                <div class="alert alert-info mb-3">
+                                    Create a Databricks service principal, assign it the Account Admin role, and create an OAuth secret.
+                                    <a href="https://docs.databricks.com/aws/en/admin/users-groups/manage-service-principals" target="_blank" rel="noopener noreferrer">Service principal guide</a>
+                                    · <a href="https://docs.databricks.com/aws/en/dev-tools/auth/oauth-m2m" target="_blank" rel="noopener noreferrer">OAuth M2M guide</a>
+                                </div>
                                 <div class="mb-3">
                                     <label for="aws-account-id" class="form-label">Databricks Account ID</label>
                                     <input type="text" class="form-control credential-input" id="aws-account-id" placeholder="Enter your Databricks Account ID" autocomplete="off">
@@ -407,12 +373,12 @@
                                 <div class="mb-3">
                                     <label for="aws-client-id" class="form-label">Client ID (Service Principal)</label>
                                     <input type="text" class="form-control credential-input" id="aws-client-id" placeholder="Enter Client ID" autocomplete="off">
-                                    <div class="form-text">OAuth Client ID from your Service Principal</div>
+                                    <div class="form-text">OAuth client ID from the Databricks service principal; this is not an AWS credential.</div>
                                 </div>
                                 <div class="mb-3">
                                     <label for="aws-client-secret" class="form-label">Client Secret</label>
                                     <input type="text" class="form-control credential-input" id="aws-client-secret" placeholder="Enter Client Secret" autocomplete="off">
-                                    <div class="form-text">OAuth Client Secret from your Service Principal</div>
+                                    <div class="form-text">OAuth secret from the Databricks service principal; this is not an AWS secret access key.</div>
                                 </div>
                                 <div class="d-flex gap-2">
                                     <button type="button" class="btn btn-primary btn-save-credentials" id="aws-save-btn" onclick="window.app.saveProviderCredentials('aws')">
@@ -517,7 +483,7 @@
         }).catch(() => {});
     </script>
 
-    <!-- Theme Toggle & Service Worker Registration & PWA Install Logic -->
+    <!-- Theme toggle and legacy installable-release cleanup -->
     <script>
         // Theme Toggle Functionality
         const ThemeManager = {
@@ -540,7 +506,7 @@
                 // Update theme-color meta tag
                 const themeColorMeta = document.getElementById('theme-color-meta');
                 if (themeColorMeta) {
-                    themeColorMeta.setAttribute('content', theme === 'dark' ? '#0a0e1a' : '#f8fafc');
+                    themeColorMeta.setAttribute('content', theme === 'dark' ? '#0B2026' : '#F9F7F4');
                 }
 
                 // Remove transition class after animation
@@ -582,383 +548,26 @@
         // Initialize theme manager
         ThemeManager.init();
 
-        // Service Worker Registration
+        // Retire registrations and caches created by earlier installable releases.
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js?v=2.1.2')
-                    .then((registration) => {
-                        console.log('SW registered:', registration);
-                        
-                        // Check for updates
-                        registration.addEventListener('updatefound', () => {
-                            const newWorker = registration.installing;
-                            newWorker.addEventListener('statechange', () => {
-                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                    // New service worker available
-                                    console.log('New service worker available');
-                                }
-                            });
-                        });
-                    })
-                    .catch((error) => {
-                        console.log('SW registration failed:', error);
-                    });
+            window.addEventListener('load', async () => {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                await Promise.all(registrations.map(registration => registration.unregister()));
+
+                if ('caches' in window) {
+                    const cacheNames = await caches.keys();
+                    await Promise.all(
+                        cacheNames
+                            .filter(name => name.startsWith('databricks-deployer-'))
+                            .map(name => caches.delete(name))
+                    );
+                }
+
+                localStorage.removeItem('pwa-installed');
+                localStorage.removeItem('pwa-install-dismissed');
             });
         }
-
-        // PWA Install Prompt Management
-        let deferredPrompt = null;
-        let installBannerDismissed = false;
-
-        // Check if already installed - Enhanced detection
-        function isPWAInstalled() {
-            // Check for standalone display mode (most reliable)
-            if (window.matchMedia('(display-mode: standalone)').matches) {
-                console.log('PWA detected: standalone display mode');
-                return true;
-            }
-            
-            // Check for iOS standalone mode
-            if (window.navigator.standalone === true) {
-                console.log('PWA detected: iOS standalone mode');
-                return true;
-            }
-            
-            // Check for Android app referrer
-            if (document.referrer.includes('android-app://')) {
-                console.log('PWA detected: Android app referrer');
-                return true;
-            }
-            
-            // Check if launched from home screen (iOS)
-            if (window.matchMedia('(display-mode: fullscreen)').matches) {
-                console.log('PWA detected: fullscreen display mode');
-                return true;
-            }
-            
-            // Check localStorage flag (set after successful installation)
-            if (localStorage.getItem('pwa-installed') === 'true') {
-                console.log('PWA detected: localStorage flag');
-                return true;
-            }
-            
-            console.log('PWA not detected - running in browser');
-            return false;
-        }
-
-        // Update install button visibility
-        function updateInstallButtonVisibility() {
-            const installNavItem = document.getElementById('pwa-install-nav-item');
-            const installBtnNav = document.getElementById('pwa-install-btn-nav');
-            const installBanner = document.getElementById('install-banner');
-            
-            console.log('Updating install button visibility - isPWAInstalled:', isPWAInstalled(), 'deferredPrompt:', !!deferredPrompt);
-            
-            if (isPWAInstalled()) {
-                // Hide install button if already installed
-                if (installNavItem) {
-                    installNavItem.style.display = 'none';
-                }
-                if (installBanner) {
-                    installBanner.style.display = 'none';
-                }
-            } else if (deferredPrompt) {
-                // Show install button if prompt is available
-                if (installNavItem) {
-                    installNavItem.style.display = 'block';
-                }
-            } else {
-                // Check if browser supports installation but prompt not yet available
-                // Show button for manual instructions
-                const isInstallable = 'BeforeInstallPromptEvent' in window || 
-                                     /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-                                     /Android/.test(navigator.userAgent);
-                
-                if (isInstallable && installNavItem) {
-                    installNavItem.style.display = 'block';
-                } else if (installNavItem) {
-                    installNavItem.style.display = 'none';
-                }
-            }
-        }
-
-        // Show install banner
-        function showInstallBanner() {
-            if (isPWAInstalled()) {
-                return; // Already installed
-            }
-
-            // Check if user dismissed before
-            const dismissed = localStorage.getItem('pwa-install-dismissed');
-            if (dismissed) {
-                const dismissedTime = parseInt(dismissed, 10);
-                const daysSinceDismissed = (Date.now() - dismissedTime) / (1000 * 60 * 60 * 24);
-                
-                // Show again after 7 days
-                if (daysSinceDismissed < 7) {
-                    return;
-                }
-            }
-
-            const banner = document.getElementById('install-banner');
-            if (banner && deferredPrompt) {
-                banner.style.display = 'block';
-                
-                // Auto-hide after 10 seconds if not interacted
-                setTimeout(() => {
-                    if (banner.style.display === 'block') {
-                        banner.style.animation = 'slideUp 0.3s ease-out';
-                        setTimeout(() => {
-                            banner.style.display = 'none';
-                        }, 300);
-                    }
-                }, 10000);
-            }
-        }
-
-        // Handle beforeinstallprompt event
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredPrompt = e;
-            
-            // Update install button visibility
-            updateInstallButtonVisibility();
-            
-            // Show banner after a short delay (better UX)
-            setTimeout(() => {
-                if (!isPWAInstalled()) {
-                    showInstallBanner();
-                }
-            }, 2000);
-        });
-
-        // Install function - reusable and globally available
-        async function installPWA() {
-            if (deferredPrompt) {
-                try {
-                    // Show the install prompt
-                    deferredPrompt.prompt();
-                    
-                    // Wait for user response
-                    const { outcome } = await deferredPrompt.userChoice;
-                    console.log(`User response: ${outcome}`);
-                    
-                    if (outcome === 'accepted') {
-                        // Track successful installation
-                        console.log('PWA installed successfully');
-                        localStorage.setItem('pwa-installed', 'true');
-                        
-                        // Show success message
-                        if (typeof Utils !== 'undefined') {
-                            Utils.showFlashMessage('App installed successfully!', 'success');
-                        }
-                        
-                        // Update UI
-                        updateInstallButtonVisibility();
-                    }
-                    
-                    // Clear the deferred prompt
-                    deferredPrompt = null;
-                    
-                    // Hide banner
-                    const banner = document.getElementById('install-banner');
-                    if (banner) {
-                        banner.style.display = 'none';
-                    }
-                } catch (error) {
-                    console.error('Error during installation:', error);
-                    if (typeof Utils !== 'undefined') {
-                        Utils.showFlashMessage('Installation failed. Please try again.', 'error');
-                    }
-                }
-            } else {
-                // Fallback: manual installation instructions
-                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-                const isAndroid = /Android/.test(navigator.userAgent);
-                
-                let instructions = '';
-                if (isIOS) {
-                    instructions = 'To install this app on iOS:\n\n1. Tap the Share button\n2. Select "Add to Home Screen"\n3. Tap "Add"';
-                } else if (isAndroid) {
-                    instructions = 'To install this app on Android:\n\n1. Tap the menu (⋮)\n2. Select "Add to Home Screen" or "Install App"\n3. Tap "Install"';
-                } else {
-                    instructions = 'To install this app:\n\nChrome Desktop: Click the install icon in the address bar\nChrome Mobile: Menu → "Add to Home Screen"';
-                }
-                
-                alert(instructions);
-            }
-        }
-
-        // Install button handlers - Banner
-        document.getElementById('install-btn-banner')?.addEventListener('click', async () => {
-            await installPWA();
-        });
-
-        // Install button handler - Navbar
-        document.getElementById('pwa-install-btn-nav')?.addEventListener('click', async () => {
-            await installPWA();
-        });
-
-        // Dismiss banner
-        document.getElementById('dismiss-install-banner')?.addEventListener('click', () => {
-            document.getElementById('install-banner').style.display = 'none';
-            localStorage.setItem('pwa-install-dismissed', Date.now().toString());
-        });
-
-        // Offline/Online detection
-        function updateOnlineStatus() {
-            const indicator = document.getElementById('offline-indicator');
-            if (indicator) {
-                if (navigator.onLine) {
-                    indicator.style.display = 'none';
-                } else {
-                    indicator.style.display = 'block';
-                }
-            }
-        }
-
-        window.addEventListener('online', () => {
-            updateOnlineStatus();
-            Utils.showFlashMessage('Connection restored!', 'success');
-        });
-
-        window.addEventListener('offline', () => {
-            updateOnlineStatus();
-            Utils.showFlashMessage('Offline mode activated. The app continues to work\!', 'info');
-        });
-
-        // Initial status check
-        updateOnlineStatus();
-
-        // Check if app was launched from installed PWA
-        console.log('=== PWA Status Check ===');
-        console.log('Display mode:', window.matchMedia('(display-mode: standalone)').matches ? 'standalone' : 'browser');
-        console.log('User agent:', navigator.userAgent);
-        console.log('Is installed:', isPWAInstalled());
-        
-        if (isPWAInstalled()) {
-            console.log('✓ Running as installed PWA');
-            // Hide install banner if already installed
-            const banner = document.getElementById('install-banner');
-            if (banner) {
-                banner.style.display = 'none';
-            }
-            
-            // Hide install button
-            updateInstallButtonVisibility();
-        } else {
-            console.log('✗ Running in browser - showing install options');
-            // Initial check for install button visibility
-            updateInstallButtonVisibility();
-            
-            // Show install button immediately for mobile devices
-            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-            if (isMobile) {
-                const installNavItem = document.getElementById('pwa-install-nav-item');
-                if (installNavItem) {
-                    installNavItem.style.display = 'block';
-                    console.log('Mobile device detected - showing install button');
-                }
-            }
-        }
-
-        // Make deferredPrompt and installPWA globally available
-        window.deferredPrompt = null;
-        window.installPWA = installPWA;
-        Object.defineProperty(window, 'deferredPrompt', {
-            get: () => deferredPrompt,
-            set: (value) => {
-                deferredPrompt = value;
-                updateInstallButtonVisibility();
-            }
-        });
-
-        // Periodic check for install prompt (every 30 seconds)
-        setInterval(() => {
-            if (window.deferredPrompt && !isPWAInstalled()) {
-                const dismissed = localStorage.getItem('pwa-install-dismissed');
-                if (!dismissed) {
-                    const banner = document.getElementById('install-banner');
-                    if (banner && banner.style.display === 'none') {
-                        // Only show if user has been on page for a while
-                        banner.style.display = 'block';
-                    }
-                }
-                // Update button visibility
-                updateInstallButtonVisibility();
-            }
-        }, 30000);
-
-        // Listen for app installed event (fired after successful installation)
-        window.addEventListener('appinstalled', () => {
-            console.log('PWA was installed');
-            localStorage.setItem('pwa-installed', 'true');
-            deferredPrompt = null;
-            updateInstallButtonVisibility();
-            
-            if (typeof Utils !== 'undefined') {
-                Utils.showFlashMessage('App installed successfully! Thank you for installing.', 'success');
-            }
-        });
     </script>
 
-    <style>
-        @keyframes slideUp {
-            from {
-                transform: translateY(0);
-                opacity: 1;
-            }
-            to {
-                transform: translateY(-100%);
-                opacity: 0;
-            }
-        }
-
-        #install-banner {
-            animation: slideDown 0.3s ease-out;
-        }
-
-        @keyframes slideDown {
-            from {
-                transform: translateY(-100%);
-                opacity: 0;
-            }
-            to {
-                transform: translateY(0);
-                opacity: 1;
-            }
-        }
-
-        /* Ensure banners don't push content down unexpectedly */
-        #install-banner[style*="block"] ~ nav {
-            position: sticky;
-            top: 0;
-        }
-
-        #offline-indicator[style*="block"] ~ nav {
-            position: sticky;
-            top: 0;
-        }
-
-        @media (max-width: 768px) {
-            #install-banner .d-flex {
-                flex-direction: column;
-                gap: 0.5rem;
-            }
-            
-            #install-banner .d-flex > div:first-child {
-                text-align: center;
-            }
-            
-            #install-banner .d-flex > div:last-child {
-                width: 100%;
-            }
-            
-            #install-banner .btn {
-                width: 100%;
-                margin-bottom: 0.25rem;
-            }
-        }
-    </style>
 </body>
 </html>

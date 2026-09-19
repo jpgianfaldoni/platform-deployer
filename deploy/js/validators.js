@@ -187,9 +187,9 @@ class Validators {
     
     if (enable_private_link) {
       if (provider === 'aws' && pricing_tier !== 'ENTERPRISE') {
-        errors.enable_private_link = 'AWS PrivateLink requires Enterprise pricing tier. Please upgrade to Enterprise tier.';
+        errors.enable_private_link = 'Back-end PrivateLink requires Enterprise pricing tier. Please upgrade to Enterprise tier.';
       } else if ((provider === 'azure' || provider === 'gcp') && pricing_tier !== 'PREMIUM') {
-        const serviceName = provider === 'azure' ? 'Private Link' : 'Private Service Connect';
+        const serviceName = provider === 'azure' ? 'Back-end Private Link' : 'Private Service Connect';
         errors.enable_private_link = `${serviceName} requires Premium pricing tier`;
       }
     }
@@ -203,7 +203,7 @@ class Validators {
     }
 
     if (provider === 'aws' && config.create_new_vpc && natGatewayMode === 'none' && !enable_private_link) {
-      errors.enable_private_link = 'AWS PrivateLink is required to communicate with the control plane when no NAT gateway is selected.';
+      errors.enable_private_link = 'Back-end PrivateLink is required to communicate with the control plane when no NAT gateway is selected.';
     }
     
     return errors;
@@ -520,7 +520,7 @@ class Validators {
       if (!subscriptionCheck.valid) errors.azure_subscription_id = subscriptionCheck.message;
 
       if (config.enable_private_link) {
-        if (!config.create_new_vpc) errors.create_new_vpc = 'The Azure Private Link source requires a new dedicated VNet';
+        if (!config.create_new_vpc) errors.create_new_vpc = 'Back-end Private Link requires a new dedicated VNet';
         if (!['new', 'existing'].includes(config.azure_resource_group_mode)) {
           errors.azure_resource_group_mode = 'Choose whether to create or reuse the data plane resource group';
         }

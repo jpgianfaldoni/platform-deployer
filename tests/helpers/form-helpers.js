@@ -327,14 +327,9 @@ class FormHelpers {
    * Confirm and generate project in summary page
    */
   static async confirmAndGenerate(page) {
-    const confirmCheckbox = page.locator('#confirm');
-    await confirmCheckbox.check();
-    
     const generateBtn = page.locator('#generate-btn');
     await generateBtn.click();
-    
-    // Wait for download to start (or error message)
-    await page.waitForTimeout(2000);
+    await page.waitForURL(/.*#\/download/, { timeout: 15000 });
   }
 
   /**

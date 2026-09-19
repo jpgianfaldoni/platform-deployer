@@ -11,7 +11,7 @@ const { test, expect } = require('../helpers/coverage-fixture');
 test.describe('Code Coverage Collection', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
   });
 
   test('should load app and trigger core JS', async ({ page }) => {

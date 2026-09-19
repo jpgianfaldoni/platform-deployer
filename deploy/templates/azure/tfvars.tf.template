@@ -3,7 +3,7 @@
 # export TF_VAR_databricks_account_id="<your-account-id>"
 
 {{#if enable_private_link}}
-# Azure Private Link (classic)
+# Azure Back-end Private Link (classic)
 resource_prefix = "{{project_prefix}}"
 az_subscription = "{{azure_subscription_id}}"
 location        = "{{#if azure_create_data_plane_resource_group}}{{region}}{{/if}}"
@@ -22,7 +22,7 @@ nat_gateway_zones = {{{azure_private_link_nat_gateway_zones}}}
 # storage through the Microsoft.Storage service endpoint policy.
 service_endpoint_policy_storage_accounts = []
 
-# Do not assign a Unity Catalog metastore in the Private Link example.
+# Do not assign a Unity Catalog metastore in the Back-end Private Link example.
 metastore_id = ""
 tags = {{{common_tags}}}
 {{else}}

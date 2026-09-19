@@ -13,7 +13,7 @@ metastore_id   = "{{metastore_id}}"
 metastore_name = "{{metastore_name}}"
 
 {{#if enable_private_link}}
-# Classic PrivateLink always creates an Enterprise workspace.
+# Classic Back-end PrivateLink always creates an Enterprise workspace.
 network_configuration     = "{{aws_network_configuration}}"
 nat_gateway_mode          = "{{aws_nat_gateway_mode}}"
 {{#if is_fully_private}}

@@ -34,9 +34,6 @@ jobs:
       - name: Run basic tests
         run: npm test -- tests/e2e/basic.spec.js
 
-      - name: Run PWA tests
-        run: npm test -- tests/e2e/pwa.spec.js
-
       - name: Run CIDR calculation tests
         run: npm test -- tests/e2e/cidr-calculations.spec.js
 

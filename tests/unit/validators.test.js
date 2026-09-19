@@ -761,7 +761,7 @@ describe('Validators.validateConfiguration', () => {
     expect(result.errors.existing_vpc_id).toBeDefined();
   });
 
-  test('GCP existing VPC fields are validated', () => {
+  test('GCP ignores legacy existing VPC fields for the new-VPC-only topology', () => {
     const config = {
       provider: 'gcp',
       project_prefix: 'myproject',
@@ -775,8 +775,7 @@ describe('Validators.validateConfiguration', () => {
       existing_service_range_name: 'svc-range',
     };
     const result = Validators.validateConfiguration(config);
-    expect(result.valid).toBe(false);
-    expect(result.errors.existing_vpc_id).toBeDefined();
+    expect(result.errors.existing_vpc_id).toBeUndefined();
   });
 
   test('AWS PrivateLink without ENTERPRISE returns feature error', () => {

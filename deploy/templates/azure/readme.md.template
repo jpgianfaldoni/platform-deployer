@@ -11,7 +11,7 @@ This ready-to-deploy Terraform project was generated from your selections.
 | Project Prefix | `{{project_prefix}}` |
 | Pricing Tier | Premium |
 | VNet | {{#if enable_private_link}}Create dedicated VNet{{else}}{{#if create_new_vpc}}Create new{{else}}Use `{{existing_vpc_id}}`{{/if}}{{/if}} |
-| Private Link | {{private_link_status}} |
+| Back-end Private Link | {{private_link_status}} |
 {{#unless enable_private_link}}
 | Metastore | {{#if metastore_id}}Attach `{{metastore_id}}`{{else}}Create `{{metastore_name}}`{{/if}} |
 | Catalog | `{{azure_catalog_name}}` |
@@ -21,7 +21,7 @@ This ready-to-deploy Terraform project was generated from your selections.
 ## Prerequisites
 
 - Terraform and Azure CLI installed
-- Contributor permission at Azure subscription scope
+- Contributor permission at Azure subscription scope, plus permission to create role assignments (for example, Owner or Role Based Access Control Administrator)
 - Databricks account admin access
 - Your Databricks account ID
 {{#unless enable_private_link}}
@@ -33,7 +33,7 @@ This ready-to-deploy Terraform project was generated from your selections.
 
 ## Authenticate
 
-Authenticate to Azure, select the subscription, and provide the Databricks account ID without storing credentials in `terraform.tfvars`:
+Authenticate to Azure, select the subscription, and provide the Databricks account ID without storing credentials in `terraform.tfvars`. See the [Azure CLI sign-in documentation](https://learn.microsoft.com/en-us/cli/azure/authenticate-azure-cli-interactively).
 
 ```bash
 az login
@@ -44,9 +44,9 @@ export TF_VAR_databricks_account_id="<your-databricks-account-id>"
 For CI/CD, Terraform also auto-detects service-principal credentials from `ARM_CLIENT_ID`, `ARM_CLIENT_SECRET`, and `ARM_TENANT_ID`. Do not commit credentials.
 
 {{#if enable_private_link}}
-## Private Link Topology
+## Back-end Private Link Topology
 
-This Azure Private Link topology creates a dedicated VNet, {{#if enable_nat_gateway}}a NAT gateway, {{/if}}backend and DBFS private endpoints, private DNS zones, storage service endpoints with an endpoint policy, and an account-level NCC for serverless DBFS access. The workspace UI remains available over the public network; front-end Private Link is not configured. Metastore assignment is deliberately disabled.
+This Azure Back-end Private Link topology creates a dedicated VNet, {{#if enable_nat_gateway}}a NAT gateway, {{/if}}Back-end and DBFS private endpoints, private DNS zones, storage service endpoints with an endpoint policy, and an account-level NCC for serverless DBFS access. The workspace UI remains available over the public network; front-end Private Link is not configured. Metastore assignment is deliberately disabled.
 
 {{#unless enable_nat_gateway}}
 The deployment does not create a NAT gateway, so classic cluster nodes have no general internet egress by default. Ensure all required traffic is covered by the built-in Microsoft.Storage and Microsoft.EventHub service endpoints or routed through your own firewall/network virtual appliance (NVA). If clusters need customer-managed storage through the storage service endpoint, add its full Azure resource ID to `service_endpoint_policy_storage_accounts` before applying.

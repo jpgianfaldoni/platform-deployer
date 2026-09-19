@@ -9,7 +9,7 @@ const FormHelpers = require('../helpers/form-helpers');
 test.describe('CIDR Calculations', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await page.evaluate(() => {
       localStorage.clear();
     });

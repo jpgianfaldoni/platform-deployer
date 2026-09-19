@@ -5,8 +5,9 @@ const FormHelpers = require('../helpers/form-helpers');
 const ValidationHelpers = require('../helpers/validation-helpers');
 
 async function downloadTerraformProject(page) {
-  const downloadPromise = page.waitForEvent('download', { timeout: 15000 });
   await FormHelpers.confirmAndGenerate(page);
+  const downloadPromise = page.waitForEvent('download', { timeout: 15000 });
+  await page.locator('#download-project-btn').click();
   const download = await downloadPromise;
   const downloadPath = await download.path();
   const archive = await JSZip.loadAsync(await fs.promises.readFile(downloadPath));

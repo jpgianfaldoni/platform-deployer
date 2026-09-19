@@ -19,7 +19,8 @@ This ready-to-deploy Terraform project was generated from your selections.
 - Terraform 1.3 or newer
 - Google Cloud CLI (`gcloud`)
 - The Compute Engine API enabled in `{{project_id}}`
-- `{{google_service_account_email}}` with the permissions required to create the GCP network and Databricks workspace
+- The caller granted `roles/iam.serviceAccountTokenCreator` on `{{google_service_account_email}}`
+- `{{google_service_account_email}}` with project permissions required to create the VPC, subnet, router, NAT, and Databricks workspace
 - The same service account added to the Databricks account and assigned the Account Admin role
 - `{{databricks_admin_user}}` already present as a Databricks account user
 
@@ -31,7 +32,7 @@ gcloud services enable compute.googleapis.com --project {{project_id}}
 
 ## Authenticate
 
-Configure the project and impersonate the service account used by both Terraform providers:
+Configure the project and impersonate the service account used by both Terraform providers. See [service account impersonation](https://cloud.google.com/docs/authentication/use-service-account-impersonation).
 
 ```bash
 gcloud config set project {{project_id}}
