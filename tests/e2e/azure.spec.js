@@ -111,16 +111,12 @@ test.describe('Azure Provider Tests', () => {
     await expect(page.getByText('Create New', { exact: true })).toBeVisible();
   });
 
-  test('shows the supported Azure tier and NAT gateway placements', async ({ page }) => {
-    const pricingValues = await page.locator('[name="pricing_tier"] option').evaluateAll(options =>
-      options.map(option => option.value).filter(Boolean)
-    );
+  test('hides the fixed Azure tier and shows NAT gateway placements', async ({ page }) => {
     const natGatewayZoneValues = await page.locator('#azure_nat_gateway_zone option').evaluateAll(options =>
       options.map(option => option.value)
     );
 
-    expect(pricingValues).toEqual(['PREMIUM']);
-    await expect(page.locator('[name="pricing_tier"]')).toHaveValue('PREMIUM');
+    await expect(page.locator('[name="pricing_tier"]')).toHaveCount(0);
     await expect(page.locator('#availability-zones-select')).toHaveCount(0);
     await expect(page.locator('#azure-nat-gateway-zone-section')).toBeVisible();
     await expect(page.locator('#nat-gateway-section')).not.toBeVisible();

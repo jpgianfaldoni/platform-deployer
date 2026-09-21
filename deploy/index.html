@@ -457,6 +457,19 @@
         </div>
     </div>
 
+    <!-- Contextual configuration help -->
+    <aside class="offcanvas offcanvas-end context-help-drawer" tabindex="-1" id="contextHelpDrawer"
+           aria-labelledby="contextHelpTitle">
+        <div class="offcanvas-header">
+            <div>
+                <div class="context-help-eyebrow" id="contextHelpProvider">Configuration guidance</div>
+                <h2 class="offcanvas-title" id="contextHelpTitle">Configuration help</h2>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close help"></button>
+        </div>
+        <div class="offcanvas-body" id="contextHelpBody"></div>
+    </aside>
+
     <!-- Bootstrap 5 JS -->
     <script src="./libs/bootstrap/js/bootstrap.bundle.min.js?v=1.0.0"></script>
     <!-- Choices.js for modern select component -->
@@ -473,6 +486,7 @@
     <script src="./js/template-loader.js?v=1.1.0"></script>
     <script src="./js/template-engine.js?v=2.1.0"></script>
     <script src="./js/terraform-generator.js?v=1.1.0"></script>
+    <script src="./js/help-content.js?v=1.0.0"></script>
     <script src="./js/app.js?v=2.2.0"></script>
 
     <!-- Deploy version display (reads version.json generated at deploy time) -->

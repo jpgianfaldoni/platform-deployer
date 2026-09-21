@@ -265,6 +265,116 @@ class App {
   }
 
   /**
+   * Render a compact, accessible trigger for provider-specific guidance.
+   */
+  renderHelpButton(topicId, label) {
+    return `
+      <button type="button" class="context-help-trigger" data-help-topic="${topicId}"
+              aria-label="Learn more about ${label}" aria-controls="contextHelpDrawer"
+              title="Learn more about ${label}">
+        <i class="bi bi-info-circle" aria-hidden="true"></i>
+      </button>
+    `;
+  }
+
+  /**
+   * Handle help triggers rendered by SPA routes and populate the shared drawer.
+   */
+  setupContextualHelp() {
+    const drawer = document.getElementById('contextHelpDrawer');
+    if (!drawer || typeof HelpContent === 'undefined') return;
+
+    document.addEventListener('click', event => {
+      const trigger = event.target.closest('[data-help-topic]');
+      if (!trigger) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      this.openContextualHelp(trigger.dataset.helpTopic, trigger);
+    });
+
+    document.addEventListener('keydown', event => {
+      if (event.key !== 'Escape' || (!drawer.classList.contains('show') && !drawer.classList.contains('showing'))) return;
+      const offcanvas = bootstrap.Offcanvas.getOrCreateInstance(drawer);
+      if (drawer.classList.contains('showing') && !drawer.classList.contains('show')) {
+        drawer.addEventListener('shown.bs.offcanvas', () => offcanvas.hide(), { once: true });
+      } else {
+        offcanvas.hide();
+      }
+    }, true);
+
+    drawer.addEventListener('hidden.bs.offcanvas', () => {
+      if (this.contextHelpTrigger?.isConnected) {
+        this.contextHelpTrigger.focus();
+      }
+    });
+  }
+
+  openContextualHelp(topicId, trigger) {
+    const topic = HelpContent.getTopic(topicId, this.currentProvider);
+    const drawer = document.getElementById('contextHelpDrawer');
+    const title = document.getElementById('contextHelpTitle');
+    const provider = document.getElementById('contextHelpProvider');
+    const body = document.getElementById('contextHelpBody');
+    if (!topic || !drawer || !title || !provider || !body) return;
+
+    const providerNames = { aws: 'AWS guidance', azure: 'Azure guidance', gcp: 'GCP guidance' };
+    title.textContent = topic.title;
+    provider.textContent = providerNames[this.currentProvider] || 'Configuration guidance';
+    body.replaceChildren();
+
+    const overview = document.createElement('p');
+    overview.className = 'context-help-overview';
+    overview.textContent = topic.overview;
+    body.appendChild(overview);
+
+    const appendListSection = (heading, items) => {
+      if (!items?.length) return;
+      const section = document.createElement('section');
+      section.className = 'context-help-section';
+      const sectionTitle = document.createElement('h3');
+      sectionTitle.textContent = heading;
+      const list = document.createElement('ul');
+      items.forEach(item => {
+        const listItem = document.createElement('li');
+        listItem.textContent = item;
+        list.appendChild(listItem);
+      });
+      section.append(sectionTitle, list);
+      body.appendChild(section);
+    };
+
+    appendListSection('When to use each option', topic.whenToUse);
+    appendListSection('Requirements and considerations', topic.considerations);
+
+    if (topic.links?.length) {
+      const section = document.createElement('section');
+      section.className = 'context-help-section context-help-links';
+      const sectionTitle = document.createElement('h3');
+      sectionTitle.textContent = 'Official documentation';
+      section.appendChild(sectionTitle);
+      topic.links.forEach(link => {
+        const anchor = document.createElement('a');
+        anchor.href = link.url;
+        anchor.target = '_blank';
+        anchor.rel = 'noopener noreferrer';
+        anchor.className = 'context-help-link';
+        const label = document.createElement('span');
+        label.textContent = link.label;
+        const icon = document.createElement('i');
+        icon.className = 'bi bi-box-arrow-up-right';
+        icon.setAttribute('aria-hidden', 'true');
+        anchor.append(label, icon);
+        section.appendChild(anchor);
+      });
+      body.appendChild(section);
+    }
+
+    this.contextHelpTrigger = trigger;
+    bootstrap.Offcanvas.getOrCreateInstance(drawer).show(trigger);
+  }
+
+  /**
    * Get availability zone limits for a provider
    */
   getAvailabilityZoneLimits(provider) {
@@ -365,6 +475,7 @@ class App {
   init() {
     // Setup navigation
     this.setupNavigation();
+    this.setupContextualHelp();
     
     // Handle hash routing
     window.addEventListener('hashchange', () => this.handleRoute());
@@ -1418,18 +1529,19 @@ class App {
                       </select>
                       <div class="form-text">Cloud provider region for resource deployment</div>
                     </div>
-                    ${this.currentProvider !== 'gcp' ? `
+                    ${this.currentProvider === 'aws' ? `
                     <div class="col-md-6">
-                      <label class="form-label fw-semibold">
-                        Databricks Pricing Tier
-                        <span class="text-danger">*</span>
-                      </label>
+                      <div class="field-label-with-help">
+                        <label class="form-label fw-semibold">
+                          Databricks Pricing Tier
+                          <span class="text-danger">*</span>
+                        </label>
+                        ${this.renderHelpButton('pricing-tier', 'Databricks pricing tier')}
+                      </div>
                       <select class="form-select" name="pricing_tier" required>
                         ${this.renderPricingTierOptions(this.currentProvider, this.currentConfig.pricing_tier)}
                       </select>
-                      <div class="form-text">${this.currentProvider === 'azure'
-                        ? 'This Azure deployment uses a Premium workspace.'
-                        : 'Databricks workspace pricing tier (affects available features)'}</div>
+                      <div class="form-text">Databricks workspace pricing tier (affects available features)</div>
                     </div>
                     ` : ''}
                     ${this.currentProvider === 'azure' ? `
@@ -1444,7 +1556,10 @@ class App {
                       <div class="col-12" id="metastore-configuration" ${this.currentProvider === 'azure' && this.currentConfig.enable_private_link ? 'style="display: none;"' : ''}>
                         <div class="row g-3 align-items-start">
                           <div class="col-md-6">
-                            <label class="form-label fw-semibold">Unity Catalog Metastore <span class="text-danger">*</span></label>
+                            <div class="field-label-with-help">
+                              <label class="form-label fw-semibold">Unity Catalog Metastore <span class="text-danger">*</span></label>
+                              ${this.renderHelpButton('metastore', 'Unity Catalog metastore')}
+                            </div>
                             <div class="form-check">
                               <input class="form-check-input" type="radio" name="metastore_mode" id="metastore_mode_create"
                                      value="create" ${this.currentConfig.metastore_mode !== 'existing' ? 'checked' : ''}>
@@ -1560,7 +1675,10 @@ class App {
                         <div class="form-text">Google Cloud Project ID for resource deployment</div>
                       </div>
                       <div class="col-md-6">
-                        <label class="form-label fw-semibold">Google Service Account Email <span class="text-danger">*</span></label>
+                        <div class="field-label-with-help">
+                          <label class="form-label fw-semibold">Google Service Account Email <span class="text-danger">*</span></label>
+                          ${this.renderHelpButton('gcp-service-account', 'Google service account')}
+                        </div>
                         <input type="email" class="form-control" name="google_service_account_email"
                                value="${this.currentConfig.google_service_account_email || ''}"
                                placeholder="workspace-creator@my-project.iam.gserviceaccount.com" required>
@@ -1599,9 +1717,12 @@ class App {
                     a Cloud Router, and Cloud NAT for outbound connectivity.
                   </div>
                   <div class="mb-0">
-                    <label class="form-label fw-semibold" for="subnet_cidr">
-                      Databricks Subnet CIDR <span class="text-danger">*</span>
-                    </label>
+                    <div class="field-label-with-help">
+                      <label class="form-label fw-semibold" for="subnet_cidr">
+                        Databricks Subnet CIDR <span class="text-danger">*</span>
+                      </label>
+                      ${this.renderHelpButton('subnet-sizing', 'Databricks subnet CIDR')}
+                    </div>
                     <input type="text" class="form-control" id="subnet_cidr" name="subnet_cidr"
                            value="${this.currentConfig.subnet_cidr || '10.10.0.0/20'}"
                            placeholder="e.g., 10.10.0.0/20" required>
@@ -1614,6 +1735,7 @@ class App {
                       <label class="form-check-label fw-semibold" for="create_new_vpc">
                         ${this.currentProvider === 'azure' ? 'Create New VNet' : 'Create New VPC'}
                       </label>
+                      ${this.renderHelpButton('network-mode', this.currentProvider === 'azure' ? 'new or existing VNet' : 'new or existing VPC')}
                     </div>
                     <div class="form-text">${this.currentProvider === 'azure' ? 
                       'The standard deployment can create a VNet or add new Databricks subnets to an existing VNet' :
@@ -1629,7 +1751,10 @@ class App {
                   </div>
                   <div class="mb-3" id="azure-nat-gateway-zone-section"
                        ${this.currentConfig.enable_private_link ? 'style="display: none;"' : ''}>
-                    <label class="form-label fw-semibold" for="azure_nat_gateway_zone">NAT Gateway Placement</label>
+                    <div class="field-label-with-help">
+                      <label class="form-label fw-semibold" for="azure_nat_gateway_zone">NAT Gateway Placement</label>
+                      ${this.renderHelpButton('nat-placement', 'NAT gateway placement')}
+                    </div>
                     <select class="form-select" id="azure_nat_gateway_zone" name="azure_nat_gateway_zone">
                       <option value="1" ${savedAzureNatGatewayZone === '1' ? 'selected' : ''}>Availability Zone 1 (default)</option>
                       <option value="2" ${savedAzureNatGatewayZone === '2' ? 'selected' : ''}>Availability Zone 2</option>
@@ -1642,7 +1767,10 @@ class App {
                   ${this.currentProvider === 'aws' || this.currentProvider === 'azure' ? `
                   <div class="mb-3" id="nat-gateway-section"
                        ${this.currentProvider === 'azure' && !this.currentConfig.enable_private_link ? 'style="display: none;"' : ''}>
-                    <label class="form-label fw-semibold" for="nat_gateway_mode">NAT Gateway</label>
+                    <div class="field-label-with-help">
+                      <label class="form-label fw-semibold" for="nat_gateway_mode">NAT Gateway</label>
+                      ${this.renderHelpButton('nat-gateway', 'NAT gateway options')}
+                    </div>
                     <select class="form-select" id="nat_gateway_mode"
                             name="${this.currentProvider === 'azure' ? 'azure_private_link_nat_gateway_mode' : 'nat_gateway_mode'}">
                       <option value="single" ${savedNatGatewayMode === 'single' ? 'selected' : ''}>Single NAT gateway</option>
@@ -1657,7 +1785,10 @@ class App {
                     ${this.currentProvider === 'azure' ? `
                     <div class="mt-3" id="azure-private-link-nat-gateway-zone-section"
                          ${savedNatGatewayMode === 'none' ? 'style="display: none;"' : ''}>
-                      <label class="form-label fw-semibold" for="azure_private_link_nat_gateway_zone">NAT Gateway Placement</label>
+                      <div class="field-label-with-help">
+                        <label class="form-label fw-semibold" for="azure_private_link_nat_gateway_zone">NAT Gateway Placement</label>
+                        ${this.renderHelpButton('nat-placement', 'NAT gateway placement')}
+                      </div>
                       <select class="form-select" id="azure_private_link_nat_gateway_zone" name="azure_private_link_nat_gateway_zone">
                         <option value="" ${savedAzurePrivateLinkNatGatewayZone === '' ? 'selected' : ''}>Regional / non-zonal (recommended)</option>
                         <option value="1" ${savedAzurePrivateLinkNatGatewayZone === '1' ? 'selected' : ''}>Availability Zone 1</option>
@@ -1823,10 +1954,13 @@ class App {
                   </div>
                   ${this.currentProvider !== 'azure' ? `
                   <div class="mb-3">
-                    <label class="form-label fw-semibold" for="availability-zones-select">
-                      Availability Zones
-                      <span class="text-danger">*</span>
-                    </label>
+                    <div class="field-label-with-help">
+                      <label class="form-label fw-semibold" for="availability-zones-select">
+                        Availability Zones
+                        <span class="text-danger">*</span>
+                      </label>
+                      ${this.renderHelpButton('availability-zones', 'Availability Zones')}
+                    </div>
                     <select id="availability-zones-select" class="form-select" name="availability_zones" multiple required>
                       <option value="" disabled>Select availability zones</option>
                     </select>
@@ -1834,11 +1968,14 @@ class App {
                   </div>
                   ` : ''}
                   <div id="subnet-size-slider-container" class="mb-4" style="display: none;">
-                    <label class="form-label fw-semibold">
-                      <i class="bi bi-sliders me-2"></i>
-                      Subnet Size
-                      <span class="text-muted small ms-2" id="subnet-size-info"></span>
-                    </label>
+                    <div class="field-label-with-help">
+                      <label class="form-label fw-semibold">
+                        <i class="bi bi-sliders me-2"></i>
+                        Subnet Size
+                        <span class="text-muted small ms-2" id="subnet-size-info"></span>
+                      </label>
+                      ${this.renderHelpButton('subnet-sizing', 'subnet sizing')}
+                    </div>
                     <div class="subnet-slider-wrapper">
                       <input type="range" class="form-range subnet-size-slider" id="subnet-size-slider" 
                              min="17" max="28" step="1" value="26" name="custom_subnet_size">
@@ -1902,6 +2039,7 @@ class App {
                         this.currentProvider === 'gcp' ? 'Enable Private Service Connect' : 
                         'Enable Back-end PrivateLink'}
                     </label>
+                    ${this.renderHelpButton('backend-private-link', this.currentProvider === 'azure' ? 'Back-end Private Link' : 'Back-end PrivateLink')}
                   </div>
                   <div class="form-text">${this.currentProvider === 'aws' ? 
                     'Enable Back-end PrivateLink (requires Enterprise tier)' :
@@ -2138,7 +2276,7 @@ class App {
     
     const calculateSubnets = Utils.debounce(() => {
       const vpcCidr = vpcCidrInput?.value;
-      const pricingTier = pricingTierSelect?.value;
+      const pricingTier = this.currentProvider === 'azure' ? 'PREMIUM' : pricingTierSelect?.value;
       const enablePrivateLink = privateLinkCheckbox?.checked || false;
       const enableNatGateway = this.currentProvider !== 'aws' || natGatewaySelect?.value !== 'none';
       const zones = this.getSelectedAvailabilityZones();
@@ -3079,7 +3217,7 @@ class App {
 
     // Setup private link validation
     const checkPrivateLinkRequirements = () => {
-      const tier = pricingTierSelect?.value;
+      const tier = this.currentProvider === 'azure' ? 'PREMIUM' : pricingTierSelect?.value;
       const requiredTier = this.currentProvider === 'aws' ? 'ENTERPRISE' : 'PREMIUM';
 
       if (this.currentProvider === 'aws' && privateLinkCheckbox) {
