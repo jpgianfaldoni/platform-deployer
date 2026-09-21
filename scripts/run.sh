@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Start a local dev server for the PWA
+# Start a local server for the app
 # Usage: bash scripts/run.sh [port]
 
 PORT="${1:-8000}"
@@ -14,6 +14,6 @@ if [ ! -d "$DEPLOY_DIR" ]; then
   exit 1
 fi
 
-echo "Serving PWA at http://localhost:$PORT"
+echo "Serving app at http://localhost:$PORT"
 echo "Press Ctrl+C to stop."
 python3 -m http.server "$PORT" -d "$DEPLOY_DIR"

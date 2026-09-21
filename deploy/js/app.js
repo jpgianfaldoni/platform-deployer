@@ -265,6 +265,116 @@ class App {
   }
 
   /**
+   * Render a compact, accessible trigger for provider-specific guidance.
+   */
+  renderHelpButton(topicId, label) {
+    return `
+      <button type="button" class="context-help-trigger" data-help-topic="${topicId}"
+              aria-label="Learn more about ${label}" aria-controls="contextHelpDrawer"
+              title="Learn more about ${label}">
+        <i class="bi bi-info-circle" aria-hidden="true"></i>
+      </button>
+    `;
+  }
+
+  /**
+   * Handle help triggers rendered by SPA routes and populate the shared drawer.
+   */
+  setupContextualHelp() {
+    const drawer = document.getElementById('contextHelpDrawer');
+    if (!drawer || typeof HelpContent === 'undefined') return;
+
+    document.addEventListener('click', event => {
+      const trigger = event.target.closest('[data-help-topic]');
+      if (!trigger) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      this.openContextualHelp(trigger.dataset.helpTopic, trigger);
+    });
+
+    document.addEventListener('keydown', event => {
+      if (event.key !== 'Escape' || (!drawer.classList.contains('show') && !drawer.classList.contains('showing'))) return;
+      const offcanvas = bootstrap.Offcanvas.getOrCreateInstance(drawer);
+      if (drawer.classList.contains('showing') && !drawer.classList.contains('show')) {
+        drawer.addEventListener('shown.bs.offcanvas', () => offcanvas.hide(), { once: true });
+      } else {
+        offcanvas.hide();
+      }
+    }, true);
+
+    drawer.addEventListener('hidden.bs.offcanvas', () => {
+      if (this.contextHelpTrigger?.isConnected) {
+        this.contextHelpTrigger.focus();
+      }
+    });
+  }
+
+  openContextualHelp(topicId, trigger) {
+    const topic = HelpContent.getTopic(topicId, this.currentProvider);
+    const drawer = document.getElementById('contextHelpDrawer');
+    const title = document.getElementById('contextHelpTitle');
+    const provider = document.getElementById('contextHelpProvider');
+    const body = document.getElementById('contextHelpBody');
+    if (!topic || !drawer || !title || !provider || !body) return;
+
+    const providerNames = { aws: 'AWS guidance', azure: 'Azure guidance', gcp: 'GCP guidance' };
+    title.textContent = topic.title;
+    provider.textContent = providerNames[this.currentProvider] || 'Configuration guidance';
+    body.replaceChildren();
+
+    const overview = document.createElement('p');
+    overview.className = 'context-help-overview';
+    overview.textContent = topic.overview;
+    body.appendChild(overview);
+
+    const appendListSection = (heading, items) => {
+      if (!items?.length) return;
+      const section = document.createElement('section');
+      section.className = 'context-help-section';
+      const sectionTitle = document.createElement('h3');
+      sectionTitle.textContent = heading;
+      const list = document.createElement('ul');
+      items.forEach(item => {
+        const listItem = document.createElement('li');
+        listItem.textContent = item;
+        list.appendChild(listItem);
+      });
+      section.append(sectionTitle, list);
+      body.appendChild(section);
+    };
+
+    appendListSection('When to use each option', topic.whenToUse);
+    appendListSection('Requirements and considerations', topic.considerations);
+
+    if (topic.links?.length) {
+      const section = document.createElement('section');
+      section.className = 'context-help-section context-help-links';
+      const sectionTitle = document.createElement('h3');
+      sectionTitle.textContent = 'Official documentation';
+      section.appendChild(sectionTitle);
+      topic.links.forEach(link => {
+        const anchor = document.createElement('a');
+        anchor.href = link.url;
+        anchor.target = '_blank';
+        anchor.rel = 'noopener noreferrer';
+        anchor.className = 'context-help-link';
+        const label = document.createElement('span');
+        label.textContent = link.label;
+        const icon = document.createElement('i');
+        icon.className = 'bi bi-box-arrow-up-right';
+        icon.setAttribute('aria-hidden', 'true');
+        anchor.append(label, icon);
+        section.appendChild(anchor);
+      });
+      body.appendChild(section);
+    }
+
+    this.contextHelpTrigger = trigger;
+    bootstrap.Offcanvas.getOrCreateInstance(drawer).show(trigger);
+  }
+
+  /**
    * Get availability zone limits for a provider
    */
   getAvailabilityZoneLimits(provider) {
@@ -365,6 +475,7 @@ class App {
   init() {
     // Setup navigation
     this.setupNavigation();
+    this.setupContextualHelp();
     
     // Handle hash routing
     window.addEventListener('hashchange', () => this.handleRoute());
@@ -377,9 +488,6 @@ class App {
     
     // Update navbar based on provider selection
     this.updateNavbar();
-    
-    // Check and show install prompt on navigation
-    this.checkInstallPrompt();
     
     // Setup credential modal event listeners
     this.setupCredentialModal();
@@ -1028,19 +1136,6 @@ class App {
     }
   }
 
-  checkInstallPrompt() {
-    // Show install banner after user interacts with the app
-    // This provides better UX than showing immediately
-    setTimeout(() => {
-      if (window.deferredPrompt && !localStorage.getItem('pwa-install-dismissed')) {
-        const banner = document.getElementById('install-banner');
-        if (banner && banner.style.display === 'none') {
-          banner.style.display = 'block';
-        }
-      }
-    }, 3000); // Show after 3 seconds of interaction
-  }
-
   setupNavigation() {
     // Handle all navigation links
     document.querySelectorAll('[data-navigate]').forEach(link => {
@@ -1062,63 +1157,31 @@ class App {
     if (handler) {
       await handler();
     }
-    
-    // Check install prompt after route change
-    this.checkInstallPrompt();
   }
 
   // Route Handlers
   renderHome() {
     const content = `
-      <!-- Hero Section -->
       <section class="hero-section">
         <div class="container">
           <div class="row align-items-center min-vh-50">
             <div class="col-lg-6">
-              <h1 class="hero-title">
-                Deploy Databricks Infrastructure in Minutes
-              </h1>
+              <h1 class="hero-title">Deploy Databricks Infrastructure in Minutes</h1>
               <p class="hero-subtitle">
-                One-Click Deployer simplifies Databricks infrastructure deployment across AWS, Azure, and GCP. 
-                Transform complex Terraform configurations into a simple, guided experience with intelligent automation.
+                Generate a ready-to-deploy Terraform project for AWS, Azure, or GCP
+                through a simple, guided configuration flow.
               </p>
               <div class="hero-cta">
                 <a href="#/select-provider" class="btn btn-primary btn-lg" data-navigate>
                   <i class="bi bi-rocket-takeoff me-2" aria-hidden="true"></i>
                   Get Started
                 </a>
-                <button class="btn btn-outline-primary btn-lg" id="hero-install-btn" style="display: none;">
-                  <i class="bi bi-download me-2" aria-hidden="true"></i>
-                  Install App
-                </button>
-              </div>
-              
-              <!-- Quick Stats -->
-              <div class="row mt-5 g-3 stagger-children">
-                <div class="col-4">
-                  <div class="glass p-3 rounded-3 text-center">
-                    <div class="h2 fw-bold mb-1 text-gradient">3</div>
-                    <div class="text-sm text-muted">Cloud Providers</div>
-                  </div>
-                </div>
-                <div class="col-4">
-                  <div class="glass p-3 rounded-3 text-center">
-                    <div class="h2 fw-bold mb-1 text-gradient">90%</div>
-                    <div class="text-sm text-muted">Time Saved</div>
-                  </div>
-                </div>
-                <div class="col-4">
-                  <div class="glass p-3 rounded-3 text-center">
-                    <div class="h2 fw-bold mb-1 text-gradient">100%</div>
-                    <div class="text-sm text-muted">Best Practices</div>
-                  </div>
-                </div>
               </div>
             </div>
             <div class="col-lg-6">
               <div class="hero-illustration animate-fade-up" style="animation-delay: 0.3s;">
                 <div class="hero-terminal">
-                  <div class="hero-terminal-header">
+                  <div class="hero-terminal-header" aria-hidden="true">
                     <span class="hero-terminal-dot red"></span>
                     <span class="hero-terminal-dot yellow"></span>
                     <span class="hero-terminal-dot green"></span>
@@ -1129,20 +1192,19 @@ class App {
                     <div class="hero-code-line"><span class="success">✓ Provider configured successfully</span></div>
                     <div class="hero-code-line mt-2"><span class="prompt">$</span> <span class="command">terraform apply</span></div>
                     <div class="hero-code-line"><span class="output">Creating Databricks workspace...</span></div>
-                    <div class="hero-code-line"><span class="success">✓ Apply complete\! Resources: 12 added</span></div>
+                    <div class="hero-code-line"><span class="success">✓ Apply complete! Resources created</span></div>
                   </div>
                 </div>
-                <!-- Floating provider badges -->
                 <div class="hero-float-element aws d-none d-lg-flex align-items-center gap-2">
-                  <i class="bi bi-cloud text-warning"></i>
+                  <i class="bi bi-cloud text-warning" aria-hidden="true"></i>
                   <span class="text-sm">AWS</span>
                 </div>
                 <div class="hero-float-element azure d-none d-lg-flex align-items-center gap-2">
-                  <i class="bi bi-cloud text-info"></i>
+                  <i class="bi bi-cloud text-info" aria-hidden="true"></i>
                   <span class="text-sm">Azure</span>
                 </div>
                 <div class="hero-float-element gcp d-none d-lg-flex align-items-center gap-2">
-                  <i class="bi bi-cloud text-primary-accent"></i>
+                  <i class="bi bi-cloud text-primary-accent" aria-hidden="true"></i>
                   <span class="text-sm">GCP</span>
                 </div>
               </div>
@@ -1150,458 +1212,10 @@ class App {
           </div>
         </div>
       </section>
-
-      <!-- What We Do Section -->
-      <section class="what-we-do-section">
-        <div class="container">
-          <div class="row">
-            <div class="col-lg-10 mx-auto text-center mb-5">
-              <h2 class="h1 fw-bold mb-3">What We Do</h2>
-              <p class="lead text-muted mb-5">
-                One-Click Deployer is a Progressive Web App (PWA) that generates production-ready Terraform configurations 
-                for Databricks workspaces across multiple cloud providers. We eliminate the complexity of infrastructure 
-                as code by providing an intuitive, visual interface that handles all the technical details for you.
-              </p>
-            </div>
-          </div>
-          
-          <div class="row g-4">
-            <div class="col-md-6 col-lg-4">
-              <div class="what-we-do-card">
-                <div class="icon-wrapper">
-                  <i class="bi bi-code-slash" aria-hidden="true"></i>
-                </div>
-                <h4 class="fw-bold mb-3">Generate Terraform Code</h4>
-                <p class="text-muted mb-0">
-                  Automatically generate complete Terraform projects with all necessary files, modules, and configurations. 
-                  No manual coding required—just fill out a simple form.
-                </p>
-              </div>
-            </div>
-            
-            <div class="col-md-6 col-lg-4">
-              <div class="what-we-do-card">
-                <div class="icon-wrapper">
-                  <i class="bi bi-calculator" aria-hidden="true"></i>
-                </div>
-                <h4 class="fw-bold mb-3">Smart Network Calculations</h4>
-                <p class="text-muted mb-0">
-                  Our intelligent calculator automatically determines optimal subnet allocations, CIDR blocks, and network 
-                  configurations based on your requirements and cloud provider best practices.
-                </p>
-              </div>
-            </div>
-            
-            <div class="col-md-6 col-lg-4">
-              <div class="what-we-do-card">
-                <div class="icon-wrapper">
-                  <i class="bi bi-shield-check" aria-hidden="true"></i>
-                </div>
-                <h4 class="fw-bold mb-3">Enterprise Security</h4>
-                <p class="text-muted mb-0">
-                  Built-in security configurations including private connectivity options (PrivateLink, Private Service Connect), 
-                  IAM roles, and network isolation following cloud provider security best practices.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Why Install Locally Section - HIGHLIGHTED -->
-      <section class="py-5">
-        <div class="container">
-          <div class="install-section">
-            <div class="install-icon">
-              <i class="bi bi-phone" aria-hidden="true"></i>
-            </div>
-            <div class="text-center mb-5">
-              <h2 class="h1 fw-bold mb-3">Why Install One-Click Deployer Locally?</h2>
-              <p class="lead text-muted mb-4">
-                Install this Progressive Web App on your device for the best experience. Get instant access, 
-                work offline, and enjoy native app performance—all while keeping your data private and secure.
-              </p>
-            </div>
-            
-            <div class="row g-4 mb-5">
-              <div class="col-md-6 col-lg-4">
-                <div class="install-benefit-card">
-                  <div class="benefit-icon">
-                    <i class="bi bi-wifi-off" aria-hidden="true"></i>
-                  </div>
-                  <h5 class="fw-bold">Complete Offline Access</h5>
-                  <p>
-                    Use the app even without an internet connection. All functionality works offline, so you can generate 
-                    Terraform configurations anywhere, anytime.
-                  </p>
-                </div>
-              </div>
-              
-              <div class="col-md-6 col-lg-4">
-                <div class="install-benefit-card">
-                  <div class="benefit-icon">
-                    <i class="bi bi-lightning-charge" aria-hidden="true"></i>
-                  </div>
-                  <h5 class="fw-bold">Faster Performance</h5>
-                  <p>
-                    Installed apps load instantly and run smoother than web versions. Experience native app performance 
-                    with faster response times and seamless interactions.
-                  </p>
-                </div>
-              </div>
-              
-              <div class="col-md-6 col-lg-4">
-                <div class="install-benefit-card">
-                  <div class="benefit-icon">
-                    <i class="bi bi-app" aria-hidden="true"></i>
-                  </div>
-                  <h5 class="fw-bold">Native App Experience</h5>
-                  <p>
-                    Access the app directly from your home screen with a dedicated icon. Enjoy a full-screen experience 
-                    without browser chrome, just like a native application.
-                  </p>
-                </div>
-              </div>
-              
-              <div class="col-md-6 col-lg-4">
-                <div class="install-benefit-card">
-                  <div class="benefit-icon">
-                    <i class="bi bi-shield-lock" aria-hidden="true"></i>
-                  </div>
-                  <h5 class="fw-bold">Enhanced Privacy & Security</h5>
-                  <p>
-                    All processing happens locally on your device. Your configurations and data never leave your machine, 
-                    ensuring complete privacy and security.
-                  </p>
-                </div>
-              </div>
-              
-              <div class="col-md-6 col-lg-4">
-                <div class="install-benefit-card">
-                  <div class="benefit-icon">
-                    <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
-                  </div>
-                  <h5 class="fw-bold">Automatic Updates</h5>
-                  <p>
-                    The app automatically updates in the background, ensuring you always have the latest features and 
-                    improvements without manual intervention.
-                  </p>
-                </div>
-              </div>
-              
-              <div class="col-md-6 col-lg-4">
-                <div class="install-benefit-card">
-                  <div class="benefit-icon">
-                    <i class="bi bi-speedometer2" aria-hidden="true"></i>
-                  </div>
-                  <h5 class="fw-bold">Quick Access</h5>
-                  <p>
-                    Launch the app instantly from your home screen or app drawer. No need to remember URLs or bookmark 
-                    pages—just tap and go.
-                  </p>
-                </div>
-              </div>
-            </div>
-            
-            <div class="install-cta">
-              <button class="btn btn-primary btn-install-large" id="install-btn-hero">
-                <i class="bi bi-download me-2" aria-hidden="true"></i>
-                Install One-Click Deployer Now
-              </button>
-              <p class="text-muted small mt-3 mb-0">
-                <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
-                Installation is free and takes less than a minute. Works on desktop and mobile devices.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Features Section -->
-      <section class="py-5">
-        <div class="container">
-          <div class="row">
-            <div class="col-lg-8 mx-auto text-center mb-5">
-              <h2 class="h1 fw-bold mb-3">Why Choose One-Click Deployer?</h2>
-              <p class="lead text-muted">
-                Eliminate the complexity barrier in Databricks infrastructure deployment 
-                with our intuitive, production-ready solution.
-              </p>
-            </div>
-          </div>
-          
-          <div class="row g-4 stagger-children">
-            <div class="col-md-6 col-lg-4">
-              <div class="card h-100">
-                <div class="card-body p-4 text-center">
-                  <div class="feature-icon icon-cyan">
-                    <i class="bi bi-lightning-charge-fill" aria-hidden="true"></i>
-                  </div>
-                  <h5 class="fw-bold">Zero Terraform Knowledge Required</h5>
-                  <p class="mb-0">
-                    Visual forms replace complex code writing. Anyone can deploy 
-                    enterprise-grade infrastructure without deep technical expertise.
-                  </p>
-                </div>
-              </div>
-            </div>
-            
-            <div class="col-md-6 col-lg-4">
-              <div class="card h-100">
-                <div class="card-body p-4 text-center">
-                  <div class="feature-icon icon-green">
-                    <i class="bi bi-shield-check" aria-hidden="true"></i>
-                  </div>
-                  <h5 class="fw-bold">Production-Ready Output</h5>
-                  <p class="mb-0">
-                    Generated code follows enterprise best practices with built-in 
-                    security, networking, and compliance configurations.
-                  </p>
-                </div>
-              </div>
-            </div>
-            
-            <div class="col-md-6 col-lg-4">
-              <div class="card h-100">
-                <div class="card-body p-4 text-center">
-                  <div class="feature-icon icon-blue">
-                    <i class="bi bi-clouds-fill" aria-hidden="true"></i>
-                  </div>
-                  <h5 class="fw-bold">Multi-Cloud Native</h5>
-                  <p class="mb-0">
-                    Single interface for AWS, Azure, and GCP. Deploy consistently 
-                    across all major cloud providers with provider-specific optimizations.
-                  </p>
-                </div>
-              </div>
-            </div>
-            
-            <div class="col-md-6 col-lg-4">
-              <div class="card h-100">
-                <div class="card-body p-4 text-center">
-                  <div class="feature-icon icon-amber">
-                    <i class="bi bi-clock-fill" aria-hidden="true"></i>
-                  </div>
-                  <h5 class="fw-bold">Minutes, Not Hours</h5>
-                  <p class="mb-0">
-                    Reduce deployment preparation time from hours to minutes. 
-                    Focus on your data projects, not infrastructure complexity.
-                  </p>
-                </div>
-              </div>
-            </div>
-            
-            <div class="col-md-6 col-lg-4">
-              <div class="card h-100">
-                <div class="card-body p-4 text-center">
-                  <div class="feature-icon icon-rose">
-                    <i class="bi bi-gear-fill" aria-hidden="true"></i>
-                  </div>
-                  <h5 class="fw-bold">Intelligent Automation</h5>
-                  <p class="mb-0">
-                    Smart defaults, automatic network calculations, and real-time 
-                    validation prevent configuration errors before they happen.
-                  </p>
-                </div>
-              </div>
-            </div>
-            
-            <div class="col-md-6 col-lg-4">
-              <div class="card h-100">
-                <div class="card-body p-4 text-center">
-                  <div class="feature-icon icon-purple">
-                    <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
-                  </div>
-                  <h5 class="fw-bold">Keep Evolving</h5>
-                  <p class="mb-0">
-                    Start with our generated code and continue evolving your 
-                    infrastructure by adding custom Terraform modules and resources.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- How It Works Section -->
-      <section class="py-5 bg-surface">
-        <div class="container">
-          <div class="row">
-            <div class="col-lg-8 mx-auto text-center mb-5">
-              <h2 class="h1 fw-bold mb-3">How It Works</h2>
-              <p class="lead text-muted">
-                Three simple steps to production-ready Databricks infrastructure.
-              </p>
-            </div>
-          </div>
-          
-          <div class="row g-4 stagger-children">
-            <div class="col-md-4">
-              <div class="text-center">
-                <div class="d-flex align-items-center justify-content-center gap-3 mb-3">
-                  <div class="step-number">1</div>
-                  <h5 class="fw-bold mb-0">Choose Your Cloud</h5>
-                </div>
-                <p>
-                  Select your preferred cloud provider from AWS, Azure, or Google Cloud Platform.
-                </p>
-              </div>
-            </div>
-            
-            <div class="col-md-4">
-              <div class="text-center">
-                <div class="d-flex align-items-center justify-content-center gap-3 mb-3">
-                  <div class="step-number">2</div>
-                  <h5 class="fw-bold mb-0">Configure Settings</h5>
-                </div>
-                <p>
-                  Fill out the guided form with your preferences. Network settings are calculated automatically.
-                </p>
-              </div>
-            </div>
-            
-            <div class="col-md-4">
-              <div class="text-center">
-                <div class="d-flex align-items-center justify-content-center gap-3 mb-3">
-                  <div class="step-number">3</div>
-                  <h5 class="fw-bold mb-0">Deploy & Go</h5>
-                </div>
-                <p>
-                  Download your complete Terraform project and deploy with standard Terraform commands.
-                </p>
-              </div>
-            </div>
-          </div>
-          
-          <div class="text-center mt-5">
-            <a href="#/select-provider" class="btn btn-primary btn-lg" data-navigate>
-              Start Building Now
-              <i class="bi bi-arrow-right ms-2" aria-hidden="true"></i>
-            </a>
-          </div>
-        </div>
-      </section>
-
-      <!-- Supported Providers Preview -->
-      <section class="py-5">
-        <div class="container">
-          <div class="row">
-            <div class="col-lg-8 mx-auto text-center mb-5">
-              <h2 class="h1 fw-bold mb-3">Supported Cloud Providers</h2>
-              <p class="lead text-muted">
-                Deploy Databricks workspaces on any major cloud platform with provider-specific optimizations.
-              </p>
-            </div>
-          </div>
-          
-          <div class="row g-4">
-            <div class="col-md-4">
-              <div class="card border-0 shadow-sm provider-card h-100">
-                <div class="card-body p-4 text-center">
-                  <div class="provider-logo mb-3">
-                    <i class="bi bi-amazon text-warning" style="font-size: 3rem;"></i>
-                  </div>
-                  <h5 class="fw-bold">Amazon Web Services</h5>
-                  <ul class="list-unstyled text-muted small">
-                    <li><i class="bi bi-check text-success me-1"></i> VPC & Subnet Management</li>
-                    <li><i class="bi bi-check text-success me-1"></i> PrivateLink Integration</li>
-                    <li><i class="bi bi-check text-success me-1"></i> Cross-Account IAM Roles</li>
-                    <li><i class="bi bi-check text-success me-1"></i> Enterprise Security</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-            
-            <div class="col-md-4">
-              <div class="card border-0 shadow-sm provider-card h-100">
-                <div class="card-body p-4 text-center">
-                  <div class="provider-logo mb-3">
-                    <i class="bi bi-microsoft text-info" style="font-size: 3rem;"></i>
-                  </div>
-                  <h5 class="fw-bold">Microsoft Azure</h5>
-                  <ul class="list-unstyled text-muted small">
-                    <li><i class="bi bi-check text-success me-1"></i> VNet & Resource Groups</li>
-                    <li><i class="bi bi-check text-success me-1"></i> Private Link Support</li>
-                    <li><i class="bi bi-check text-success me-1"></i> Managed Identity</li>
-                    <li><i class="bi bi-check text-success me-1"></i> Premium Features</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-            
-            <div class="col-md-4">
-              <div class="card border-0 shadow-sm provider-card h-100">
-                <div class="card-body p-4 text-center">
-                  <div class="provider-logo mb-3">
-                    <i class="bi bi-google text-success" style="font-size: 3rem;"></i>
-                  </div>
-                  <h5 class="fw-bold">Google Cloud Platform</h5>
-                  <ul class="list-unstyled text-muted small">
-                    <li><i class="bi bi-check text-success me-1"></i> VPC & Subnet Networks</li>
-                    <li><i class="bi bi-check text-success me-1"></i> Private Service Connect</li>
-                    <li><i class="bi bi-check text-success me-1"></i> Service Account Integration</li>
-                    <li><i class="bi bi-check text-success me-1"></i> Private Google Access</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- CTA Section -->
-      <section class="py-5 bg-primary text-white">
-        <div class="container">
-          <div class="row">
-            <div class="col-lg-8 mx-auto text-center">
-              <h2 class="h1 fw-bold mb-3">Ready to Simplify Your Databricks Deployment?</h2>
-              <p class="lead mb-4">
-                Join developers and data engineers who have streamlined their infrastructure deployment process. 
-                Generate production-ready Terraform code in minutes, not hours.
-              </p>
-              <div class="d-flex gap-3 justify-content-center flex-wrap">
-                <a href="#/select-provider" class="btn btn-light btn-lg px-5" data-navigate>
-                  <i class="bi bi-play-circle me-2" aria-hidden="true"></i>
-                  Start Your Deployment
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
     `;
-    
+
     this.render(content);
     Utils.updateProgress(0);
-    
-    // Setup install button in hero section
-    const heroInstallBtn = document.getElementById('hero-install-btn');
-    const installBtnHero = document.getElementById('install-btn-hero');
-    
-    const installPWAHandler = async () => {
-      if (typeof window.installPWA === 'function') {
-        await window.installPWA();
-      } else {
-        // Fallback if function not yet available
-        console.warn('Install PWA function not available yet');
-      }
-    };
-    
-    if (heroInstallBtn) {
-      heroInstallBtn.addEventListener('click', installPWAHandler);
-      
-      // Show button if install is available (check after a delay to ensure deferredPrompt is set)
-      setTimeout(() => {
-        if (window.deferredPrompt) {
-          heroInstallBtn.style.display = 'inline-block';
-        }
-      }, 1000);
-    }
-    
-    if (installBtnHero) {
-      installBtnHero.addEventListener('click', installPWAHandler);
-    }
   }
 
   renderProviderSelection() {
@@ -1611,10 +1225,6 @@ class App {
           <div class="col-lg-10 mx-auto">
             <div class="text-center mb-5">
               <h1 class="text-gradient mb-3">Choose Your Cloud Provider</h1>
-              <p class="lead">
-                Select the cloud provider where you want to deploy your Databricks workspace.
-                Each provider has unique features and capabilities optimized for different use cases.
-              </p>
             </div>
 
             <div class="row g-4 mb-5 stagger-children">
@@ -1628,7 +1238,7 @@ class App {
                       <i class="bi bi-cloud-fill"></i>
                     </div>
                     <h4>Amazon Web Services</h4>
-                    <p>Complete VPC management with subnets, security groups, and PrivateLink support.</p>
+                    <p>Complete VPC management with subnets, security groups, and Back-end PrivateLink support.</p>
                     <ul class="list-unstyled text-start mb-4 text-sm">
                       <li class="mb-2 d-flex align-items-start">
                         <i class="bi bi-check2 text-success me-2 mt-1"></i>
@@ -1636,7 +1246,7 @@ class App {
                       </li>
                       <li class="mb-2 d-flex align-items-start">
                         <i class="bi bi-check2 text-success me-2 mt-1"></i>
-                        <span>PrivateLink (Enterprise tier)</span>
+                        <span>Back-end PrivateLink (Enterprise tier)</span>
                       </li>
                       <li class="mb-2 d-flex align-items-start">
                         <i class="bi bi-check2 text-success me-2 mt-1"></i>
@@ -1657,7 +1267,7 @@ class App {
                       <i class="bi bi-microsoft"></i>
                     </div>
                     <h4>Microsoft Azure</h4>
-                    <p>Virtual networks, resource groups, and Private Link with Azure AD integration.</p>
+                    <p>Virtual networks, resource groups, and Back-end Private Link with Azure AD integration.</p>
                     <ul class="list-unstyled text-start mb-4 text-sm">
                       <li class="mb-2 d-flex align-items-start">
                         <i class="bi bi-check2 text-success me-2 mt-1"></i>
@@ -1665,7 +1275,7 @@ class App {
                       </li>
                       <li class="mb-2 d-flex align-items-start">
                         <i class="bi bi-check2 text-success me-2 mt-1"></i>
-                        <span>Private Link (Premium tier)</span>
+                        <span>Back-end Private Link (Premium tier)</span>
                       </li>
                       <li class="mb-2 d-flex align-items-start">
                         <i class="bi bi-check2 text-success me-2 mt-1"></i>
@@ -1832,7 +1442,16 @@ class App {
       '<i class="bi bi-microsoft text-info me-2" style="font-size: 2rem;"></i>' :
       '<i class="bi bi-google text-success me-2" style="font-size: 2rem;"></i>';
     
-    const providerName = Utils.getProviderName(this.currentProvider);
+    const providerShortName = this.currentProvider === 'aws'
+      ? 'AWS'
+      : this.currentProvider === 'azure'
+        ? 'Azure'
+        : 'GCP';
+    const configurationDescription = this.currentProvider === 'aws'
+      ? 'Configure workspace, VPC, NAT, and Back-end PrivateLink options for your AWS Terraform project.'
+      : this.currentProvider === 'azure'
+        ? 'Configure workspace, VNet, NAT, and Back-end Private Link options for your Azure Terraform project.'
+        : 'Configure workspace, project, service account, and network inputs for your GCP Terraform project.';
     const vpcLabel = this.currentProvider === 'azure' ? 'VNet CIDR Block' : 'VPC CIDR Block';
     const vpcDesc = this.currentProvider === 'azure' ? 
       'CIDR block for the VNet or subnet allocation (between /16 and /24)' :
@@ -1865,19 +1484,15 @@ class App {
     
     // Load configuration form based on provider
     const content = `
-      <div class="container my-5">
+      <div class="container my-5 configuration-page">
         <div class="row">
           <div class="col-xl-8 mx-auto">
             <div class="text-center mb-5">
               <div class="provider-badge mb-3">
                 ${providerIcon}
-                <span class="h2 fw-bold text-capitalize">${this.currentProvider} Configuration</span>
+                <span class="h2 fw-bold">${providerShortName} Configuration</span>
               </div>
-              <p class="lead text-muted">
-                ${this.currentProvider === 'gcp'
-                  ? 'Configure the inputs required for your GCP deployment.'
-                  : `Configure your Databricks deployment settings for ${this.currentProvider.toUpperCase()}. All network calculations are handled automatically based on your selections.`}
-              </p>
+              <p class="lead text-muted">${configurationDescription}</p>
             </div>
             
             <form id="config-form" novalidate>
@@ -1901,8 +1516,8 @@ class App {
                       <div class="form-text">${this.currentProvider === 'gcp'
                         ? 'Name for the new Databricks workspace (2-20 characters)'
                         : this.currentProvider === 'aws'
-                        ? 'Prefix for all resource names (2-20 lowercase letters, numbers, hyphens, or periods)'
-                        : 'Prefix for all resource names (2-20 characters, alphanumeric and hyphens only)'}</div>
+                        ? 'Prefix for all resource names (2-20 lowercase letters, numbers, hyphens, or periods). Do not use underscores; use hyphens instead.'
+                        : 'Prefix for all resource names (2-20 characters, alphanumeric and hyphens only). Do not use underscores; use hyphens instead.'}</div>
                     </div>
                     <div class="col-md-6">
                       <label class="form-label fw-semibold">
@@ -1914,18 +1529,19 @@ class App {
                       </select>
                       <div class="form-text">Cloud provider region for resource deployment</div>
                     </div>
-                    ${this.currentProvider !== 'gcp' ? `
+                    ${this.currentProvider === 'aws' ? `
                     <div class="col-md-6">
-                      <label class="form-label fw-semibold">
-                        Databricks Pricing Tier
-                        <span class="text-danger">*</span>
-                      </label>
+                      <div class="field-label-with-help">
+                        <label class="form-label fw-semibold">
+                          Databricks Pricing Tier
+                          <span class="text-danger">*</span>
+                        </label>
+                        ${this.renderHelpButton('pricing-tier', 'Databricks pricing tier')}
+                      </div>
                       <select class="form-select" name="pricing_tier" required>
                         ${this.renderPricingTierOptions(this.currentProvider, this.currentConfig.pricing_tier)}
                       </select>
-                      <div class="form-text">${this.currentProvider === 'azure'
-                        ? 'This Azure deployment uses a Premium workspace.'
-                        : 'Databricks workspace pricing tier (affects available features)'}</div>
+                      <div class="form-text">Databricks workspace pricing tier (affects available features)</div>
                     </div>
                     ` : ''}
                     ${this.currentProvider === 'azure' ? `
@@ -1939,8 +1555,11 @@ class App {
                     ${this.currentProvider === 'aws' || this.currentProvider === 'azure' ? `
                       <div class="col-12" id="metastore-configuration" ${this.currentProvider === 'azure' && this.currentConfig.enable_private_link ? 'style="display: none;"' : ''}>
                         <div class="row g-3 align-items-start">
-                          <div class="col-md-5">
-                            <label class="form-label fw-semibold">Unity Catalog Metastore <span class="text-danger">*</span></label>
+                          <div class="col-md-6">
+                            <div class="field-label-with-help">
+                              <label class="form-label fw-semibold">Unity Catalog Metastore <span class="text-danger">*</span></label>
+                              ${this.renderHelpButton('metastore', 'Unity Catalog metastore')}
+                            </div>
                             <div class="form-check">
                               <input class="form-check-input" type="radio" name="metastore_mode" id="metastore_mode_create"
                                      value="create" ${this.currentConfig.metastore_mode !== 'existing' ? 'checked' : ''}>
@@ -1952,7 +1571,7 @@ class App {
                               <label class="form-check-label" for="metastore_mode_existing">Attach an existing metastore</label>
                             </div>
                           </div>
-                          <div class="col-md-7">
+                          <div class="col-md-6">
                             <div id="new-metastore-section">
                               <label class="form-label" for="metastore_name">Metastore Name</label>
                               <input type="text" class="form-control" id="metastore_name" name="metastore_name"
@@ -2056,7 +1675,10 @@ class App {
                         <div class="form-text">Google Cloud Project ID for resource deployment</div>
                       </div>
                       <div class="col-md-6">
-                        <label class="form-label fw-semibold">Google Service Account Email <span class="text-danger">*</span></label>
+                        <div class="field-label-with-help">
+                          <label class="form-label fw-semibold">Google Service Account Email <span class="text-danger">*</span></label>
+                          ${this.renderHelpButton('gcp-service-account', 'Google service account')}
+                        </div>
                         <input type="email" class="form-control" name="google_service_account_email"
                                value="${this.currentConfig.google_service_account_email || ''}"
                                placeholder="workspace-creator@my-project.iam.gserviceaccount.com" required>
@@ -2095,9 +1717,12 @@ class App {
                     a Cloud Router, and Cloud NAT for outbound connectivity.
                   </div>
                   <div class="mb-0">
-                    <label class="form-label fw-semibold" for="subnet_cidr">
-                      Databricks Subnet CIDR <span class="text-danger">*</span>
-                    </label>
+                    <div class="field-label-with-help">
+                      <label class="form-label fw-semibold" for="subnet_cidr">
+                        Databricks Subnet CIDR <span class="text-danger">*</span>
+                      </label>
+                      ${this.renderHelpButton('subnet-sizing', 'Databricks subnet CIDR')}
+                    </div>
                     <input type="text" class="form-control" id="subnet_cidr" name="subnet_cidr"
                            value="${this.currentConfig.subnet_cidr || '10.10.0.0/20'}"
                            placeholder="e.g., 10.10.0.0/20" required>
@@ -2110,6 +1735,7 @@ class App {
                       <label class="form-check-label fw-semibold" for="create_new_vpc">
                         ${this.currentProvider === 'azure' ? 'Create New VNet' : 'Create New VPC'}
                       </label>
+                      ${this.renderHelpButton('network-mode', this.currentProvider === 'azure' ? 'new or existing VNet' : 'new or existing VPC')}
                     </div>
                     <div class="form-text">${this.currentProvider === 'azure' ? 
                       'The standard deployment can create a VNet or add new Databricks subnets to an existing VNet' :
@@ -2125,20 +1751,26 @@ class App {
                   </div>
                   <div class="mb-3" id="azure-nat-gateway-zone-section"
                        ${this.currentConfig.enable_private_link ? 'style="display: none;"' : ''}>
-                    <label class="form-label fw-semibold" for="azure_nat_gateway_zone">NAT Gateway Placement</label>
+                    <div class="field-label-with-help">
+                      <label class="form-label fw-semibold" for="azure_nat_gateway_zone">NAT Gateway Placement</label>
+                      ${this.renderHelpButton('nat-placement', 'NAT gateway placement')}
+                    </div>
                     <select class="form-select" id="azure_nat_gateway_zone" name="azure_nat_gateway_zone">
                       <option value="1" ${savedAzureNatGatewayZone === '1' ? 'selected' : ''}>Availability Zone 1 (default)</option>
                       <option value="2" ${savedAzureNatGatewayZone === '2' ? 'selected' : ''}>Availability Zone 2</option>
                       <option value="3" ${savedAzureNatGatewayZone === '3' ? 'selected' : ''}>Availability Zone 3</option>
                       <option value="" ${savedAzureNatGatewayZone === '' ? 'selected' : ''}>Regional / non-zonal</option>
                     </select>
-                    <div class="form-text">The standard deployment creates one NAT gateway and public IP in the selected zone. Use regional placement for regions without availability-zone support.</div>
+                    <div class="form-text">The standard deployment creates one NAT gateway and public IP. Zonal placement keeps them in the selected zone; regional placement is not tied to one zone and supports regions without availability zones.</div>
                   </div>
                   ` : ''}
                   ${this.currentProvider === 'aws' || this.currentProvider === 'azure' ? `
                   <div class="mb-3" id="nat-gateway-section"
                        ${this.currentProvider === 'azure' && !this.currentConfig.enable_private_link ? 'style="display: none;"' : ''}>
-                    <label class="form-label fw-semibold" for="nat_gateway_mode">NAT Gateway</label>
+                    <div class="field-label-with-help">
+                      <label class="form-label fw-semibold" for="nat_gateway_mode">NAT Gateway</label>
+                      ${this.renderHelpButton('nat-gateway', 'NAT gateway options')}
+                    </div>
                     <select class="form-select" id="nat_gateway_mode"
                             name="${this.currentProvider === 'azure' ? 'azure_private_link_nat_gateway_mode' : 'nat_gateway_mode'}">
                       <option value="single" ${savedNatGatewayMode === 'single' ? 'selected' : ''}>Single NAT gateway</option>
@@ -2148,26 +1780,29 @@ class App {
                       <option value="none" ${savedNatGatewayMode === 'none' ? 'selected' : ''}>No NAT gateway</option>
                     </select>
                     <div class="form-text">${this.currentProvider === 'azure'
-                      ? 'Choose outbound internet access through one NAT gateway or a fully private deployment without NAT.'
-                      : 'Choose a shared NAT gateway, one per availability zone, or a fully private deployment without NAT.'}</div>
+                      ? 'Single provides general outbound internet through one NAT gateway and public IP. None provides no general internet egress; use service endpoints or route required traffic through a firewall or network virtual appliance (NVA).'
+                      : 'Single costs less but shares one gateway across zones and can add a cross-zone dependency and data charges. Per-zone keeps egress local and improves zone resilience at higher cost. None provides no general internet egress and requires Back-end PrivateLink plus private AWS service endpoints.'}</div>
                     ${this.currentProvider === 'azure' ? `
                     <div class="mt-3" id="azure-private-link-nat-gateway-zone-section"
                          ${savedNatGatewayMode === 'none' ? 'style="display: none;"' : ''}>
-                      <label class="form-label fw-semibold" for="azure_private_link_nat_gateway_zone">NAT Gateway Placement</label>
+                      <div class="field-label-with-help">
+                        <label class="form-label fw-semibold" for="azure_private_link_nat_gateway_zone">NAT Gateway Placement</label>
+                        ${this.renderHelpButton('nat-placement', 'NAT gateway placement')}
+                      </div>
                       <select class="form-select" id="azure_private_link_nat_gateway_zone" name="azure_private_link_nat_gateway_zone">
                         <option value="" ${savedAzurePrivateLinkNatGatewayZone === '' ? 'selected' : ''}>Regional / non-zonal (recommended)</option>
                         <option value="1" ${savedAzurePrivateLinkNatGatewayZone === '1' ? 'selected' : ''}>Availability Zone 1</option>
                         <option value="2" ${savedAzurePrivateLinkNatGatewayZone === '2' ? 'selected' : ''}>Availability Zone 2</option>
                         <option value="3" ${savedAzurePrivateLinkNatGatewayZone === '3' ? 'selected' : ''}>Availability Zone 3</option>
                       </select>
-                      <div class="form-text">Regional placement avoids making outbound traffic depend on one availability zone.</div>
+                      <div class="form-text">Regional placement is not tied to one availability zone. Zonal placement pins the NAT gateway and public IP to the selected zone.</div>
                     </div>
                     ` : ''}
                     <div id="nat-gateway-private-link-message" class="alert alert-warning mt-2 mb-0" style="display: none;">
                       <i class="bi bi-exclamation-triangle me-2"></i>
                       ${this.currentProvider === 'azure'
                         ? 'Without a NAT gateway, cluster nodes have no general internet egress. Ensure required traffic is covered by the configured service endpoints or routed through a firewall/NVA.'
-                        : 'AWS PrivateLink is required to communicate with the control plane when no NAT gateway is selected.'}
+                        : 'Back-end PrivateLink is required to communicate with the control plane when no NAT gateway is selected.'}
                     </div>
                   </div>
                   ` : ''}
@@ -2249,7 +1884,7 @@ class App {
                                      value="${this.currentConfig.backend_relay_aws_vpce_id || ''}"
                                      placeholder="e.g., vpce-1234567890abcdef0">
                             </div>
-                            <div class="form-text">Required only when PrivateLink uses an existing VPC.</div>
+                            <div class="form-text">Required only when Back-end PrivateLink uses an existing VPC.</div>
                           </div>
                         </div>
                         ` : ''}
@@ -2319,22 +1954,28 @@ class App {
                   </div>
                   ${this.currentProvider !== 'azure' ? `
                   <div class="mb-3">
-                    <label class="form-label fw-semibold" for="availability-zones-select">
-                      Availability Zones
-                      <span class="text-danger">*</span>
-                    </label>
+                    <div class="field-label-with-help">
+                      <label class="form-label fw-semibold" for="availability-zones-select">
+                        Availability Zones
+                        <span class="text-danger">*</span>
+                      </label>
+                      ${this.renderHelpButton('availability-zones', 'Availability Zones')}
+                    </div>
                     <select id="availability-zones-select" class="form-select" name="availability_zones" multiple required>
                       <option value="" disabled>Select availability zones</option>
                     </select>
-                    <div class="form-text">Type to search and select availability zones. Selected zones will appear as tags.</div>
+                    <div class="form-text">Select at least two distinct zones in the chosen region. Workspace subnets are distributed across them; when “one NAT gateway per availability zone” is selected, this also determines how many NAT gateways are created.</div>
                   </div>
                   ` : ''}
                   <div id="subnet-size-slider-container" class="mb-4" style="display: none;">
-                    <label class="form-label fw-semibold">
-                      <i class="bi bi-sliders me-2"></i>
-                      Subnet Size
-                      <span class="text-muted small ms-2" id="subnet-size-info"></span>
-                    </label>
+                    <div class="field-label-with-help">
+                      <label class="form-label fw-semibold">
+                        <i class="bi bi-sliders me-2"></i>
+                        Subnet Size
+                        <span class="text-muted small ms-2" id="subnet-size-info"></span>
+                      </label>
+                      ${this.renderHelpButton('subnet-sizing', 'subnet sizing')}
+                    </div>
                     <div class="subnet-slider-wrapper">
                       <input type="range" class="form-range subnet-size-slider" id="subnet-size-slider" 
                              min="17" max="28" step="1" value="26" name="custom_subnet_size">
@@ -2394,15 +2035,16 @@ class App {
                     <input class="form-check-input" type="checkbox" id="enable_private_link" name="enable_private_link"
                            ${this.currentProvider === 'aws' && (this.currentConfig.pricing_tier || 'ENTERPRISE') !== 'ENTERPRISE' ? 'disabled aria-disabled="true"' : ''}>
                     <label class="form-check-label fw-semibold" for="enable_private_link">
-                      ${this.currentProvider === 'azure' ? 'Enable Private Link' : 
+                      ${this.currentProvider === 'azure' ? 'Enable Back-end Private Link' :
                         this.currentProvider === 'gcp' ? 'Enable Private Service Connect' : 
-                        'Enable AWS PrivateLink'}
+                        'Enable Back-end PrivateLink'}
                     </label>
+                    ${this.renderHelpButton('backend-private-link', this.currentProvider === 'azure' ? 'Back-end Private Link' : 'Back-end PrivateLink')}
                   </div>
                   <div class="form-text">${this.currentProvider === 'aws' ? 
-                    'Enable AWS PrivateLink (requires Enterprise tier)' :
+                    'Enable Back-end PrivateLink (requires Enterprise tier)' :
                     this.currentProvider === 'azure' ?
-                    'Use classic backend and DBFS Private Link. The workspace UI remains public.' :
+                    'Use classic Back-end and DBFS Private Link. The workspace UI remains public.' :
                     'Enable Private Service Connect (requires Premium tier)'}</div>
                   <div id="private-link-warning" class="alert alert-info mt-2" style="display: none;">
                     <i class="bi bi-info-circle me-2"></i>
@@ -2634,7 +2276,7 @@ class App {
     
     const calculateSubnets = Utils.debounce(() => {
       const vpcCidr = vpcCidrInput?.value;
-      const pricingTier = pricingTierSelect?.value;
+      const pricingTier = this.currentProvider === 'azure' ? 'PREMIUM' : pricingTierSelect?.value;
       const enablePrivateLink = privateLinkCheckbox?.checked || false;
       const enableNatGateway = this.currentProvider !== 'aws' || natGatewaySelect?.value !== 'none';
       const zones = this.getSelectedAvailabilityZones();
@@ -3575,7 +3217,7 @@ class App {
 
     // Setup private link validation
     const checkPrivateLinkRequirements = () => {
-      const tier = pricingTierSelect?.value;
+      const tier = this.currentProvider === 'azure' ? 'PREMIUM' : pricingTierSelect?.value;
       const requiredTier = this.currentProvider === 'aws' ? 'ENTERPRISE' : 'PREMIUM';
 
       if (this.currentProvider === 'aws' && privateLinkCheckbox) {
@@ -4073,7 +3715,7 @@ class App {
       })() : null;
     
     const content = `
-      <div class="container my-5">
+      <div class="container my-5 configuration-summary-page">
         <div class="row">
           <div class="col-xl-10 mx-auto">
             <div class="text-center mb-5">
@@ -4354,12 +3996,6 @@ class App {
             <form id="summary-form">
               <div class="card mb-4">
                 <div class="card-body">
-                  <div class="form-check mb-3">
-                    <input class="form-check-input" type="checkbox" id="confirm" required>
-                    <label class="form-check-label fw-semibold" for="confirm">
-                      I confirm the configuration is correct
-                    </label>
-                  </div>
                   <div class="form-check">
                     <input class="form-check-input" type="checkbox" id="include_docs" checked>
                     <label class="form-check-label" for="include_docs">
@@ -4375,9 +4011,9 @@ class App {
                   <i class="bi bi-arrow-left me-2"></i>
                   Back to Configuration
                 </a>
-                <button type="submit" class="btn btn-primary btn-lg px-5" id="generate-btn" disabled>
-                  <i class="bi bi-download me-2"></i>
-                  Generate & Download Project
+                <button type="submit" class="btn btn-primary btn-lg px-5" id="generate-btn">
+                  <i class="bi bi-gear me-2"></i>
+                  Generate Project
                 </button>
               </div>
             </form>
@@ -4388,10 +4024,6 @@ class App {
     
     this.render(content);
     Utils.updateProgress(3);
-    
-    document.getElementById('confirm').addEventListener('change', (e) => {
-      document.getElementById('generate-btn').disabled = !e.target.checked;
-    });
     
     document.getElementById('summary-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -4416,7 +4048,6 @@ class App {
         this.downloadBlob = zipBlob;
         this.downloadFilename = filename;
         
-        Utils.downloadFile(zipBlob, filename);
         Utils.setStorage('step', 3);
         Utils.hideLoading();
         window.location.hash = '/download';
@@ -4509,9 +4140,46 @@ export DATABRICKS_CLIENT_SECRET="${clientSecretDisplay}"`;
         : vaultLockedWithCredentials
           ? '<span class="badge bg-warning text-dark"><i class="bi bi-lock me-1"></i>Vault locked - unlock to use credentials</span>'
           : '<span class="badge bg-secondary"><i class="bi bi-info-circle me-1"></i>Replace placeholders with your credentials</span>';
+
+    const cloudAuthCommand = config.provider === 'aws'
+      ? 'aws configure'
+      : config.provider === 'azure'
+        ? `az login\naz account set --subscription "${config.azure_subscription_id}"`
+        : `gcloud auth login\ngcloud config set project ${config.project_id}`;
+    const cloudAuthHelp = config.provider === 'aws'
+      ? `<ul class="mb-2 ps-3">
+          <li>Configure an AWS identity that can create the selected VPC/EC2, endpoint, NAT gateway, IAM, and S3 resources.</li>
+          <li><a href="https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html" target="_blank" rel="noopener noreferrer">AWS CLI configuration guide</a></li>
+        </ul>`
+      : config.provider === 'azure'
+        ? `<ul class="mb-2 ps-3">
+            <li>Sign in and select the subscription shown below.</li>
+            <li>The identity needs Contributor plus permission to create role assignments, such as Owner or Role Based Access Control Administrator.</li>
+            <li><a href="https://learn.microsoft.com/en-us/cli/azure/authenticate-azure-cli-interactively" target="_blank" rel="noopener noreferrer">Azure CLI authentication guide</a></li>
+          </ul>`
+        : `<ul class="mb-2 ps-3">
+            <li>Sign in with an identity that can impersonate the configured service account.</li>
+            <li>The caller needs <code>roles/iam.serviceAccountTokenCreator</code>; the service account needs project network creation permissions.</li>
+            <li><a href="https://cloud.google.com/docs/authentication/use-service-account-impersonation" target="_blank" rel="noopener noreferrer">Google Cloud service-account impersonation guide</a></li>
+          </ul>`;
+    const databricksAuthHelp = config.provider === 'aws'
+      ? `<ul class="mb-2 ps-3">
+          <li>Create a Databricks service principal and assign it the Account Admin role. <a href="https://docs.databricks.com/aws/en/admin/users-groups/manage-service-principals" target="_blank" rel="noopener noreferrer">Service principal guide</a></li>
+          <li>Create an OAuth secret by following the <a href="https://docs.databricks.com/aws/en/dev-tools/auth/oauth-m2m" target="_blank" rel="noopener noreferrer">OAuth machine-to-machine guide</a>.</li>
+          <li>The client ID and secret below belong to the Databricks service principal, not to AWS.</li>
+        </ul>`
+      : config.provider === 'azure'
+        ? `<ul class="mb-2 ps-3">
+            <li>The signed-in Azure identity must also have Databricks Account Admin access for account-level resources.</li>
+            <li>Export your Databricks account ID as shown below.</li>
+          </ul>`
+        : `<ul class="mb-2 ps-3">
+            <li>Add the configured Google service account to the Databricks account and assign it the Account Admin role.</li>
+            <li>Impersonate it and export the short-lived access token shown below.</li>
+          </ul>`;
     
     const content = `
-      <div class="container my-5">
+      <div class="container my-5 download-page">
         <div class="row">
           <div class="col-xl-8 mx-auto">
             <div class="text-center mb-5">
@@ -4580,18 +4248,10 @@ export DATABRICKS_CLIENT_SECRET="${clientSecretDisplay}"`;
                 </h5>
               </div>
               <div class="card-body text-center">
-                <button type="button" class="btn btn-download btn-lg mb-3" id="download-project-btn">
+                <button type="button" class="btn btn-download btn-lg" id="download-project-btn">
                   <i class="bi bi-download me-2"></i>
                   <span class="download-filename">${config.project_prefix || 'databricks'}-${config.provider}-terraform.zip</span>
                 </button>
-                <p class="text-muted mb-4">
-                  Complete generated Terraform project with your configuration, documentation,
-                  and deployment instructions.
-                </p>
-                <div class="text-muted small">
-                  <i class="bi bi-info-circle me-1"></i>
-                  The download should have started automatically. If not, click above to download.
-                </div>
               </div>
             </div>
 
@@ -4734,9 +4394,9 @@ export DATABRICKS_CLIENT_SECRET="${clientSecretDisplay}"`;
                     </div>
                     <div class="step-content">
                       <h6 class="fw-bold mb-2">Configure Credentials</h6>
-                      <p class="mb-2">Set up your cloud provider credentials according to the provider-specific instructions in the README.</p>
-                      <div class="command-block" data-command="${config.provider === 'aws' ? 'aws configure' : config.provider === 'azure' ? 'az login' : 'gcloud auth login'}">
-                        <code>${config.provider === 'aws' ? 'aws configure' : config.provider === 'azure' ? 'az login' : 'gcloud auth login'}</code>
+                      ${cloudAuthHelp}
+                      <div class="command-block" data-command="${cloudAuthCommand.replace(/"/g, '&quot;')}">
+                        <code>${cloudAuthCommand}</code>
                         <button class="command-copy-btn" type="button" aria-label="Copy command" title="Copy to clipboard">
                           <i class="bi bi-clipboard"></i>
                         </button>
@@ -4767,6 +4427,7 @@ export DATABRICKS_CLIENT_SECRET="${clientSecretDisplay}"`;
                     <div class="step-content">
                       <h6 class="fw-bold mb-2">Prepare Deployment ${credentialsStatus}</h6>
                       ${vaultUnlockBanner}
+                      ${databricksAuthHelp}
                       <p class="mb-2">${config.provider === 'gcp'
                         ? 'Impersonate the configured Google service account and export a short-lived access token. The non-secret identifiers are already in <code>terraform.tfvars</code>.'
                         : 'Export sensitive variables as environment variables to avoid storing them in <code>terraform.tfvars</code>. See the README for provider-specific instructions.'}</p>

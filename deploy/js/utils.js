@@ -1,5 +1,5 @@
 /**
- * Utility functions for the PWA
+ * Shared application utility functions
  */
 
 class Utils {
@@ -832,4 +832,3 @@ class Utils {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = Utils;
 }
-

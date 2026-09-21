@@ -14,14 +14,14 @@ This ready-to-deploy Terraform project was generated from your selections.
 {{#if create_new_vpc}}
 | NAT Gateway | {{nat_gateway_summary}} |
 {{/if}}
-| PrivateLink | {{private_link_status}} |
+| Back-end PrivateLink | {{private_link_status}} |
 | Metastore | {{#if metastore_id}}Attach `{{metastore_id}}`{{else}}Create `{{metastore_name}}`{{/if}} |
 
 ## Prerequisites
 
 - Terraform installed
-- AWS credentials with permission to create the selected infrastructure
-- A Databricks account service principal with the Account Admin role
+- AWS credentials with permission to create the selected EC2/VPC, endpoint, NAT gateway, IAM, and S3 resources
+- A Databricks service principal with the Account Admin role ([create and manage service principals](https://docs.databricks.com/aws/en/admin/users-groups/manage-service-principals))
 - Your Databricks account ID
 {{#unless create_new_vpc}}
 - Existing VPC, at least two private subnets in different Availability Zones, and a workspace security group
@@ -34,7 +34,9 @@ This ready-to-deploy Terraform project was generated from your selections.
 
 ## Authenticate
 
-Configure AWS credentials using your normal AWS CLI/profile process. Export the Databricks account credentials without placing secrets in `terraform.tfvars`:
+Configure AWS credentials with `aws configure` or your normal AWS CLI/profile process. See [AWS CLI configuration](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html). These AWS credentials are separate from the Databricks credentials below.
+
+Create an OAuth secret for the Databricks service principal by following the [OAuth machine-to-machine authentication guide](https://docs.databricks.com/aws/en/dev-tools/auth/oauth-m2m), then export its client ID and secret without placing them in `terraform.tfvars`:
 
 ```bash
 export TF_VAR_databricks_account_id="<your-databricks-account-id>"
@@ -49,11 +51,11 @@ Do not commit these values.
 This deployment requires a Unity Catalog metastore assignment for the workspace. It creates or attaches the selected metastore. Optional catalog and cluster creation are disabled.
 
 {{#if enable_private_link}}
-## PrivateLink Networking
+## Back-end PrivateLink Networking
 
 {{#if create_new_vpc}}
 {{#if is_fully_private}}
-The fully private network topology creates no NAT gateway or internet gateway. PrivateLink and the S3, STS, and Kinesis endpoints provide the required private paths for control-plane and AWS service communication.
+The fully private network topology creates no NAT gateway or internet gateway. Back-end PrivateLink and the S3, STS, and Kinesis endpoints provide the required private paths for control-plane and AWS service communication.
 {{else}}
 The standard network topology creates the VPC, {{#if (eq nat_gateway_mode "per_az")}}one NAT gateway per availability zone{{else}}one shared NAT gateway{{/if}}, an internet gateway, workspace subnets, and the required endpoints.
 {{/if}}

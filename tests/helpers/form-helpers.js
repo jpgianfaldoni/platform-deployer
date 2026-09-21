@@ -42,9 +42,11 @@ class FormHelpers {
     
     if (config.pricing_tier) {
       const field = page.locator('select[name="pricing_tier"]');
-      await field.waitFor({ state: 'visible', timeout: 5000 });
-      await field.selectOption(config.pricing_tier);
-      await page.waitForTimeout(300); // Wait for any dependent fields to update
+      if (await field.count()) {
+        await field.waitFor({ state: 'visible', timeout: 5000 });
+        await field.selectOption(config.pricing_tier);
+        await page.waitForTimeout(300); // Wait for any dependent fields to update
+      }
     }
     
     if (config.resource_group_name) {
@@ -72,7 +74,6 @@ class FormHelpers {
     const values = {
       project_prefix: 'test-azure',
       region: 'eastus',
-      pricing_tier: 'PREMIUM',
       azure_subscription_id: '11111111-1111-4111-8111-111111111111',
       azure_tenant_id: '22222222-2222-4222-8222-222222222222',
       resource_group_name: 'rg-databricks-workspace',
@@ -327,14 +328,9 @@ class FormHelpers {
    * Confirm and generate project in summary page
    */
   static async confirmAndGenerate(page) {
-    const confirmCheckbox = page.locator('#confirm');
-    await confirmCheckbox.check();
-    
     const generateBtn = page.locator('#generate-btn');
     await generateBtn.click();
-    
-    // Wait for download to start (or error message)
-    await page.waitForTimeout(2000);
+    await page.waitForURL(/.*#\/download/, { timeout: 15000 });
   }
 
   /**

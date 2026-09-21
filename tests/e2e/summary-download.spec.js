@@ -210,8 +210,8 @@ test.describe('Download/Generate Tests', () => {
     });
   });
 
-  test.describe('Confirm Checkbox Tests', () => {
-    test('should require confirmation checkbox before generating', async ({ page }) => {
+  test.describe('Generate Button Tests', () => {
+    test('should generate without a confirmation checkbox', async ({ page }) => {
       await FormHelpers.selectProvider(page, 'aws');
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'aws-confirm',
@@ -224,44 +224,15 @@ test.describe('Download/Generate Tests', () => {
       });
       await FormHelpers.submitConfigForm(page);
       await expect(page).toHaveURL(/.*#\/summary/, { timeout: 10000 });
-      
-      // Verify confirm checkbox exists
-      const confirmCheckbox = page.locator('#confirm');
-      await expect(confirmCheckbox).toBeVisible();
-      
-      // Verify generate button exists
-      const generateBtn = page.locator('#generate-btn');
-      await expect(generateBtn).toBeVisible();
-      
-      // Generate button should be disabled when checkbox is not checked
-      // (or clicking should not work)
-    });
 
-    test('should enable generate when confirmation is checked', async ({ page }) => {
-      await FormHelpers.selectProvider(page, 'aws');
-      await FormHelpers.fillBasicConfig(page, {
-        project_prefix: 'aws-enable-gen',
-        region: 'us-east-1',
-        pricing_tier: 'PREMIUM'
-      });
-      await FormHelpers.fillNetworkConfig(page, {
-        vpc_cidr: '10.0.0.0/20',
-        availability_zones: ['us-east-1a', 'us-east-1b']
-      });
-      await FormHelpers.submitConfigForm(page);
-      await expect(page).toHaveURL(/.*#\/summary/, { timeout: 10000 });
-      
-      // Check the confirmation checkbox
-      const confirmCheckbox = page.locator('#confirm');
-      await confirmCheckbox.check();
-      
-      // Verify checkbox is checked
-      await expect(confirmCheckbox).toBeChecked();
+      await expect(page.locator('#confirm')).toHaveCount(0);
+      await expect(page.locator('#generate-btn')).toBeEnabled();
+      await expect(page.locator('#generate-btn')).toContainText('Generate Project');
     });
   });
 
   test.describe('Generate Project Tests', () => {
-    test('should trigger download when generate is clicked for AWS', async ({ page }) => {
+    test('should generate without downloading for AWS', async ({ page }) => {
       await FormHelpers.selectProvider(page, 'aws');
       await FormHelpers.fillBasicConfig(page, {
         project_prefix: 'aws-download',
@@ -276,29 +247,12 @@ test.describe('Download/Generate Tests', () => {
       await FormHelpers.submitConfigForm(page);
       await expect(page).toHaveURL(/.*#\/summary/, { timeout: 10000 });
       
-      // Setup download listener
-      const downloadPromise = page.waitForEvent('download', { timeout: 10000 }).catch(() => null);
-      
-      // Confirm and generate
       await FormHelpers.confirmAndGenerate(page);
-      
-      // Wait for download or navigation
-      const download = await downloadPromise;
-      
-      if (download) {
-        // Verify download filename contains expected parts
-        const filename = download.suggestedFilename();
-        expect(filename).toContain('aws-download');
-        expect(filename).toContain('terraform');
-        expect(filename).toMatch(/\.zip$/);
-      } else {
-        // If no download, should navigate to download page
-        const currentRoute = await NavigationHelpers.getCurrentRoute(page);
-        expect(['/download', '/summary']).toContain(currentRoute);
-      }
+      await expect(page).toHaveURL(/.*#\/download/);
+      await expect(page.locator('#download-project-btn')).toContainText('aws-download-aws-terraform.zip');
     });
 
-    test('should trigger download when generate is clicked for Azure', async ({ page }) => {
+    test('should generate without downloading for Azure', async ({ page }) => {
       await FormHelpers.selectProvider(page, 'azure');
       await FormHelpers.fillAzureConfig(page, {
         project_prefix: 'azure-download',
@@ -313,29 +267,12 @@ test.describe('Download/Generate Tests', () => {
       await FormHelpers.submitConfigForm(page);
       await expect(page).toHaveURL(/.*#\/summary/, { timeout: 10000 });
       
-      // Setup download listener
-      const downloadPromise = page.waitForEvent('download', { timeout: 10000 }).catch(() => null);
-      
-      // Confirm and generate
       await FormHelpers.confirmAndGenerate(page);
-      
-      // Wait for download or navigation
-      const download = await downloadPromise;
-      
-      if (download) {
-        // Verify download filename contains expected parts
-        const filename = download.suggestedFilename();
-        expect(filename).toContain('azure-download');
-        expect(filename).toContain('terraform');
-        expect(filename).toMatch(/\.zip$/);
-      } else {
-        // If no download, should navigate to download page
-        const currentRoute = await NavigationHelpers.getCurrentRoute(page);
-        expect(['/download', '/summary']).toContain(currentRoute);
-      }
+      await expect(page).toHaveURL(/.*#\/download/);
+      await expect(page.locator('#download-project-btn')).toContainText('azure-download-azure-terraform.zip');
     });
 
-    test('should trigger download when generate is clicked for GCP', async ({ page }) => {
+    test('should generate without downloading for GCP', async ({ page }) => {
       await FormHelpers.selectProvider(page, 'gcp');
       await FormHelpers.fillGcpConfig(page, {
         project_prefix: 'gcp-download',
@@ -345,26 +282,9 @@ test.describe('Download/Generate Tests', () => {
       await FormHelpers.submitConfigForm(page);
       await expect(page).toHaveURL(/.*#\/summary/, { timeout: 10000 });
       
-      // Setup download listener
-      const downloadPromise = page.waitForEvent('download', { timeout: 10000 }).catch(() => null);
-      
-      // Confirm and generate
       await FormHelpers.confirmAndGenerate(page);
-      
-      // Wait for download or navigation
-      const download = await downloadPromise;
-      
-      if (download) {
-        // Verify download filename contains expected parts
-        const filename = download.suggestedFilename();
-        expect(filename).toContain('gcp-download');
-        expect(filename).toContain('terraform');
-        expect(filename).toMatch(/\.zip$/);
-      } else {
-        // If no download, should navigate to download page
-        const currentRoute = await NavigationHelpers.getCurrentRoute(page);
-        expect(['/download', '/summary']).toContain(currentRoute);
-      }
+      await expect(page).toHaveURL(/.*#\/download/);
+      await expect(page.locator('#download-project-btn')).toContainText('gcp-download-gcp-terraform.zip');
     });
   });
 

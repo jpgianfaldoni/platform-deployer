@@ -1,6 +1,6 @@
 /**
  * TemplateLoader - Loads Terraform templates from external files
- * Supports caching for offline PWA functionality
+ * Caches loaded templates in memory for the current session
  */
 class TemplateLoader {
   constructor() {

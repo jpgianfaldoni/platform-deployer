@@ -206,11 +206,8 @@ test.describe('Provider Switch Tests', () => {
     const resourceGroupField = page.locator('input[name="resource_group_name"]');
     await expect(resourceGroupField).toBeVisible();
     
-    // Both Azure configurations deploy Premium workspaces.
-    const pricingOptions = await page.locator('select[name="pricing_tier"] option').evaluateAll(options =>
-      options.map(option => option.value).filter(Boolean)
-    );
-    expect(pricingOptions).toEqual(['PREMIUM']);
+    // Azure always deploys Premium, so there is no editable tier selector.
+    await expect(page.locator('select[name="pricing_tier"]')).toHaveCount(0);
   });
 
   test('should reset configuration when switching from Azure to GCP', async ({ page }) => {
